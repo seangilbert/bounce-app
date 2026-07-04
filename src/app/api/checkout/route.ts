@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getPaymentProvider } from "@/lib/payments";
+import { createPendingOrder } from "@/lib/orders/repo";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,23 @@ export async function POST(req: Request) {
   try {
     const provider = getPaymentProvider();
     const result = await provider.createCheckout(parsed.data);
+
+    // Record a pending order keyed by the checkout session. The webhook flips
+    // it to paid/refunded later. Amount is the sum of line totals (minor units).
+    const amountTotal = parsed.data.lineItems.reduce(
+      (sum, li) => sum + li.quantity * li.unitAmount,
+      0,
+    );
+    await createPendingOrder({
+      provider: provider.name,
+      providerSessionId: result.id,
+      amountTotal,
+      currency: parsed.data.currency,
+      customerEmail: parsed.data.customerEmail ?? null,
+      lineItems: parsed.data.lineItems,
+      metadata: parsed.data.metadata,
+    });
+
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error.";

@@ -88,6 +88,41 @@ export const stripeProvider: PaymentProvider = {
       signature,
       secret,
     );
-    return { type: normalizeEventType(event.type), id: event.id, raw: event };
+
+    // Pull normalized ids off the event object so business logic never has to
+    // reach into Stripe-shaped payloads.
+    const obj = event.data.object as {
+      id?: string;
+      payment_intent?: string | { id?: string };
+    };
+    const intentId =
+      typeof obj.payment_intent === "string"
+        ? obj.payment_intent
+        : obj.payment_intent?.id;
+
+    let sessionId: string | undefined;
+    let paymentId: string | undefined;
+    switch (event.type) {
+      case "checkout.session.completed":
+        sessionId = obj.id;
+        paymentId = intentId;
+        break;
+      case "payment_intent.succeeded":
+      case "payment_intent.payment_failed":
+        paymentId = obj.id;
+        break;
+      case "charge.refunded":
+      case "refund.updated":
+        paymentId = intentId;
+        break;
+    }
+
+    return {
+      type: normalizeEventType(event.type),
+      id: event.id,
+      sessionId,
+      paymentId,
+      raw: event,
+    };
   },
 };

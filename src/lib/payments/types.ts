@@ -58,6 +58,10 @@ export interface PaymentEvent {
   type: PaymentEventType;
   /** Provider-native event id. */
   id: string;
+  /** Normalized checkout-session id, when the event carries one. */
+  sessionId?: string;
+  /** Normalized payment/intent id, when the event carries one. */
+  paymentId?: string;
   /** The provider-native event object, for handlers needing full detail. */
   raw: unknown;
 }
