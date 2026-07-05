@@ -32,7 +32,7 @@ export interface CreateFromTemplateInput {
   draft?: boolean;
   /**
    * Test-mode document (no legal weight, not counted for billing). Defaults to
-   * true outside production so development never sends real agreements.
+   * true — going live is always an explicit opt-in, never implicit.
    */
   testMode?: boolean;
 }

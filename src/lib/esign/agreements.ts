@@ -37,6 +37,9 @@ export async function sendAgreementForOrder(order: Order): Promise<void> {
   const provider = getESignatureProvider();
   const doc = await provider.createFromTemplate({
     templateId,
+    // Live documents are billable + legally binding — opt in explicitly by
+    // setting SIGNWELL_TEST_MODE=false. Anything else stays test mode.
+    testMode: process.env.SIGNWELL_TEST_MODE !== "false",
     // The rental template has two signer roles: the company countersigner
     // ("Document Sender") and the customer ("Client").
     // Omit sendEmail entirely — SignWell emails both signers by default (this

@@ -45,9 +45,10 @@ export const signwellProvider: ESignatureProvider = {
   name: "signwell",
 
   async createFromTemplate(input: CreateFromTemplateInput): Promise<ESignDocument> {
-    // Default to test mode everywhere except production, so dev never sends a
-    // legally-binding agreement.
-    const testMode = input.testMode ?? process.env.NODE_ENV !== "production";
+    // Safe by default: test mode unless the caller explicitly opts into live.
+    // Going live is a deliberate choice (see SIGNWELL_TEST_MODE in agreements),
+    // never an implicit consequence of NODE_ENV.
+    const testMode = input.testMode ?? true;
 
     const body = {
       template_id: input.templateId,
