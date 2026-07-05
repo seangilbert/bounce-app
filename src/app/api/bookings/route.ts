@@ -1,0 +1,88 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getDefaultOperator } from "@/lib/inventory/repo";
+import { checkAvailability } from "@/lib/inventory/availability";
+import { createBooking } from "@/lib/bookings/repo";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+export const dynamic = "force-dynamic";
+
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 60_000;
+
+function clientIp(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0]!.trim();
+  return req.headers.get("x-real-ip") ?? "unknown";
+}
+
+const BookingSchema = z.object({
+  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
+  items: z
+    .array(z.object({ itemId: z.string().uuid(), quantity: z.number().int().positive() }))
+    .min(1),
+  customerName: z.string().optional(),
+  customerEmail: z.string().email().optional(),
+  deliveryWindow: z.string().optional(),
+  deliveryAddress: z.string().optional(),
+  deliveryZip: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export async function POST(req: Request) {
+  const rl = checkRateLimit(`bookings:${clientIp(req)}`, RATE_LIMIT, RATE_WINDOW_MS);
+  if (!rl.allowed) {
+    const retryAfter = Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000));
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Try again later." },
+      { status: 429, headers: { "retry-after": String(retryAfter) } },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  const parsed = BookingSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid request.", details: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+  const input = parsed.data;
+
+  try {
+    const operator = await getDefaultOperator();
+    if (!operator) {
+      return NextResponse.json({ error: "No operator configured." }, { status: 503 });
+    }
+
+    // Enforce availability before quoting. A quote doesn't reserve, but we won't
+    // quote something we can't fulfill on that date.
+    const unavailable: { itemId: string; requested: number; available: number }[] = [];
+    for (const sel of input.items) {
+      const a = await checkAvailability(sel.itemId, input.eventDate, sel.quantity);
+      if (!a.ok) {
+        unavailable.push({ itemId: sel.itemId, requested: sel.quantity, available: a.available });
+      }
+    }
+    if (unavailable.length) {
+      return NextResponse.json(
+        { error: "Some items are not available on that date.", unavailable },
+        { status: 409 },
+      );
+    }
+
+    const booking = await createBooking({ operatorId: operator.id, ...input });
+    return NextResponse.json({ booking }, { status: 201 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error.";
+    // Client errors (bad item, wrong operator) → 400; anything else → 500.
+    const clientError = /not found|does not belong|not available|Invalid quantity/.test(message);
+    return NextResponse.json({ error: message }, { status: clientError ? 400 : 500 });
+  }
+}

@@ -1,0 +1,56 @@
+export type BookingStatus =
+  | "inquiry"
+  | "quoted"
+  | "pending_payment"
+  | "paid"
+  | "contracted"
+  | "confirmed"
+  | "delivered"
+  | "completed"
+  | "canceled";
+
+/** What the caller selects when creating a booking. */
+export interface BookingItemInput {
+  itemId: string;
+  quantity: number;
+}
+
+export interface NewBooking {
+  operatorId: string;
+  eventDate: string; // YYYY-MM-DD
+  items: BookingItemInput[];
+  customerName?: string | null;
+  customerEmail?: string | null;
+  deliveryWindow?: string | null;
+  deliveryAddress?: string | null;
+  deliveryZip?: string | null;
+  notes?: string | null;
+}
+
+/** A booking line with the item name + price snapshot (minor units). */
+export interface BookingLineItem {
+  itemId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface Booking {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  operatorId: string;
+  status: BookingStatus;
+  eventDate: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  deliveryWindow: string | null;
+  deliveryAddress: string | null;
+  deliveryZip: string | null;
+  subtotal: number;
+  deposit: number | null;
+  currency: string;
+  notes: string | null;
+  items: BookingLineItem[];
+}

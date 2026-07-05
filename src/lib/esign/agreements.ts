@@ -1,5 +1,6 @@
 import { getESignatureProvider } from "./index";
 import { setOrderEsignDocument } from "@/lib/orders/repo";
+import { setBookingStatus } from "@/lib/bookings/repo";
 import type { Order } from "@/lib/orders/types";
 
 /**
@@ -58,9 +59,14 @@ export async function sendAgreementForOrder(order: Order): Promise<void> {
         placeholderName: "Client",
       },
     ],
-    // Links webhook events back to this order (data.object.metadata.order_id).
-    metadata: { order_id: order.id },
+    // Links webhook events back to this order/booking (data.object.metadata).
+    metadata: {
+      order_id: order.id,
+      ...(order.bookingId ? { booking_id: order.bookingId } : {}),
+    },
   });
 
   await setOrderEsignDocument(order.id, doc.id, "sent");
+  // Agreement is out for signature.
+  if (order.bookingId) await setBookingStatus(order.bookingId, "contracted");
 }

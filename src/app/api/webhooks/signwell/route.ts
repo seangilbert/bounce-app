@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getESignatureProvider } from "@/lib/esign";
 import { setEsignStatusByDocumentId } from "@/lib/orders/repo";
+import { setBookingStatus } from "@/lib/bookings/repo";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,9 @@ export async function POST(req: Request) {
         console.warn(
           `[signwell] no order for document ${event.documentId} (event ${event.type})`,
         );
+      } else if (order.bookingId && event.type === "completed") {
+        // Both parties signed → the booking is confirmed.
+        await setBookingStatus(order.bookingId, "confirmed");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "handler error";

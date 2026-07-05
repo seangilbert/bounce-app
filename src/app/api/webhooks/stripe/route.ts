@@ -7,6 +7,7 @@ import {
   setOrderStatusBySessionId,
 } from "@/lib/orders/repo";
 import { autoSendEnabled, sendAgreementForOrder } from "@/lib/esign/agreements";
+import { confirmBookingPaid } from "@/lib/bookings/repo";
 
 export const dynamic = "force-dynamic";
 
@@ -55,9 +56,23 @@ export async function POST(req: Request) {
             console.warn(
               `[webhook] checkout.completed: no local order for session ${event.sessionId}`,
             );
-          } else if (autoSendEnabled() && !order.esignDocumentId) {
-            // Send the signing agreement for the freshly-paid order. Guarded by
-            // esignDocumentId so a webhook retry never double-sends.
+            break;
+          }
+
+          // Advance the linked booking to paid + run the final oversell guard.
+          if (order.bookingId) {
+            const { oversold } = await confirmBookingPaid(order.bookingId);
+            if (oversold.length) {
+              console.warn(
+                `[webhook] OVERSOLD booking ${order.bookingId}: ${JSON.stringify(oversold)}`,
+              );
+            }
+          }
+
+          // Send the signing agreement for the freshly-paid order (also moves
+          // the booking to `contracted`). Guarded by esignDocumentId so a
+          // webhook retry never double-sends.
+          if (autoSendEnabled() && !order.esignDocumentId) {
             await sendAgreementForOrder(order);
           }
         }

@@ -26,6 +26,8 @@ export interface Order {
   customerEmail: string | null;
   lineItems: OrderLineItem[];
   metadata: Record<string, string>;
+  /** The booking this payment belongs to, if created via the booking flow. */
+  bookingId: string | null;
   /** Provider document id of the agreement sent for this order, if any. */
   esignDocumentId: string | null;
   /** Normalized signing status: sent | viewed | signed | completed | declined | expired | canceled. */
@@ -41,4 +43,5 @@ export interface NewOrder {
   customerEmail?: string | null;
   lineItems: OrderLineItem[];
   metadata?: Record<string, string>;
+  bookingId?: string | null;
 }

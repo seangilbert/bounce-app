@@ -19,6 +19,7 @@ interface OrderRow {
   customer_email: string | null;
   line_items: Order["lineItems"];
   metadata: Record<string, string>;
+  booking_id: string | null;
   esign_document_id: string | null;
   esign_status: string | null;
 }
@@ -37,6 +38,7 @@ function rowToOrder(row: OrderRow): Order {
     customerEmail: row.customer_email,
     lineItems: row.line_items ?? [],
     metadata: row.metadata ?? {},
+    bookingId: row.booking_id,
     esignDocumentId: row.esign_document_id,
     esignStatus: row.esign_status,
   };
@@ -56,6 +58,7 @@ export async function createPendingOrder(input: NewOrder): Promise<Order> {
       customer_email: input.customerEmail ?? null,
       line_items: input.lineItems,
       metadata: input.metadata ?? {},
+      booking_id: input.bookingId ?? null,
     })
     .select()
     .single();

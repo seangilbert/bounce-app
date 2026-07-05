@@ -1,0 +1,182 @@
+import { createAdminClient } from "@/utils/supabase/admin";
+import { checkAvailability } from "@/lib/inventory/availability";
+import type { Booking, BookingLineItem, BookingStatus, NewBooking } from "./types";
+
+const BOOKINGS = "bookings";
+const BOOKING_ITEMS = "booking_items";
+
+interface BookingRow {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  operator_id: string;
+  status: BookingStatus;
+  event_date: string;
+  customer_name: string | null;
+  customer_email: string | null;
+  delivery_window: string | null;
+  delivery_address: string | null;
+  delivery_zip: string | null;
+  subtotal: number;
+  deposit: number | null;
+  currency: string;
+  notes: string | null;
+}
+
+interface BookingItemRow {
+  item_id: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  items: { name: string } | null;
+}
+
+function rowToBooking(row: BookingRow, items: BookingLineItem[]): Booking {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    operatorId: row.operator_id,
+    status: row.status,
+    eventDate: row.event_date,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    deliveryWindow: row.delivery_window,
+    deliveryAddress: row.delivery_address,
+    deliveryZip: row.delivery_zip,
+    subtotal: row.subtotal,
+    deposit: row.deposit,
+    currency: row.currency,
+    notes: row.notes,
+    items,
+  };
+}
+
+/** Load a booking with its line items (item name joined in). */
+export async function getBooking(id: string): Promise<Booking | null> {
+  const supabase = createAdminClient();
+  const { data: row, error } = await supabase
+    .from(BOOKINGS)
+    .select()
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getBooking failed: ${error.message}`);
+  if (!row) return null;
+
+  const { data: itemRows, error: itemsErr } = await supabase
+    .from(BOOKING_ITEMS)
+    .select("item_id, quantity, unit_price, line_total, items(name)")
+    .eq("booking_id", id);
+  if (itemsErr) throw new Error(`getBooking items failed: ${itemsErr.message}`);
+
+  const items: BookingLineItem[] = (itemRows as unknown as BookingItemRow[]).map((r) => ({
+    itemId: r.item_id,
+    name: r.items?.name ?? "(item)",
+    quantity: r.quantity,
+    unitPrice: r.unit_price,
+    lineTotal: r.line_total,
+  }));
+  return rowToBooking(row as BookingRow, items);
+}
+
+/**
+ * Create a `quoted` booking, snapshotting each item's current price into
+ * booking_items and computing the subtotal. Validates every selected item
+ * exists, belongs to the operator, and is active. Does NOT reserve inventory
+ * (a quote holds nothing) — availability is enforced by the caller.
+ */
+export async function createBooking(input: NewBooking): Promise<Booking> {
+  const supabase = createAdminClient();
+  if (!input.items.length) throw new Error("A booking needs at least one item.");
+
+  const ids = input.items.map((i) => i.itemId);
+  const { data: itemRows, error: itemsErr } = await supabase
+    .from("items")
+    .select("id, name, base_price, operator_id, active")
+    .in("id", ids);
+  if (itemsErr) throw new Error(`createBooking item lookup failed: ${itemsErr.message}`);
+
+  const byId = new Map((itemRows ?? []).map((r) => [r.id as string, r]));
+  const lines = input.items.map((sel) => {
+    const it = byId.get(sel.itemId);
+    if (!it) throw new Error(`Item ${sel.itemId} not found.`);
+    if (it.operator_id !== input.operatorId) {
+      throw new Error(`Item ${sel.itemId} does not belong to this operator.`);
+    }
+    if (!it.active) throw new Error(`Item "${it.name}" is not available.`);
+    if (!Number.isInteger(sel.quantity) || sel.quantity <= 0) {
+      throw new Error(`Invalid quantity for "${it.name}".`);
+    }
+    const unitPrice = it.base_price as number;
+    return {
+      item_id: sel.itemId,
+      quantity: sel.quantity,
+      unit_price: unitPrice,
+      line_total: unitPrice * sel.quantity,
+    };
+  });
+  const subtotal = lines.reduce((sum, l) => sum + l.line_total, 0);
+
+  const { data: booking, error: bErr } = await supabase
+    .from(BOOKINGS)
+    .insert({
+      operator_id: input.operatorId,
+      status: "quoted",
+      event_date: input.eventDate,
+      customer_name: input.customerName ?? null,
+      customer_email: input.customerEmail ?? null,
+      delivery_window: input.deliveryWindow ?? null,
+      delivery_address: input.deliveryAddress ?? null,
+      delivery_zip: input.deliveryZip ?? null,
+      notes: input.notes ?? null,
+      subtotal,
+      currency: "usd",
+    })
+    .select("id")
+    .single();
+  if (bErr) throw new Error(`createBooking failed: ${bErr.message}`);
+
+  const { error: biErr } = await supabase
+    .from(BOOKING_ITEMS)
+    .insert(lines.map((l) => ({ booking_id: booking.id, ...l })));
+  if (biErr) throw new Error(`createBooking items failed: ${biErr.message}`);
+
+  const created = await getBooking(booking.id);
+  if (!created) throw new Error("createBooking: booking vanished after insert.");
+  return created;
+}
+
+/** Transition a booking's status. Returns the updated booking. */
+export async function setBookingStatus(
+  id: string,
+  status: BookingStatus,
+): Promise<Booking | null> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from(BOOKINGS).update({ status }).eq("id", id);
+  if (error) throw new Error(`setBookingStatus failed: ${error.message}`);
+  return getBooking(id);
+}
+
+/**
+ * Mark a booking paid and run the final oversell guard. The payment already
+ * succeeded, so we never block here — we set `paid` and RETURN any items whose
+ * total committed reservations now exceed units owned, for the caller to alert
+ * on. (This booking is itself counted, since paid/pending_payment reserve.)
+ */
+export async function confirmBookingPaid(
+  bookingId: string,
+): Promise<{ booking: Booking | null; oversold: { itemId: string; owned: number; reserved: number }[] }> {
+  const booking = await getBooking(bookingId);
+  if (!booking) return { booking: null, oversold: [] };
+
+  await setBookingStatus(bookingId, "paid");
+
+  const oversold: { itemId: string; owned: number; reserved: number }[] = [];
+  for (const li of booking.items) {
+    const a = await checkAvailability(li.itemId, booking.eventDate, 0);
+    if (a.reserved > a.owned) {
+      oversold.push({ itemId: li.itemId, owned: a.owned, reserved: a.reserved });
+    }
+  }
+  return { booking: await getBooking(bookingId), oversold };
+}
