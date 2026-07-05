@@ -7,6 +7,11 @@ const ITEMS = "items";
 interface OperatorRow {
   id: string;
   name: string;
+  owner_name: string | null;
+  location: string | null;
+  plan: string | null;
+  latitude: number | null;
+  longitude: number | null;
   contact_email: string | null;
   brand_color: string | null;
   logo_url: string | null;
@@ -35,6 +40,11 @@ function rowToOperator(r: OperatorRow): Operator {
   return {
     id: r.id,
     name: r.name,
+    ownerName: r.owner_name,
+    location: r.location,
+    plan: r.plan ?? "solo",
+    latitude: r.latitude,
+    longitude: r.longitude,
     contactEmail: r.contact_email,
     brandColor: r.brand_color,
     logoUrl: r.logo_url,

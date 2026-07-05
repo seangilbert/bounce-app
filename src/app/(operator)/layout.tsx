@@ -1,5 +1,9 @@
 import { BottomNav } from "@/components/operator/BottomNav";
 import { Sidebar } from "@/components/operator/Sidebar";
+import { getDefaultOperator } from "@/lib/inventory/repo";
+import { countNeedsReview } from "@/lib/inquiries/repo";
+
+export const dynamic = "force-dynamic";
 
 /**
  * Operator app shell — responsive.
@@ -10,16 +14,18 @@ import { Sidebar } from "@/components/operator/Sidebar";
  * `min-w-0` on the main column lets it shrink to the viewport instead of being
  * forced wide by its content. No auth gate yet — that's a later milestone.
  */
-export default function OperatorLayout({
+export default async function OperatorLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const operator = await getDefaultOperator();
+  const needsCount = operator ? await countNeedsReview(operator.id) : 0;
   return (
     <div className="flex min-h-dvh w-full bg-cream">
-      <Sidebar />
+      <Sidebar operator={operator} needsCount={needsCount} />
       <div className="flex min-h-dvh w-full min-w-0 flex-col overflow-x-hidden bg-cream lg:border-l lg:border-sand">
         <main className="flex flex-1 flex-col pb-20 lg:pb-0">{children}</main>
       </div>
-      <BottomNav />
+      <BottomNav needsCount={needsCount} />
     </div>
   );
 }

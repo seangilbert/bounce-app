@@ -3,6 +3,11 @@ export type PriceUnit = "per_day" | "per_hour" | "flat";
 export interface Operator {
   id: string;
   name: string;
+  ownerName: string | null;
+  location: string | null;
+  plan: string;
+  latitude: number | null;
+  longitude: number | null;
   contactEmail: string | null;
   brandColor: string | null;
   logoUrl: string | null;

@@ -4,8 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Confetti, CaretUpDown } from "@phosphor-icons/react/dist/ssr";
 import { NAV, type NavItem } from "@/lib/operator/nav";
-import { operator } from "@/lib/operator/mock";
 import { calFilters } from "@/lib/operator/calendar";
+import type { Operator } from "@/lib/inventory/types";
+
+function initialsOf(name: string): string {
+  return name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+}
 
 const MAIN_NAV = NAV.filter((n) => n.href !== "/settings");
 const SETTINGS = NAV.find((n) => n.href === "/settings");
@@ -34,9 +38,23 @@ function NavLink({ item }: { item: NavItem }) {
 }
 
 /** Desktop-only persistent sidebar (hidden on mobile, where the bottom bar takes over). */
-export function Sidebar() {
+export function Sidebar({
+  operator,
+  needsCount,
+}: {
+  operator: Operator | null;
+  needsCount: number;
+}) {
   const pathname = usePathname();
   const onCalendar = pathname === "/calendar" || pathname.startsWith("/calendar/");
+
+  const business = operator?.name ?? "Your business";
+  const location = operator?.location ?? "";
+  const ownerName = operator?.ownerName ?? operator?.name ?? "Account";
+  const planLabel = operator?.plan
+    ? `${operator.plan[0].toUpperCase()}${operator.plan.slice(1)} plan`
+    : "";
+
   return (
     <aside className="hidden w-[272px] flex-shrink-0 flex-col border-r border-sand bg-cream px-4 py-5 lg:sticky lg:top-0 lg:flex lg:h-dvh">
       {/* Brand */}
@@ -46,16 +64,19 @@ export function Sidebar() {
         </span>
         <div className="min-w-0">
           <div className="font-display text-[17px] font-extrabold leading-tight tracking-tight text-ink">
-            {operator.business}
+            {business}
           </div>
-          <div className="text-[12.5px] font-semibold text-ink-mute">{operator.location}</div>
+          <div className="text-[12.5px] font-semibold text-ink-mute">{location}</div>
         </div>
       </div>
 
       {/* Primary nav */}
       <nav className="flex flex-col gap-1" aria-label="Primary">
         {MAIN_NAV.map((item) => (
-          <NavLink key={item.href} item={item} />
+          <NavLink
+            key={item.href}
+            item={item.href === "/inquiries" ? { ...item, badge: needsCount || undefined } : item}
+          />
         ))}
       </nav>
 
@@ -85,13 +106,11 @@ export function Sidebar() {
         {SETTINGS ? <NavLink item={SETTINGS} /> : null}
         <button className="mt-1 flex items-center gap-3 rounded-2xl bg-sand/50 px-3 py-3 text-left transition-colors hover:bg-sand/70">
           <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold text-white">
-            {operator.initials}
+            {initialsOf(ownerName)}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-bold text-ink">{operator.fullName}</span>
-            <span className="block truncate text-[13px] font-medium text-ink-mute">
-              {operator.plan}
-            </span>
+            <span className="block truncate text-[15px] font-bold text-ink">{ownerName}</span>
+            <span className="block truncate text-[13px] font-medium text-ink-mute">{planLabel}</span>
           </span>
           <CaretUpDown size={18} className="flex-shrink-0 text-ink-faint" />
         </button>

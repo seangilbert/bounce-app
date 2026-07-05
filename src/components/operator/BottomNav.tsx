@@ -36,9 +36,11 @@ function Tab({ item, active }: { item: NavItem; active: boolean }) {
 }
 
 /** Mobile-only bottom tab bar (hidden on desktop, where the sidebar takes over). */
-export function BottomNav() {
+export function BottomNav({ needsCount = 0 }: { needsCount?: number }) {
   const pathname = usePathname();
-  const tabs = [...MOBILE_PRIMARY, MORE_TAB];
+  const tabs = [...MOBILE_PRIMARY, MORE_TAB].map((item) =>
+    item.href === "/inquiries" ? { ...item, badge: needsCount || undefined } : item,
+  );
   const moreActive = !MOBILE_PRIMARY.some((t) => isActive(pathname, t.href));
 
   return (

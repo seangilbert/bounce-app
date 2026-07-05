@@ -22,7 +22,7 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", mobileLabel: "Home", icon: House },
   { href: "/calendar", label: "Calendar", icon: CalendarDots },
-  { href: "/inquiries", label: "Inquiries", icon: ChatCircleDots, badge: 1 },
+  { href: "/inquiries", label: "Inquiries", icon: ChatCircleDots },
   { href: "/deliveries", label: "Deliveries", icon: Truck },
   { href: "/inventory", label: "Inventory", icon: Package },
   { href: "/settings", label: "Settings", icon: GearSix },

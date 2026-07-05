@@ -84,6 +84,18 @@ export async function createInquiry(input: CreateInquiryInput): Promise<{ id: st
   return { id: data.id as string };
 }
 
+/** Count of inquiries awaiting operator review (for the nav badge). */
+export async function countNeedsReview(operatorId: string): Promise<number> {
+  const supabase = createAdminClient();
+  const { count, error } = await supabase
+    .from("inquiries")
+    .select("id", { count: "exact", head: true })
+    .eq("operator_id", operatorId)
+    .eq("status", "needs_review");
+  if (error) throw new Error(`countNeedsReview failed: ${error.message}`);
+  return count ?? 0;
+}
+
 /** All inquiries for an operator, newest first (the inbox). */
 export async function listInquiries(operatorId: string): Promise<InquiryRow[]> {
   const supabase = createAdminClient();

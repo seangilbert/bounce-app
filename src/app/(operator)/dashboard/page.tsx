@@ -6,15 +6,18 @@ import {
   MagnifyingGlass,
   Plus,
   CloudRain,
+  Sun,
   ArrowUp,
   ArrowDown,
   TrendUp,
   CheckCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import { getDefaultOperator } from "@/lib/inventory/repo";
+import type { Operator } from "@/lib/inventory/types";
 import { getDashboard, type DashboardData } from "@/lib/operator/data";
-// Operator identity + weather stay mock/config for now (no weather API yet).
-import { operator, aiSummary, weekStats, weatherAdvisory } from "@/lib/operator/mock";
+import { getWeatherAdvisory, type WeatherAdvisory } from "@/lib/operator/weather";
+// Reply-time + weekly deltas remain lightweight config (no historical series yet).
+import { aiSummary, weekStats } from "@/lib/operator/mock";
 import type { Stop } from "@/lib/operator/mock";
 
 export const dynamic = "force-dynamic";
@@ -23,17 +26,27 @@ export default async function DashboardPage() {
   const op = await getDefaultOperator();
   if (!op) return <div className="p-8 text-ink-mute">No operator configured.</div>;
   const data = await getDashboard(op.id);
-  return <DashboardBody data={data} />;
+  const weather = await getWeatherAdvisory(op, data.todayStops);
+  return <DashboardBody data={data} operator={op} weather={weather} />;
 }
 
-function DashboardBody({ data }: { data: DashboardData }) {
+function DashboardBody({
+  data,
+  operator,
+  weather,
+}: {
+  data: DashboardData;
+  operator: Operator;
+  weather: WeatherAdvisory | null;
+}) {
+  const firstName = operator.ownerName?.split(/\s+/)[0] ?? operator.name;
   return (
     <div className="flex w-full flex-col">
       {/* Top bar */}
       <div className="flex flex-col gap-4 border-b border-sand px-5 py-5 sm:flex-row sm:items-center sm:justify-between lg:px-8 lg:py-6">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">
-            Good morning, {operator.firstName}
+            Good morning, {firstName}
           </h1>
           <p className="mt-0.5 text-sm font-medium text-ink-mute">
             {data.dateLabel} · {data.routeSummary}
@@ -72,7 +85,7 @@ function DashboardBody({ data }: { data: DashboardData }) {
               <span className="font-semibold text-ink-mute">{weekStats.repliedPct}% replied</span>
             </StatTile>
           </div>
-          <WeatherCard />
+          <WeatherCard weather={weather} />
           <ComingUp items={data.comingUp} />
         </div>
       </div>
@@ -232,20 +245,30 @@ function StatTile({
   );
 }
 
-function WeatherCard() {
+function WeatherCard({ weather }: { weather: WeatherAdvisory | null }) {
+  if (!weather) {
+    return (
+      <div className="rounded-[20px] border border-sand-line bg-white p-5">
+        <div className="flex items-center gap-2.5">
+          <Sun size={20} weight="fill" className="text-amber" />
+          <span className="text-base font-extrabold text-ink">Clear skies today</span>
+        </div>
+        <p className="mt-2 text-[13.5px] font-medium leading-snug text-ink-mute">
+          No rain in the forecast for your route — a good day for setups.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="rounded-[20px] border border-amber-line bg-amber-tint p-5">
       <div className="flex items-center gap-2.5">
         <CloudRain size={20} weight="fill" className="text-amber-deep" />
-        <span className="text-base font-extrabold text-[#5C4B22]">{weatherAdvisory.headline}</span>
+        <span className="text-base font-extrabold text-[#5C4B22]">{weather.headline}</span>
       </div>
-      <p className="mt-2 text-[13.5px] font-medium leading-snug text-[#8A7A55]">
-        Could affect the <b className="text-[#5C4B22]">Miller</b> 10 AM setup in Plymouth. A
-        heads-up message is drafted and ready to send.
-      </p>
+      <p className="mt-2 text-[13.5px] font-medium leading-snug text-[#8A7A55]">{weather.detail}</p>
       <div className="mt-4 flex gap-2.5">
         <button className="flex-1 rounded-xl bg-amber px-4 py-3 text-sm font-extrabold text-white transition-colors hover:bg-amber-deep">
-          Review message
+          Draft heads-up
         </button>
         <button className="rounded-xl border border-amber-line bg-white px-4 py-3 text-sm font-bold text-ink-soft">
           Dismiss
