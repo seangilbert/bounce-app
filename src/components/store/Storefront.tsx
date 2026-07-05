@@ -15,6 +15,7 @@ import {
   CircleNotch,
   ShieldCheck,
   Truck,
+  Sparkle,
 } from "@phosphor-icons/react/dist/ssr";
 
 type Category = "bounce" | "tent" | "tables" | "other";
@@ -31,6 +32,21 @@ interface ApiItem {
 interface ApiResponse {
   operator: { name: string } | null;
   items: ApiItem[];
+}
+
+interface QuoteLine {
+  itemId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+interface InquiryResult {
+  auto: boolean;
+  customerMessage: string;
+  quote: { lineItems: QuoteLine[]; subtotal: number; suggestedDeposit: number; currency: string };
+  escalation: { reasons: string[] } | null;
+  unmatchedRequests: string[];
 }
 
 function toCategory(c: string | null): Category {
@@ -67,6 +83,37 @@ export function Storefront() {
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+
+  // AI Instant Quote assistant
+  const [message, setMessage] = useState("");
+  const [assistLoading, setAssistLoading] = useState(false);
+  const [assistResult, setAssistResult] = useState<InquiryResult | null>(null);
+  const [assistError, setAssistError] = useState<string | null>(null);
+
+  async function askAssistant() {
+    setAssistLoading(true);
+    setAssistError(null);
+    setAssistResult(null);
+    try {
+      const res = await fetch("/api/inquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, startDate: date }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Couldn't get a quote right now.");
+      setAssistResult(json as InquiryResult);
+    } catch (e) {
+      setAssistError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setAssistLoading(false);
+    }
+  }
+
+  function bookQuote(lines: QuoteLine[]) {
+    setCart(Object.fromEntries(lines.map((l) => [l.itemId, l.quantity])));
+    setCheckoutOpen(true);
+  }
 
   useEffect(() => {
     let active = true;
@@ -122,30 +169,68 @@ export function Storefront() {
         </div>
       </header>
 
-      {/* Hero + date picker */}
+      {/* Hero + AI Instant Quote */}
       <section className="px-5 pt-10 lg:px-10">
         <div className="mx-auto max-w-6xl">
           <h1 className="max-w-2xl font-display text-4xl font-bold leading-[1.05] tracking-tight text-ink lg:text-5xl">
             Bouncy fun, delivered to your party.
           </h1>
           <p className="mt-3 max-w-xl text-base font-medium text-ink-soft">
-            Pick your date and we&apos;ll show you what&apos;s available. Delivery, setup, and
-            pickup included.
+            Tell us about your event for an instant quote — or browse below. Delivery, setup &amp;
+            pickup always included.
           </p>
 
-          <div className="mt-6 inline-flex flex-wrap items-center gap-3 rounded-2xl border border-sand bg-white p-2.5 shadow-sm">
-            <label className="flex items-center gap-2.5 px-2">
-              <CalendarBlank size={20} weight="fill" className="text-brand" />
-              <span className="text-sm font-bold text-ink-soft">Event date</span>
-            </label>
-            <input
-              type="date"
-              value={date}
-              min={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setDate(e.target.value)}
-              className="rounded-xl border border-sand bg-cream px-3 py-2 text-sm font-bold text-ink outline-none focus:border-brand"
+          <div className="mt-6 max-w-2xl rounded-[24px] border border-brand-ring bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Sparkle size={18} weight="fill" className="text-brand" />
+              <span className="text-sm font-extrabold text-ink">Instant quote</span>
+              <span className="text-xs font-semibold text-ink-mute">· answers in seconds, 24/7</span>
+            </div>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={2}
+              placeholder="e.g. A bounce house and a popcorn machine for a 6-year-old's birthday, about 15 kids."
+              className="mt-3 w-full resize-none rounded-xl border border-sand bg-cream px-4 py-3 text-sm font-medium text-ink outline-none placeholder:text-ink-faint focus:border-brand"
             />
-            <span className="px-2 text-sm font-semibold text-ink-mute">{prettyDate(date)}</span>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 rounded-xl border border-sand bg-cream px-3 py-2">
+                <CalendarBlank size={18} weight="fill" className="text-brand" />
+                <input
+                  type="date"
+                  value={date}
+                  min={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="bg-transparent text-sm font-bold text-ink outline-none"
+                />
+              </div>
+              <button
+                onClick={askAssistant}
+                disabled={!message.trim() || assistLoading}
+                className="ml-auto flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
+              >
+                {assistLoading ? (
+                  <>
+                    <CircleNotch size={16} weight="bold" className="animate-spin" /> Thinking…
+                  </>
+                ) : (
+                  <>
+                    <Sparkle size={15} weight="fill" /> Get instant quote
+                  </>
+                )}
+              </button>
+            </div>
+            {assistError ? (
+              <div className="mt-3 rounded-xl bg-coral-tint px-4 py-3 text-sm font-semibold text-coral-deep">
+                {assistError}
+              </div>
+            ) : null}
+            {assistResult ? (
+              <QuoteResult
+                result={assistResult}
+                onBook={() => bookQuote(assistResult.quote.lineItems)}
+              />
+            ) : null}
           </div>
         </div>
       </section>
@@ -363,6 +448,64 @@ function Field({
         className="w-full rounded-xl border border-sand bg-white px-3.5 py-2.5 text-sm font-medium text-ink outline-none placeholder:text-ink-faint focus:border-brand"
       />
     </label>
+  );
+}
+
+function QuoteResult({ result, onBook }: { result: InquiryResult; onBook: () => void }) {
+  if (result.quote.lineItems.length > 0) {
+    return (
+      <div className="mt-4 rounded-2xl border border-brand-ring bg-brand-tint/40 p-4">
+        <div className="flex items-center gap-2 text-brand-deep">
+          <Sparkle size={16} weight="fill" />
+          <span className="text-sm font-extrabold">Here&apos;s your instant quote</span>
+        </div>
+        <p className="mt-1.5 text-sm font-medium leading-snug text-ink">
+          {result.auto
+            ? result.customerMessage
+            : "Here's what we'd recommend — book now to lock in your date and we'll confirm the details."}
+        </p>
+        <div className="mt-3 rounded-xl bg-white p-3.5">
+          {result.quote.lineItems.map((l) => (
+            <div key={l.itemId} className="flex items-center justify-between py-1 text-sm">
+              <span className="font-semibold text-ink">
+                {l.quantity > 1 ? `${l.quantity}× ` : ""}
+                {l.name}
+              </span>
+              <span className="font-bold text-ink">{money(l.lineTotal)}</span>
+            </div>
+          ))}
+          <div className="mt-2 flex items-center justify-between border-t border-sand-line pt-2.5">
+            <span className="font-bold text-ink">Total</span>
+            <span className="font-display text-lg font-extrabold text-ink">
+              {money(result.quote.subtotal)}
+            </span>
+          </div>
+          {result.quote.suggestedDeposit > 0 ? (
+            <div className="mt-1 text-right text-xs font-semibold text-ink-mute">
+              Deposit today: {money(result.quote.suggestedDeposit)}
+            </div>
+          ) : null}
+        </div>
+        <button
+          onClick={onBook}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep"
+        >
+          Add to cart &amp; book <ArrowRight size={15} weight="bold" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-amber-line bg-amber-tint p-4">
+      <div className="text-sm font-extrabold text-ink">Thanks — we&apos;ll confirm shortly</div>
+      <p className="mt-1 text-sm font-medium leading-snug text-ink-soft">{result.customerMessage}</p>
+      {result.unmatchedRequests.length > 0 ? (
+        <p className="mt-2 text-[13px] font-semibold text-amber-deep">
+          Note: we don&apos;t carry {result.unmatchedRequests.join(", ")}.
+        </p>
+      ) : null}
+    </div>
   );
 }
 
