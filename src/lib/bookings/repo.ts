@@ -165,6 +165,17 @@ export async function setBookingStatus(
 }
 
 /**
+ * Record the amount collected up front (minor units). For a deposit this is the
+ * partial payment; for pay-in-full it equals the subtotal. The balance shown to
+ * the operator is subtotal − deposit.
+ */
+export async function setBookingDeposit(id: string, deposit: number): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from(BOOKINGS).update({ deposit }).eq("id", id);
+  if (error) throw new Error(`setBookingDeposit failed: ${error.message}`);
+}
+
+/**
  * Mark a booking paid and run the final oversell guard. The payment already
  * succeeded, so we never block here — we set `paid` and RETURN any items whose
  * total committed reservations now exceed units owned, for the caller to alert

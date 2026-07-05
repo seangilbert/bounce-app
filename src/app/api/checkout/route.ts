@@ -3,8 +3,9 @@ import { z } from "zod";
 import { getPaymentProvider } from "@/lib/payments";
 import type { CheckoutInput } from "@/lib/payments";
 import { createPendingOrder } from "@/lib/orders/repo";
-import { getBooking, setBookingStatus } from "@/lib/bookings/repo";
+import { getBooking, setBookingStatus, setBookingDeposit } from "@/lib/bookings/repo";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,9 @@ const CheckoutSchema = z
     currency: z.string().default("usd"),
     customerEmail: z.string().email().optional(),
     metadata: z.record(z.string(), z.string()).optional(),
+    // Booking checkouts can collect a deposit now (balance due on delivery) or
+    // the full amount. Ignored for raw-lineItems checkouts.
+    paymentType: z.enum(["deposit", "full"]).default("full"),
   })
   .refine((d) => d.bookingId || d.lineItems, {
     message: "Provide either bookingId or lineItems.",
@@ -72,6 +76,8 @@ export async function POST(req: Request) {
   // Resolve line items + metadata from either the booking or the raw payload.
   let checkoutInput: CheckoutInput;
   let bookingId: string | undefined;
+  // Amount to record on the booking as collected up front (deposit, or full).
+  let depositToRecord: number | null = null;
 
   if (data.bookingId) {
     const booking = await getBooking(data.bookingId);
@@ -85,17 +91,34 @@ export async function POST(req: Request) {
       );
     }
     bookingId = booking.id;
+
+    // booking.subtotal is range-aware (line_total already applies the rental
+    // duration). Charge either a deposit or the full amount.
+    const subtotal = booking.subtotal;
+    let lineItems;
+    if (data.paymentType === "deposit") {
+      const dep = depositAmount(subtotal);
+      lineItems = [
+        { name: `Deposit (${DEPOSIT_PERCENT}%) — balance due on delivery`, quantity: 1, unitAmount: dep },
+      ];
+      depositToRecord = dep;
+    } else {
+      // Per-unit for the whole rental = line_total / quantity (integer for our
+      // pricing: unit_price × days). Charging this fixes the prior single-day bug.
+      lineItems = booking.items.map((li) => ({
+        name: li.name,
+        quantity: li.quantity,
+        unitAmount: Math.round(li.lineTotal / li.quantity),
+      }));
+      depositToRecord = subtotal; // paid in full
+    }
     checkoutInput = {
       currency: booking.currency,
       successUrl: data.successUrl,
       cancelUrl: data.cancelUrl,
       customerEmail: booking.customerEmail ?? undefined,
-      metadata: { booking_id: booking.id },
-      lineItems: booking.items.map((li) => ({
-        name: li.name,
-        quantity: li.quantity,
-        unitAmount: li.unitPrice,
-      })),
+      metadata: { booking_id: booking.id, payment_type: data.paymentType },
+      lineItems,
     };
   } else {
     checkoutInput = {
@@ -127,9 +150,12 @@ export async function POST(req: Request) {
       bookingId,
     });
 
-    // Move the booking into checkout. (Still doesn't reserve inventory — that
-    // happens when the payment is confirmed.)
-    if (bookingId) await setBookingStatus(bookingId, "pending_payment");
+    // Move the booking into checkout + record what's being collected up front.
+    // (Still doesn't reserve inventory — that happens when payment is confirmed.)
+    if (bookingId) {
+      await setBookingStatus(bookingId, "pending_payment");
+      if (depositToRecord != null) await setBookingDeposit(bookingId, depositToRecord);
+    }
 
     return NextResponse.json(result);
   } catch (err) {

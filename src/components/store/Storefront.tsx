@@ -17,6 +17,7 @@ import {
   Truck,
   Sparkle,
 } from "@phosphor-icons/react/dist/ssr";
+import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
 
 type Category = "bounce" | "tent" | "tables" | "other";
 
@@ -77,12 +78,41 @@ function prettyDate(iso: string): string {
   return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 }
 
+/** Inclusive rental length in days (start === end → 1 day). */
+function durationDays(start: string, end: string): number {
+  const s = new Date(`${start}T00:00:00Z`).getTime();
+  const e = new Date(`${end}T00:00:00Z`).getTime();
+  return Math.max(1, Math.round((e - s) / 86_400_000) + 1);
+}
+
+/** Client estimate of a line total: per_day scales with length; flat/per_hour are one-time. */
+function lineTotalOf(item: ApiItem, qty: number, days: number): number {
+  const oneTime = item.priceUnit === "flat" || item.priceUnit === "per_hour";
+  return item.basePrice * qty * (oneTime ? 1 : days);
+}
+
+function rangeLabel(start: string, end: string): string {
+  if (start === end) return prettyDate(start);
+  const fmt = (iso: string) =>
+    new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${fmt(start)} – ${fmt(end)}`;
+}
+
 export function Storefront() {
   const [date, setDate] = useState(nextSaturday);
+  const [endDate, setEndDate] = useState(nextSaturday);
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+
+  const days = durationDays(date, endDate);
+
+  // Keep the end date on/after the start date.
+  const changeStart = (v: string) => {
+    setDate(v);
+    if (endDate < v) setEndDate(v);
+  };
 
   // AI Instant Quote assistant
   const [message, setMessage] = useState("");
@@ -98,7 +128,7 @@ export function Storefront() {
       const res = await fetch("/api/inquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, startDate: date }),
+        body: JSON.stringify({ message, startDate: date, endDate }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Couldn't get a quote right now.");
@@ -118,14 +148,14 @@ export function Storefront() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetch(`/api/items?start=${date}&end=${date}`)
+    fetch(`/api/items?start=${date}&end=${endDate}`)
       .then((r) => r.json())
       .then((d: ApiResponse) => active && setData(d))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [date]);
+  }, [date, endDate]);
 
   const items = data?.items ?? [];
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
@@ -142,7 +172,7 @@ export function Storefront() {
     .map(([id, qty]) => ({ item: byId.get(id), qty }))
     .filter((l): l is { item: ApiItem; qty: number } => Boolean(l.item));
   const cartCount = cartLines.reduce((s, l) => s + l.qty, 0);
-  const subtotal = cartLines.reduce((s, l) => s + l.item.basePrice * l.qty, 0);
+  const subtotal = cartLines.reduce((s, l) => s + lineTotalOf(l.item, l.qty, days), 0);
 
   return (
     <div className="min-h-dvh bg-cream pb-28">
@@ -198,12 +228,27 @@ export function Storefront() {
                 <CalendarBlank size={18} weight="fill" className="text-brand" />
                 <input
                   type="date"
+                  aria-label="Start date"
                   value={date}
                   min={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => changeStart(e.target.value)}
+                  className="bg-transparent text-sm font-bold text-ink outline-none"
+                />
+                <span className="text-ink-faint">→</span>
+                <input
+                  type="date"
+                  aria-label="End date"
+                  value={endDate}
+                  min={date}
+                  onChange={(e) => setEndDate(e.target.value)}
                   className="bg-transparent text-sm font-bold text-ink outline-none"
                 />
               </div>
+              {days > 1 ? (
+                <span className="rounded-full bg-brand-tint px-2.5 py-1 text-xs font-extrabold text-brand-deep">
+                  {days} days
+                </span>
+              ) : null}
               <button
                 onClick={askAssistant}
                 disabled={!message.trim() || assistLoading}
@@ -238,7 +283,10 @@ export function Storefront() {
       {/* Catalog */}
       <section className="px-5 pt-10 lg:px-10">
         <div className="mx-auto max-w-6xl">
-          <h2 className="font-display text-2xl font-bold text-ink">Available for {prettyDate(date)}</h2>
+          <h2 className="font-display text-2xl font-bold text-ink">
+            Available {rangeLabel(date, endDate)}
+            {days > 1 ? <span className="text-ink-mute"> · {days}-day rental</span> : null}
+          </h2>
           {loading ? (
             <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {[0, 1, 2].map((i) => (
@@ -261,7 +309,7 @@ export function Storefront() {
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
             <div className="text-sm font-semibold text-ink-soft">
               <span className="font-display text-lg font-extrabold text-ink">{money(subtotal)}</span>{" "}
-              · {cartCount} {cartCount === 1 ? "item" : "items"} · {prettyDate(date)}
+              · {cartCount} {cartCount === 1 ? "item" : "items"} · {rangeLabel(date, endDate)}
             </div>
             <button
               onClick={() => setCheckoutOpen(true)}
@@ -276,6 +324,8 @@ export function Storefront() {
       {checkoutOpen ? (
         <CheckoutDrawer
           date={date}
+          endDate={endDate}
+          days={days}
           lines={cartLines}
           subtotal={subtotal}
           onClose={() => setCheckoutOpen(false)}
@@ -287,19 +337,28 @@ export function Storefront() {
 
 function CheckoutDrawer({
   date,
+  endDate,
+  days,
   lines,
   subtotal,
   onClose,
 }: {
   date: string;
+  endDate: string;
+  days: number;
   lines: { item: ApiItem; qty: number }[];
   subtotal: number;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
+  const [payType, setPayType] = useState<"deposit" | "full">("deposit");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const valid = form.name.trim() && /.+@.+\..+/.test(form.email) && form.address.trim();
+
+  const deposit = depositAmount(subtotal);
+  const balance = subtotal - deposit;
+  const amountNow = payType === "deposit" ? deposit : subtotal;
 
   const field = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -313,6 +372,7 @@ function CheckoutDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           startDate: date,
+          endDate,
           items: lines.map((l) => ({ itemId: l.item.id, quantity: l.qty })),
           customerName: form.name,
           customerEmail: form.email,
@@ -328,6 +388,7 @@ function CheckoutDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bookingId: bJson.booking.id,
+          paymentType: payType,
           successUrl: `${location.origin}/book/success`,
           cancelUrl: `${location.origin}/book`,
         }),
@@ -359,7 +420,10 @@ function CheckoutDrawer({
         </div>
 
         <div className="flex-1 space-y-5 px-5 py-5">
-          <div className="text-sm font-semibold text-ink-mute">{prettyDate(date)}</div>
+          <div className="text-sm font-semibold text-ink-mute">
+            {rangeLabel(date, endDate)}
+            {days > 1 ? ` · ${days} days` : ""}
+          </div>
 
           <div className="rounded-2xl border border-sand-line bg-white p-4">
             {lines.map((l) => (
@@ -367,13 +431,35 @@ function CheckoutDrawer({
                 <span className="font-semibold text-ink">
                   {l.qty > 1 ? `${l.qty}× ` : ""}
                   {l.item.name}
+                  {days > 1 && l.item.priceUnit !== "flat" ? (
+                    <span className="font-medium text-ink-mute"> · {days} days</span>
+                  ) : null}
                 </span>
-                <span className="font-bold text-ink">{money(l.item.basePrice * l.qty)}</span>
+                <span className="font-bold text-ink">{money(lineTotalOf(l.item, l.qty, days))}</span>
               </div>
             ))}
             <div className="mt-2 flex items-center justify-between border-t border-sand-line pt-2.5">
               <span className="font-bold text-ink">Total</span>
               <span className="font-display text-lg font-extrabold text-ink">{money(subtotal)}</span>
+            </div>
+          </div>
+
+          {/* Deposit vs full */}
+          <div>
+            <div className="mb-2 text-[13px] font-bold text-ink-soft">How would you like to pay?</div>
+            <div className="flex flex-col gap-2.5">
+              <PayOption
+                active={payType === "deposit"}
+                onClick={() => setPayType("deposit")}
+                title={`Pay ${DEPOSIT_PERCENT}% deposit`}
+                subtitle={`${money(deposit)} today · ${money(balance)} due on delivery`}
+              />
+              <PayOption
+                active={payType === "full"}
+                onClick={() => setPayType("full")}
+                title="Pay in full"
+                subtitle={`${money(subtotal)} today · nothing due later`}
+              />
             </div>
           </div>
 
@@ -412,15 +498,51 @@ function CheckoutDrawer({
                 <CircleNotch size={18} weight="bold" className="animate-spin" /> Starting checkout…
               </>
             ) : (
-              <>Pay {money(subtotal)} deposit</>
+              <>Pay {money(amountNow)} now</>
             )}
           </button>
           <p className="mt-2 text-center text-xs font-medium text-ink-mute">
-            You&apos;ll confirm on the next screen. No charge until you pay.
+            {payType === "deposit"
+              ? `Balance of ${money(balance)} collected on delivery.`
+              : "Paid in full — nothing due later."}{" "}
+            No charge until you confirm.
           </p>
         </div>
       </div>
     </div>
+  );
+}
+
+function PayOption({
+  active,
+  onClick,
+  title,
+  subtitle,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-colors ${
+        active ? "border-brand bg-brand-tint/40" : "border-sand-line bg-white hover:border-sand"
+      }`}
+    >
+      <span
+        className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+          active ? "border-brand" : "border-sand"
+        }`}
+      >
+        {active ? <span className="h-2.5 w-2.5 rounded-full bg-brand" /> : null}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-bold text-ink">{title}</span>
+        <span className="block text-[13px] font-medium text-ink-mute">{subtitle}</span>
+      </span>
+    </button>
   );
 }
 
