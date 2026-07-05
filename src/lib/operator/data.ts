@@ -6,12 +6,8 @@ import type {
   ItemCategory,
   SelectedDayDetail,
 } from "./calendar";
-import {
-  inquiries as MOCK_INQUIRIES,
-  inquiryDetails as MOCK_DETAILS,
-  type InquiryListItem,
-  type InquiryDetail,
-} from "./inquiries";
+import type { InquiryListItem, InquiryDetail } from "./inquiries";
+import { listInquiries, type InquiryRow } from "@/lib/inquiries/repo";
 import type { Stop } from "./mock";
 
 /** Booking statuses that occupy inventory (shown on the calendar). */
@@ -206,53 +202,96 @@ function initials(name: string): string {
   return name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
+/** Relative timestamp for the inbox, e.g. "6:52 AM", "Yesterday", "Jul 3". */
+function relTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString())
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return "Yesterday";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** "Sat, Jul 12" from a date-only ISO string (UTC). */
+function fmtEventDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return `${WEEKDAY[d.getUTCDay()].slice(0, 3)}, ${MONTHS[d.getUTCMonth()].slice(0, 3)} ${d.getUTCDate()}`;
+}
+
+function friendlyWhy(reasons: string[]): string {
+  if (!reasons.length) return "I flagged this inquiry for your review.";
+  return `I didn't auto-send because ${reasons.join("; ")}.`;
+}
+
+function rowToListItem(r: InquiryRow): InquiryListItem {
+  const name = r.customer_name ?? "Website visitor";
+  const top = r.quote?.lineItems[0];
+  const preview =
+    r.status === "auto"
+      ? top
+        ? `${top.name} quoted ${money(top.unitPrice)}/day · auto-sent`
+        : r.ai_summary ?? r.inbound_message
+      : `“${r.inbound_message}”`;
+  return {
+    id: r.id,
+    name,
+    initials: initials(name),
+    time: relTime(r.created_at),
+    status: r.status === "auto" ? "auto" : "needs_review",
+    preview,
+    customerType: r.customer_type ?? "New customer",
+    location: r.location ?? r.customer_email ?? "via your website",
+  };
+}
+
+function rowToDetail(r: InquiryRow): InquiryDetail {
+  const message = { text: r.inbound_message, meta: `${relTime(r.created_at)} · via your ${r.channel}` };
+  const q = r.quote;
+
+  if (r.status === "auto") {
+    const note = q?.lineItems.length
+      ? `${q.lineItems.map((l) => `${l.quantity > 1 ? `${l.quantity}× ` : ""}${l.name}`).join(", ")} · ${money(q.subtotal)} · auto-sent`
+      : r.ai_summary ?? "Auto-answered.";
+    return { message, handledNote: r.ai_summary ?? note };
+  }
+
+  // needs_review → show the AI's drafted reply for the operator to send/edit.
+  const top = q?.lineItems[0];
+  const draft = r.ai_summary ?? "I've flagged this for you — add a reply below.";
+  return {
+    message,
+    whyBanner: friendlyWhy(r.escalation_reasons),
+    aiDraft: {
+      match: top
+        ? {
+            name: q!.lineItems.length > 1 ? `${top.name} +${q!.lineItems.length - 1} more` : top.name,
+            availabilityLabel: fmtEventDate(r.start_date),
+            price: q!.lineItems.length > 1 ? money(q!.subtotal) : money(top.unitPrice),
+            unit: q!.lineItems.length > 1 ? "total" : "/ day",
+          }
+        : { name: "No catalog match", availabilityLabel: fmtEventDate(r.start_date), price: "—", unit: "" },
+      message: draft,
+      replyDraft: draft,
+    },
+  };
+}
+
 /**
- * Inbox from live bookings with status inquiry (needs review) or quoted
- * (auto-answered). The rich detail (AI draft / conversation) is not yet
- * persisted, so it's matched from mock content by customer name.
+ * Inbox from the persisted `inquiries` table — real AI drafts, quotes, and
+ * escalation reasons, written by the Quote Assistant on every inquiry.
  */
 export async function getInquiries(operatorId: string): Promise<{
   list: InquiryListItem[];
   filters: { all: number; needsYou: number; auto: number };
   details: Record<string, InquiryDetail>;
 }> {
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("bookings")
-    .select("id, customer_name, status, notes, created_at")
-    .eq("operator_id", operatorId)
-    .in("status", ["inquiry", "quoted"])
-    .order("created_at", { ascending: false });
-  const rows = data ?? [];
-
-  const mockByName = new Map(MOCK_INQUIRIES.map((m) => [m.name, m]));
-  const list: InquiryListItem[] = rows.map((b) => {
-    const name = b.customer_name ?? "Customer";
-    const m = mockByName.get(name);
-    return {
-      id: b.id,
-      name,
-      initials: initials(name),
-      time: m?.time ?? "Today",
-      status: b.status === "inquiry" ? "needs_review" : "auto",
-      preview: b.notes ?? "",
-      customerType: m?.customerType ?? "New customer",
-      location: m?.location ?? "Plymouth, MA",
-    };
-  });
-  const needsYou = list.filter((l) => l.status === "needs_review").length;
-
+  const rows = await listInquiries(operatorId);
+  const list = rows.map(rowToListItem);
   const details: Record<string, InquiryDetail> = {};
-  for (const b of rows) {
-    const key = Object.keys(MOCK_DETAILS).find(
-      (k) => MOCK_INQUIRIES.find((m) => m.id === k)?.name === b.customer_name,
-    );
-    details[b.id] =
-      key && MOCK_DETAILS[key]
-        ? MOCK_DETAILS[key]
-        : { message: { text: b.notes ?? "", meta: "via your website" }, handledNote: b.notes ?? undefined };
-  }
-
+  for (const r of rows) details[r.id] = rowToDetail(r);
+  const needsYou = list.filter((l) => l.status === "needs_review").length;
   return { list, filters: { all: list.length, needsYou, auto: list.length - needsYou }, details };
 }
 
@@ -307,15 +346,10 @@ export async function getDashboard(operatorId: string): Promise<DashboardData> {
     .lte("start_date", ymd(weekEnd));
   const revenueCents = (weekData ?? []).reduce((s, b) => s + (b.subtotal ?? 0), 0);
 
-  const { data: inq } = await supabase
-    .from("bookings")
-    .select("customer_name, status, notes")
-    .eq("operator_id", operatorId)
-    .in("status", ["inquiry", "quoted"]);
-  const inqRows = inq ?? [];
-  const needsYou = inqRows.filter((r) => r.status === "inquiry").length;
-  const quotesSent = inqRows.filter((r) => r.status === "quoted").length;
-  const flagged = inqRows.find((r) => r.status === "inquiry");
+  const inqRows = await listInquiries(operatorId);
+  const needsYou = inqRows.filter((r) => r.status === "needs_review").length;
+  const quotesSent = inqRows.filter((r) => r.status === "auto").length;
+  const flagged = inqRows.find((r) => r.status === "needs_review");
 
   // Today's route
   const todayStops: Stop[] = committed
@@ -349,7 +383,7 @@ export async function getDashboard(operatorId: string): Promise<DashboardData> {
     comingUp.push({ month: WEEKDAY_ABBR[d.getUTCDay()], day: String(d.getUTCDate()), title: "Fully booked", subtitle: `${fbDay[1].length} bookings out`, tone: "coral" });
   }
   if (flagged) {
-    comingUp.push({ month: "NEW", day: "•", title: "Quote to review", subtitle: `${flagged.customer_name} · needs you`, tone: "muted" });
+    comingUp.push({ month: "NEW", day: "•", title: "Quote to review", subtitle: `${flagged.customer_name ?? "Website visitor"} · needs you`, tone: "muted" });
   }
 
   return {
@@ -360,7 +394,7 @@ export async function getDashboard(operatorId: string): Promise<DashboardData> {
     needsYou,
     quotesSent,
     booked: quotesSent,
-    flaggedSummary: flagged?.notes ?? null,
+    flaggedSummary: flagged?.inbound_message ?? null,
     todayStops,
     comingUp,
   };

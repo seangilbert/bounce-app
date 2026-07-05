@@ -5,6 +5,7 @@ import { getDefaultOperator } from "@/lib/inventory/repo";
 import { availabilityForOperator, type ItemAvailability } from "@/lib/inventory/availability";
 import { durationDays, lineTotal } from "@/lib/inventory/pricing";
 import { createBooking, setBookingStatus } from "@/lib/bookings/repo";
+import { createInquiry } from "@/lib/inquiries/repo";
 
 /** Model for the quote assistant. Haiku is a valid cost swap (spec 7.2). */
 const ASSISTANT_MODEL = "claude-opus-4-8";
@@ -196,6 +197,30 @@ export async function handleInquiry(inquiry: Inquiry): Promise<InquiryResult> {
     // createBooking makes a `quoted` draft; downgrade to `inquiry` if escalated.
     if (!auto) await setBookingStatus(booking.id, "inquiry");
     bookingId = booking.id;
+  }
+
+  // Persist the inquiry for the operator inbox (best-effort — the customer's
+  // quote must not fail if this write does). We store the model's actual
+  // summary as the AI draft, even when escalated (the public reply stays a
+  // safe ack; the operator still sees the real drafted reply).
+  try {
+    await createInquiry({
+      operatorId: operator.id,
+      bookingId,
+      customerName: inquiry.customerName ?? null,
+      customerEmail: inquiry.customerEmail ?? null,
+      inboundMessage: inquiry.message,
+      startDate,
+      endDate,
+      auto,
+      confidence: out.confidence,
+      aiSummary: out.summary,
+      escalationReasons: reasons,
+      unmatchedRequests: out.unmatchedRequests,
+      quote: { lineItems: lines, subtotal, suggestedDeposit, currency: "usd" },
+    });
+  } catch (err) {
+    console.error("[inquiries] failed to persist inquiry:", err);
   }
 
   return {
