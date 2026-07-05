@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/operator/ComingSoon";
+import { InquiriesView } from "@/components/operator/inquiries/InquiriesView";
 
 export default function InquiriesPage() {
-  return <ComingSoon title="Inquiries" />;
+  return <InquiriesView />;
 }

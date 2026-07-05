@@ -17,7 +17,7 @@ export default function OperatorLayout({
     <div className="flex min-h-dvh w-full bg-cream">
       <Sidebar />
       <div className="flex min-h-dvh w-full min-w-0 flex-col overflow-x-hidden bg-cream lg:border-l lg:border-sand">
-        <main className="flex-1 pb-24 lg:pb-10">{children}</main>
+        <main className="flex flex-1 flex-col pb-20 lg:pb-0">{children}</main>
       </div>
       <BottomNav />
     </div>
