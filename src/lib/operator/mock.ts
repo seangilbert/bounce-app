@@ -6,9 +6,11 @@
 
 export const operator = {
   firstName: "Cheri",
+  fullName: "Cheri Boyd",
   initials: "CB",
   business: "Bounce USA",
   location: "Plymouth, MA",
+  plan: "Solo plan",
 };
 
 export const today = {

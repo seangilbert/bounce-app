@@ -2,18 +2,38 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Confetti } from "@phosphor-icons/react/dist/ssr";
-import { NAV } from "@/lib/operator/nav";
+import { Confetti, CaretUpDown } from "@phosphor-icons/react/dist/ssr";
+import { NAV, type NavItem } from "@/lib/operator/nav";
 import { operator } from "@/lib/operator/mock";
 
-// The desktop sidebar shows the primary destinations (Settings lives under
-// "More" on mobile and isn't surfaced in the rail).
-const SIDEBAR_NAV = NAV.filter((n) => n.href !== "/settings");
+const MAIN_NAV = NAV.filter((n) => n.href !== "/settings");
+const SETTINGS = NAV.find((n) => n.href === "/settings");
+
+function NavLink({ item }: { item: NavItem }) {
+  const pathname = usePathname();
+  const { href, label, icon: Icon, badge } = item;
+  const active = pathname === href || pathname.startsWith(`${href}/`);
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-bold transition-colors ${
+        active ? "bg-brand-tint text-brand-deep" : "text-ink-soft hover:bg-sand/60"
+      }`}
+    >
+      <Icon size={22} weight={active ? "fill" : "regular"} />
+      <span className="flex-1">{label}</span>
+      {badge ? (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-extrabold text-white">
+          {badge}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
 
 /** Desktop-only persistent sidebar (hidden on mobile, where the bottom bar takes over). */
 export function Sidebar() {
-  const pathname = usePathname();
-
   return (
     <aside className="hidden w-[272px] flex-shrink-0 flex-col border-r border-sand bg-cream px-4 py-5 lg:sticky lg:top-0 lg:flex lg:h-dvh">
       {/* Brand */}
@@ -29,30 +49,29 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Nav */}
+      {/* Primary nav */}
       <nav className="flex flex-col gap-1" aria-label="Primary">
-        {SIDEBAR_NAV.map(({ href, label, icon: Icon, badge }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
-          return (
-            <Link
-              key={href}
-              href={href}
-              aria-current={active ? "page" : undefined}
-              className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-bold transition-colors ${
-                active ? "bg-brand-tint text-brand-deep" : "text-ink-soft hover:bg-sand/60"
-              }`}
-            >
-              <Icon size={22} weight={active ? "fill" : "regular"} />
-              <span className="flex-1">{label}</span>
-              {badge ? (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-extrabold text-white">
-                  {badge}
-                </span>
-              ) : null}
-            </Link>
-          );
-        })}
+        {MAIN_NAV.map((item) => (
+          <NavLink key={item.href} item={item} />
+        ))}
       </nav>
+
+      {/* Settings + account, pinned to the bottom */}
+      <div className="mt-auto flex flex-col gap-1 pt-4">
+        {SETTINGS ? <NavLink item={SETTINGS} /> : null}
+        <button className="mt-1 flex items-center gap-3 rounded-2xl bg-sand/50 px-3 py-3 text-left transition-colors hover:bg-sand/70">
+          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold text-white">
+            {operator.initials}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-bold text-ink">{operator.fullName}</span>
+            <span className="block truncate text-[13px] font-medium text-ink-mute">
+              {operator.plan}
+            </span>
+          </span>
+          <CaretUpDown size={18} className="flex-shrink-0 text-ink-faint" />
+        </button>
+      </div>
     </aside>
   );
 }
