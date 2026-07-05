@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Truck,
   Sparkle,
+  PaperPlaneTilt,
 } from "@phosphor-icons/react/dist/ssr";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
 
@@ -42,12 +43,15 @@ interface QuoteLine {
   unitPrice: number;
   lineTotal: number;
 }
-interface InquiryResult {
+type ChatMsg = { role: "user" | "assistant"; content: string };
+interface ConversationResult {
+  reply: string;
+  status: "gathering" | "quoted" | "review";
+  eventDate: string | null;
+  quote: { lineItems: QuoteLine[]; subtotal: number; suggestedDeposit: number; currency: string } | null;
   auto: boolean;
-  customerMessage: string;
-  quote: { lineItems: QuoteLine[]; subtotal: number; suggestedDeposit: number; currency: string };
-  escalation: { reasons: string[] } | null;
   unmatchedRequests: string[];
+  inquiryId: string | null;
 }
 
 function toCategory(c: string | null): Category {
@@ -114,34 +118,53 @@ export function Storefront() {
     if (endDate < v) setEndDate(v);
   };
 
-  // AI Instant Quote assistant
-  const [message, setMessage] = useState("");
-  const [assistLoading, setAssistLoading] = useState(false);
-  const [assistResult, setAssistResult] = useState<InquiryResult | null>(null);
-  const [assistError, setAssistError] = useState<string | null>(null);
+  // AI Instant Quote — conversational
+  const [chat, setChat] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatQuote, setChatQuote] = useState<ConversationResult["quote"]>(null);
+  const [chatDate, setChatDate] = useState<string | null>(null);
+  const [chatInquiryId, setChatInquiryId] = useState<string | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
 
-  async function askAssistant() {
-    setAssistLoading(true);
-    setAssistError(null);
-    setAssistResult(null);
+  async function sendChat() {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+    const next: ChatMsg[] = [...chat, { role: "user", content: text }];
+    setChat(next);
+    setChatInput("");
+    setChatLoading(true);
+    setChatError(null);
     try {
       const res = await fetch("/api/inquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, startDate: date, endDate }),
+        body: JSON.stringify({
+          messages: next,
+          startDate: chatDate ?? undefined,
+          inquiryId: chatInquiryId ?? undefined,
+        }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Couldn't get a quote right now.");
-      setAssistResult(json as InquiryResult);
+      const json = (await res.json()) as ConversationResult & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Couldn't respond right now.");
+      setChat((c) => [...c, { role: "assistant", content: json.reply }]);
+      if (json.eventDate) setChatDate(json.eventDate);
+      if (json.inquiryId) setChatInquiryId(json.inquiryId);
+      setChatQuote(json.quote);
     } catch (e) {
-      setAssistError(e instanceof Error ? e.message : "Something went wrong.");
+      setChatError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
-      setAssistLoading(false);
+      setChatLoading(false);
     }
   }
 
-  function bookQuote(lines: QuoteLine[]) {
-    setCart(Object.fromEntries(lines.map((l) => [l.itemId, l.quantity])));
+  function bookChatQuote() {
+    if (!chatQuote) return;
+    if (chatDate) {
+      setDate(chatDate);
+      setEndDate(chatDate);
+    }
+    setCart(Object.fromEntries(chatQuote.lineItems.map((l) => [l.itemId, l.quantity])));
     setCheckoutOpen(true);
   }
 
@@ -216,66 +239,58 @@ export function Storefront() {
               <span className="text-sm font-extrabold text-ink">Instant quote</span>
               <span className="text-xs font-semibold text-ink-mute">· answers in seconds, 24/7</span>
             </div>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={2}
-              placeholder="e.g. A bounce house and a popcorn machine for a 6-year-old's birthday, about 15 kids."
-              className="mt-3 w-full resize-none rounded-xl border border-sand bg-cream px-4 py-3 text-sm font-medium text-ink outline-none placeholder:text-ink-faint focus:border-brand"
-            />
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 rounded-xl border border-sand bg-cream px-3 py-2">
-                <CalendarBlank size={18} weight="fill" className="text-brand" />
-                <input
-                  type="date"
-                  aria-label="Start date"
-                  value={date}
-                  min={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => changeStart(e.target.value)}
-                  className="bg-transparent text-sm font-bold text-ink outline-none"
-                />
-                <span className="text-ink-faint">→</span>
-                <input
-                  type="date"
-                  aria-label="End date"
-                  value={endDate}
-                  min={date}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="bg-transparent text-sm font-bold text-ink outline-none"
-                />
-              </div>
-              {days > 1 ? (
-                <span className="rounded-full bg-brand-tint px-2.5 py-1 text-xs font-extrabold text-brand-deep">
-                  {days} days
-                </span>
+
+            <div className="mt-4 flex max-h-[22rem] flex-col gap-3 overflow-y-auto">
+              <ChatBubble role="assistant">
+                Hi! Tell me about your event — what are you thinking, and when? I&apos;ll pull
+                together a quote.
+              </ChatBubble>
+              {chat.map((m, i) => (
+                <ChatBubble key={i} role={m.role}>
+                  {m.content}
+                </ChatBubble>
+              ))}
+              {chatQuote ? (
+                <ChatQuoteCard quote={chatQuote} date={chatDate} onBook={bookChatQuote} />
               ) : null}
+              {chatLoading ? (
+                <ChatBubble role="assistant">
+                  <TypingDots />
+                </ChatBubble>
+              ) : null}
+              {chatError ? (
+                <div className="rounded-xl bg-coral-tint px-4 py-2.5 text-sm font-semibold text-coral-deep">
+                  {chatError}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-sand bg-cream px-2 py-1.5">
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    sendChat();
+                  }
+                }}
+                placeholder="e.g. A bounce house for my 5-year-old's birthday"
+                className="min-w-0 flex-1 bg-transparent px-2 text-sm font-medium text-ink outline-none placeholder:text-ink-faint"
+              />
               <button
-                onClick={askAssistant}
-                disabled={!message.trim() || assistLoading}
-                className="ml-auto flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
+                onClick={sendChat}
+                disabled={!chatInput.trim() || chatLoading}
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-colors hover:bg-brand-deep disabled:bg-sand disabled:text-ink-mute"
+                aria-label="Send"
               >
-                {assistLoading ? (
-                  <>
-                    <CircleNotch size={16} weight="bold" className="animate-spin" /> Thinking…
-                  </>
+                {chatLoading ? (
+                  <CircleNotch size={16} weight="bold" className="animate-spin" />
                 ) : (
-                  <>
-                    <Sparkle size={15} weight="fill" /> Get instant quote
-                  </>
+                  <PaperPlaneTilt size={16} weight="fill" />
                 )}
               </button>
             </div>
-            {assistError ? (
-              <div className="mt-3 rounded-xl bg-coral-tint px-4 py-3 text-sm font-semibold text-coral-deep">
-                {assistError}
-              </div>
-            ) : null}
-            {assistResult ? (
-              <QuoteResult
-                result={assistResult}
-                onBook={() => bookQuote(assistResult.quote.lineItems)}
-              />
-            ) : null}
           </div>
         </div>
       </section>
@@ -283,10 +298,35 @@ export function Storefront() {
       {/* Catalog */}
       <section className="px-5 pt-10 lg:px-10">
         <div className="mx-auto max-w-6xl">
-          <h2 className="font-display text-2xl font-bold text-ink">
-            Available {rangeLabel(date, endDate)}
-            {days > 1 ? <span className="text-ink-mute"> · {days}-day rental</span> : null}
-          </h2>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl font-bold text-ink">Browse the catalog</h2>
+              <p className="mt-0.5 text-sm font-medium text-ink-mute">
+                Available {rangeLabel(date, endDate)}
+                {days > 1 ? ` · ${days}-day rental` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-sand bg-white px-3 py-2">
+              <CalendarBlank size={18} weight="fill" className="text-brand" />
+              <input
+                type="date"
+                aria-label="Start date"
+                value={date}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => changeStart(e.target.value)}
+                className="bg-transparent text-sm font-bold text-ink outline-none"
+              />
+              <span className="text-ink-faint">→</span>
+              <input
+                type="date"
+                aria-label="End date"
+                value={endDate}
+                min={date}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-transparent text-sm font-bold text-ink outline-none"
+              />
+            </div>
+          </div>
           {loading ? (
             <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {[0, 1, 2].map((i) => (
@@ -573,60 +613,75 @@ function Field({
   );
 }
 
-function QuoteResult({ result, onBook }: { result: InquiryResult; onBook: () => void }) {
-  if (result.quote.lineItems.length > 0) {
-    return (
-      <div className="mt-4 rounded-2xl border border-brand-ring bg-brand-tint/40 p-4">
-        <div className="flex items-center gap-2 text-brand-deep">
-          <Sparkle size={16} weight="fill" />
-          <span className="text-sm font-extrabold">Here&apos;s your instant quote</span>
-        </div>
-        <p className="mt-1.5 text-sm font-medium leading-snug text-ink">
-          {result.auto
-            ? result.customerMessage
-            : "Here's what we'd recommend — book now to lock in your date and we'll confirm the details."}
-        </p>
-        <div className="mt-3 rounded-xl bg-white p-3.5">
-          {result.quote.lineItems.map((l) => (
-            <div key={l.itemId} className="flex items-center justify-between py-1 text-sm">
-              <span className="font-semibold text-ink">
-                {l.quantity > 1 ? `${l.quantity}× ` : ""}
-                {l.name}
-              </span>
-              <span className="font-bold text-ink">{money(l.lineTotal)}</span>
-            </div>
-          ))}
-          <div className="mt-2 flex items-center justify-between border-t border-sand-line pt-2.5">
-            <span className="font-bold text-ink">Total</span>
-            <span className="font-display text-lg font-extrabold text-ink">
-              {money(result.quote.subtotal)}
-            </span>
-          </div>
-          {result.quote.suggestedDeposit > 0 ? (
-            <div className="mt-1 text-right text-xs font-semibold text-ink-mute">
-              Deposit today: {money(result.quote.suggestedDeposit)}
-            </div>
-          ) : null}
-        </div>
-        <button
-          onClick={onBook}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep"
-        >
-          Add to cart &amp; book <ArrowRight size={15} weight="bold" />
-        </button>
-      </div>
-    );
-  }
-
+function ChatBubble({ role, children }: { role: "user" | "assistant"; children: React.ReactNode }) {
+  const isUser = role === "user";
   return (
-    <div className="mt-4 rounded-2xl border border-amber-line bg-amber-tint p-4">
-      <div className="text-sm font-extrabold text-ink">Thanks — we&apos;ll confirm shortly</div>
-      <p className="mt-1 text-sm font-medium leading-snug text-ink-soft">{result.customerMessage}</p>
-      {result.unmatchedRequests.length > 0 ? (
-        <p className="mt-2 text-[13px] font-semibold text-amber-deep">
-          Note: we don&apos;t carry {result.unmatchedRequests.join(", ")}.
-        </p>
+    <div className={`max-w-[85%] ${isUser ? "self-end" : "self-start"}`}>
+      <div
+        className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+          isUser
+            ? "rounded-br-md bg-brand font-medium text-white"
+            : "rounded-bl-md border border-sand-line bg-cream text-ink"
+        }`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TypingDots() {
+  return (
+    <span className="flex items-center gap-1 py-1">
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-mute [animation-delay:-0.3s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-mute [animation-delay:-0.15s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-mute" />
+    </span>
+  );
+}
+
+function ChatQuoteCard({
+  quote,
+  date,
+  onBook,
+}: {
+  quote: { lineItems: QuoteLine[]; subtotal: number; suggestedDeposit: number; currency: string };
+  date: string | null;
+  onBook: () => void;
+}) {
+  return (
+    <div className="max-w-[92%] self-start rounded-2xl border border-brand-ring bg-brand-tint/40 p-3.5">
+      {date ? (
+        <div className="mb-2 flex items-center gap-1.5 text-xs font-extrabold text-brand-deep">
+          <CalendarBlank size={13} weight="fill" /> {prettyDate(date)}
+        </div>
       ) : null}
+      <div className="rounded-xl bg-white p-3.5">
+        {quote.lineItems.map((l) => (
+          <div key={l.itemId} className="flex items-center justify-between py-1 text-sm">
+            <span className="font-semibold text-ink">
+              {l.quantity > 1 ? `${l.quantity}× ` : ""}
+              {l.name}
+            </span>
+            <span className="font-bold text-ink">{money(l.lineTotal)}</span>
+          </div>
+        ))}
+        <div className="mt-2 flex items-center justify-between border-t border-sand-line pt-2.5">
+          <span className="font-bold text-ink">Total</span>
+          <span className="font-display text-lg font-extrabold text-ink">{money(quote.subtotal)}</span>
+        </div>
+        {quote.suggestedDeposit > 0 ? (
+          <div className="mt-1 text-right text-xs font-semibold text-ink-mute">
+            Deposit today: {money(quote.suggestedDeposit)}
+          </div>
+        ) : null}
+      </div>
+      <button
+        onClick={onBook}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep"
+      >
+        Add to cart &amp; book <ArrowRight size={15} weight="bold" />
+      </button>
     </div>
   );
 }
