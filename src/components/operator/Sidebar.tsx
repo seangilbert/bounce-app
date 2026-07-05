@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Confetti, CaretUpDown } from "@phosphor-icons/react/dist/ssr";
 import { NAV, type NavItem } from "@/lib/operator/nav";
 import { operator } from "@/lib/operator/mock";
+import { calFilters } from "@/lib/operator/calendar";
 
 const MAIN_NAV = NAV.filter((n) => n.href !== "/settings");
 const SETTINGS = NAV.find((n) => n.href === "/settings");
@@ -34,6 +35,8 @@ function NavLink({ item }: { item: NavItem }) {
 
 /** Desktop-only persistent sidebar (hidden on mobile, where the bottom bar takes over). */
 export function Sidebar() {
+  const pathname = usePathname();
+  const onCalendar = pathname === "/calendar" || pathname.startsWith("/calendar/");
   return (
     <aside className="hidden w-[272px] flex-shrink-0 flex-col border-r border-sand bg-cream px-4 py-5 lg:sticky lg:top-0 lg:flex lg:h-dvh">
       {/* Brand */}
@@ -55,6 +58,27 @@ export function Sidebar() {
           <NavLink key={item.href} item={item} />
         ))}
       </nav>
+
+      {/* Calendar-only: filter by item category */}
+      {onCalendar ? (
+        <div className="mt-7 px-2">
+          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+            Filter by item
+          </div>
+          <div className="mt-3 flex flex-col gap-2.5">
+            {calFilters.map((f) => (
+              <div key={f.label} className="flex items-center gap-2.5">
+                <span className={`h-2.5 w-2.5 rounded-full ${f.dot}`} />
+                <span
+                  className={`text-[14px] ${f.active ? "font-extrabold text-ink" : "font-semibold text-ink-soft"}`}
+                >
+                  {f.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Settings + account, pinned to the bottom */}
       <div className="mt-auto flex flex-col gap-1 pt-4">
