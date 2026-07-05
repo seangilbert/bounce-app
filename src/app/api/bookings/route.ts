@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDefaultOperator } from "@/lib/inventory/repo";
 import { checkAvailability } from "@/lib/inventory/availability";
 import { createBooking } from "@/lib/bookings/repo";
+import { expireStaleCheckouts } from "@/lib/bookings/expire";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,9 @@ export async function POST(req: Request) {
     if (!operator) {
       return NextResponse.json({ error: "No operator configured." }, { status: 503 });
     }
+
+    // Free up any abandoned checkouts before checking availability.
+    await expireStaleCheckouts();
 
     // Enforce availability across the whole range before quoting. A quote
     // doesn't reserve, but we won't quote something we can't fulfill.

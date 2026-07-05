@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { listItems } from "./repo";
+import { expireStaleCheckouts } from "@/lib/bookings/expire";
 import type { Item } from "./types";
 
 export interface Availability {
@@ -55,6 +56,8 @@ export async function availabilityForOperator(
   endDate: string,
 ): Promise<ItemAvailability[]> {
   const supabase = createAdminClient();
+  // Release abandoned checkouts first so availability reflects only live holds.
+  await expireStaleCheckouts();
   const items = await listItems(operatorId, { activeOnly: true });
 
   const { data: rows, error } = await supabase.rpc("item_availability_range", {

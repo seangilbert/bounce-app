@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { CHECKOUT_HOLD_MINUTES } from "@/lib/checkout-hold";
 import type {
   CheckoutInput,
   CheckoutResult,
@@ -44,6 +45,9 @@ export const stripeProvider: PaymentProvider = {
   async createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
     const session = await client().checkout.sessions.create({
       mode: "payment",
+      // Expire the session with the inventory hold, so a stale session can't be
+      // paid after its booking's hold has been released.
+      expires_at: Math.floor(Date.now() / 1000) + CHECKOUT_HOLD_MINUTES * 60,
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       customer_email: input.customerEmail,

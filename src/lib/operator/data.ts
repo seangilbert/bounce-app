@@ -8,6 +8,7 @@ import type {
 } from "./calendar";
 import type { InquiryListItem, InquiryDetail } from "./inquiries";
 import { listInquiries, type InquiryRow } from "@/lib/inquiries/repo";
+import { expireStaleCheckouts } from "@/lib/bookings/expire";
 import type { Stop } from "./mock";
 
 /** Booking statuses that occupy inventory (shown on the calendar). */
@@ -70,6 +71,7 @@ export async function getCalendarMonth(
   month: number,
 ): Promise<CalendarMonth> {
   const supabase = createAdminClient();
+  await expireStaleCheckouts();
   const pad = (n: number) => String(n).padStart(2, "0");
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const first = `${year}-${pad(month)}-01`;
@@ -320,6 +322,7 @@ function ymd(d: Date): string {
 
 export async function getDashboard(operatorId: string): Promise<DashboardData> {
   const supabase = createAdminClient();
+  await expireStaleCheckouts();
   const now = new Date();
   const today = ymd(now);
   const dow = now.getUTCDay();
