@@ -17,7 +17,8 @@ export interface BookingItemInput {
 
 export interface NewBooking {
   operatorId: string;
-  eventDate: string; // YYYY-MM-DD
+  startDate: string; // YYYY-MM-DD (inclusive)
+  endDate: string; // YYYY-MM-DD (inclusive; same as startDate for single-day)
   items: BookingItemInput[];
   customerName?: string | null;
   customerEmail?: string | null;
@@ -42,7 +43,8 @@ export interface Booking {
   updatedAt: string;
   operatorId: string;
   status: BookingStatus;
-  eventDate: string;
+  startDate: string;
+  endDate: string;
   customerName: string | null;
   customerEmail: string | null;
   deliveryWindow: string | null;

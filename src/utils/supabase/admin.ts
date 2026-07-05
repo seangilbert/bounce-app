@@ -26,6 +26,12 @@ export function createAdminClient(): SupabaseClient {
   if (!admin) {
     admin = createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },
+      // This client reads real-time data (availability, orders, bookings) from
+      // Route Handlers and webhooks. Force every request past Next.js's Data
+      // Cache so a stale read can never be served.
+      global: {
+        fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+      },
     });
   }
   return admin;

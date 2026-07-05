@@ -16,18 +16,27 @@ function clientIp(req: Request): string {
   return req.headers.get("x-real-ip") ?? "unknown";
 }
 
-const BookingSchema = z.object({
-  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
-  items: z
-    .array(z.object({ itemId: z.string().uuid(), quantity: z.number().int().positive() }))
-    .min(1),
-  customerName: z.string().optional(),
-  customerEmail: z.string().email().optional(),
-  deliveryWindow: z.string().optional(),
-  deliveryAddress: z.string().optional(),
-  deliveryZip: z.string().optional(),
-  notes: z.string().optional(),
-});
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const BookingSchema = z
+  .object({
+    startDate: z.string().regex(ISO_DATE, "Expected YYYY-MM-DD"),
+    // Optional — omit for a single-day rental (endDate defaults to startDate).
+    endDate: z.string().regex(ISO_DATE, "Expected YYYY-MM-DD").optional(),
+    items: z
+      .array(z.object({ itemId: z.string().uuid(), quantity: z.number().int().positive() }))
+      .min(1),
+    customerName: z.string().optional(),
+    customerEmail: z.string().email().optional(),
+    deliveryWindow: z.string().optional(),
+    deliveryAddress: z.string().optional(),
+    deliveryZip: z.string().optional(),
+    notes: z.string().optional(),
+  })
+  .refine((d) => !d.endDate || d.endDate >= d.startDate, {
+    message: "endDate must be on or after startDate.",
+    path: ["endDate"],
+  });
 
 export async function POST(req: Request) {
   const rl = checkRateLimit(`bookings:${clientIp(req)}`, RATE_LIMIT, RATE_WINDOW_MS);
@@ -54,6 +63,8 @@ export async function POST(req: Request) {
     );
   }
   const input = parsed.data;
+  const startDate = input.startDate;
+  const endDate = input.endDate ?? input.startDate;
 
   try {
     const operator = await getDefaultOperator();
@@ -61,23 +72,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No operator configured." }, { status: 503 });
     }
 
-    // Enforce availability before quoting. A quote doesn't reserve, but we won't
-    // quote something we can't fulfill on that date.
+    // Enforce availability across the whole range before quoting. A quote
+    // doesn't reserve, but we won't quote something we can't fulfill.
     const unavailable: { itemId: string; requested: number; available: number }[] = [];
     for (const sel of input.items) {
-      const a = await checkAvailability(sel.itemId, input.eventDate, sel.quantity);
+      const a = await checkAvailability(sel.itemId, startDate, endDate, sel.quantity);
       if (!a.ok) {
         unavailable.push({ itemId: sel.itemId, requested: sel.quantity, available: a.available });
       }
     }
     if (unavailable.length) {
       return NextResponse.json(
-        { error: "Some items are not available on that date.", unavailable },
+        { error: "Some items are not available for those dates.", unavailable },
         { status: 409 },
       );
     }
 
-    const booking = await createBooking({ operatorId: operator.id, ...input });
+    const booking = await createBooking({
+      operatorId: operator.id,
+      startDate,
+      endDate,
+      items: input.items,
+      customerName: input.customerName,
+      customerEmail: input.customerEmail,
+      deliveryWindow: input.deliveryWindow,
+      deliveryAddress: input.deliveryAddress,
+      deliveryZip: input.deliveryZip,
+      notes: input.notes,
+    });
     return NextResponse.json({ booking }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error.";

@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { checkAvailability } from "@/lib/inventory/availability";
+import { durationDays, lineTotal } from "@/lib/inventory/pricing";
+import type { PriceUnit } from "@/lib/inventory/types";
 import type { Booking, BookingLineItem, BookingStatus, NewBooking } from "./types";
 
 const BOOKINGS = "bookings";
@@ -11,7 +13,8 @@ interface BookingRow {
   updated_at: string;
   operator_id: string;
   status: BookingStatus;
-  event_date: string;
+  start_date: string;
+  end_date: string;
   customer_name: string | null;
   customer_email: string | null;
   delivery_window: string | null;
@@ -38,7 +41,8 @@ function rowToBooking(row: BookingRow, items: BookingLineItem[]): Booking {
     updatedAt: row.updated_at,
     operatorId: row.operator_id,
     status: row.status,
-    eventDate: row.event_date,
+    startDate: row.start_date,
+    endDate: row.end_date,
     customerName: row.customer_name,
     customerEmail: row.customer_email,
     deliveryWindow: row.delivery_window,
@@ -89,10 +93,11 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
   const supabase = createAdminClient();
   if (!input.items.length) throw new Error("A booking needs at least one item.");
 
+  const days = durationDays(input.startDate, input.endDate);
   const ids = input.items.map((i) => i.itemId);
   const { data: itemRows, error: itemsErr } = await supabase
     .from("items")
-    .select("id, name, base_price, operator_id, active")
+    .select("id, name, base_price, price_unit, operator_id, active")
     .in("id", ids);
   if (itemsErr) throw new Error(`createBooking item lookup failed: ${itemsErr.message}`);
 
@@ -111,8 +116,9 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
     return {
       item_id: sel.itemId,
       quantity: sel.quantity,
+      // Snapshot the per-unit rate; line_total applies the rental duration.
       unit_price: unitPrice,
-      line_total: unitPrice * sel.quantity,
+      line_total: lineTotal(unitPrice, it.price_unit as PriceUnit, sel.quantity, days),
     };
   });
   const subtotal = lines.reduce((sum, l) => sum + l.line_total, 0);
@@ -122,7 +128,8 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
     .insert({
       operator_id: input.operatorId,
       status: "quoted",
-      event_date: input.eventDate,
+      start_date: input.startDate,
+      end_date: input.endDate,
       customer_name: input.customerName ?? null,
       customer_email: input.customerEmail ?? null,
       delivery_window: input.deliveryWindow ?? null,
@@ -173,7 +180,7 @@ export async function confirmBookingPaid(
 
   const oversold: { itemId: string; owned: number; reserved: number }[] = [];
   for (const li of booking.items) {
-    const a = await checkAvailability(li.itemId, booking.eventDate, 0);
+    const a = await checkAvailability(li.itemId, booking.startDate, booking.endDate, 0);
     if (a.reserved > a.owned) {
       oversold.push({ itemId: li.itemId, owned: a.owned, reserved: a.reserved });
     }

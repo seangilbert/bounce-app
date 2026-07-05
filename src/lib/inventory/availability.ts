@@ -5,9 +5,9 @@ import type { Item } from "./types";
 export interface Availability {
   /** Units the operator owns. */
   owned: number;
-  /** Units held by committed bookings on the date. */
+  /** Peak units held by committed bookings on the busiest day of the range. */
   reserved: number;
-  /** owned − reserved (can be 0; never assume it's positive). */
+  /** owned − reserved (can be 0 or negative; never assume positive). */
   available: number;
 }
 
@@ -15,10 +15,14 @@ export interface ItemAvailability extends Item {
   availability: Availability;
 }
 
-/** Date must be an ISO `YYYY-MM-DD` string (day-level availability). */
+/**
+ * Availability of one item across an inclusive `YYYY-MM-DD` date range.
+ * `available = owned − peak daily reservation` over the range.
+ */
 export async function checkAvailability(
   itemId: string,
-  date: string,
+  startDate: string,
+  endDate: string,
   quantityNeeded = 1,
 ): Promise<Availability & { ok: boolean }> {
   const supabase = createAdminClient();
@@ -31,29 +35,32 @@ export async function checkAvailability(
   if (itemErr) throw new Error(`checkAvailability failed: ${itemErr.message}`);
   if (!item) throw new Error(`Item ${itemId} not found.`);
 
-  const { data: reserved, error: rpcErr } = await supabase.rpc("reserved_qty", {
+  const { data: peak, error: rpcErr } = await supabase.rpc("reserved_peak", {
     p_item: itemId,
-    p_date: date,
+    p_start: startDate,
+    p_end: endDate,
   });
   if (rpcErr) throw new Error(`checkAvailability failed: ${rpcErr.message}`);
 
   const owned = item.quantity as number;
-  const res = (reserved as number) ?? 0;
-  const available = owned - res;
-  return { owned, reserved: res, available, ok: available >= quantityNeeded };
+  const reserved = (peak as number) ?? 0;
+  const available = owned - reserved;
+  return { owned, reserved, available, ok: available >= quantityNeeded };
 }
 
-/** The operator's active catalog, each item annotated with availability on `date`. */
+/** The operator's active catalog, each item annotated with availability over the range. */
 export async function availabilityForOperator(
   operatorId: string,
-  date: string,
+  startDate: string,
+  endDate: string,
 ): Promise<ItemAvailability[]> {
   const supabase = createAdminClient();
   const items = await listItems(operatorId, { activeOnly: true });
 
-  const { data: rows, error } = await supabase.rpc("item_availability", {
+  const { data: rows, error } = await supabase.rpc("item_availability_range", {
     p_operator: operatorId,
-    p_date: date,
+    p_start: startDate,
+    p_end: endDate,
   });
   if (error) throw new Error(`availabilityForOperator failed: ${error.message}`);
 
