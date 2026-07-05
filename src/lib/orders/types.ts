@@ -26,6 +26,10 @@ export interface Order {
   customerEmail: string | null;
   lineItems: OrderLineItem[];
   metadata: Record<string, string>;
+  /** Provider document id of the agreement sent for this order, if any. */
+  esignDocumentId: string | null;
+  /** Normalized signing status: sent | viewed | signed | completed | declined | expired | canceled. */
+  esignStatus: string | null;
 }
 
 /** Fields needed to open a new pending order at checkout time. */

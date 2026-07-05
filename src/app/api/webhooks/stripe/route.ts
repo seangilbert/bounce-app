@@ -6,6 +6,7 @@ import {
   setOrderStatusByPaymentId,
   setOrderStatusBySessionId,
 } from "@/lib/orders/repo";
+import { autoSendEnabled, sendAgreementForOrder } from "@/lib/esign/agreements";
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +55,11 @@ export async function POST(req: Request) {
             console.warn(
               `[webhook] checkout.completed: no local order for session ${event.sessionId}`,
             );
+          } else if (autoSendEnabled() && !order.esignDocumentId) {
+            // Send the signing agreement for the freshly-paid order. Guarded by
+            // esignDocumentId so a webhook retry never double-sends.
+            await sendAgreementForOrder(order);
           }
-          // TODO(step 3): trigger SignWell / fulfillment for the paid order.
         }
         break;
 

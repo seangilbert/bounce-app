@@ -19,6 +19,8 @@ interface OrderRow {
   customer_email: string | null;
   line_items: Order["lineItems"];
   metadata: Record<string, string>;
+  esign_document_id: string | null;
+  esign_status: string | null;
 }
 
 function rowToOrder(row: OrderRow): Order {
@@ -35,6 +37,8 @@ function rowToOrder(row: OrderRow): Order {
     customerEmail: row.customer_email,
     lineItems: row.line_items ?? [],
     metadata: row.metadata ?? {},
+    esignDocumentId: row.esign_document_id,
+    esignStatus: row.esign_status,
   };
 }
 
@@ -123,6 +127,39 @@ export async function setOrderStatusByPaymentId(
     .maybeSingle();
 
   if (error) throw new Error(`setOrderStatusByPaymentId failed: ${error.message}`);
+  return data ? rowToOrder(data as OrderRow) : null;
+}
+
+/** Record the agreement document created for an order. */
+export async function setOrderEsignDocument(
+  orderId: string,
+  esignDocumentId: string,
+  esignStatus: string,
+): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from(ORDERS)
+    .update({ esign_document_id: esignDocumentId, esign_status: esignStatus })
+    .eq("id", orderId);
+  if (error) throw new Error(`setOrderEsignDocument failed: ${error.message}`);
+}
+
+/**
+ * Update the signing status of the order tied to an agreement document.
+ * Returns the updated order, or null if no order references that document.
+ */
+export async function setEsignStatusByDocumentId(
+  esignDocumentId: string,
+  esignStatus: string,
+): Promise<Order | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from(ORDERS)
+    .update({ esign_status: esignStatus })
+    .eq("esign_document_id", esignDocumentId)
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(`setEsignStatusByDocumentId failed: ${error.message}`);
   return data ? rowToOrder(data as OrderRow) : null;
 }
 
