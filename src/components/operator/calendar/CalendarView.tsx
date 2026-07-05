@@ -9,13 +9,12 @@ import {
   ArrowSquareOut,
 } from "@phosphor-icons/react/dist/ssr";
 import {
-  monthLabel,
   weekdays,
-  monthDays,
-  selectedDay,
   type CalDay,
   type CalEvent,
+  type CalendarMonth,
   type ItemCategory,
+  type SelectedDayDetail,
 } from "@/lib/operator/calendar";
 
 const CAT_BG: Record<ItemCategory, string> = {
@@ -24,7 +23,7 @@ const CAT_BG: Record<ItemCategory, string> = {
   tables: "bg-amber",
 };
 
-export function CalendarView() {
+export function CalendarView({ monthLabel, monthDays, selected }: CalendarMonth) {
   return (
     <div className="lg:flex lg:h-dvh lg:overflow-hidden">
       {/* Calendar */}
@@ -69,7 +68,7 @@ export function CalendarView() {
           </div>
           <div className="grid grid-cols-7 gap-1.5 lg:gap-2">
             {monthDays.map((day, i) => (
-              <DayCell key={i} day={day} selected={day.date === selectedDay.date} />
+              <DayCell key={i} day={day} selected={selected != null && day.date === selected.date} />
             ))}
           </div>
         </div>
@@ -77,7 +76,7 @@ export function CalendarView() {
 
       {/* Detail panel */}
       <aside className="border-t border-sand p-5 lg:h-dvh lg:w-[360px] lg:flex-shrink-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
-        <DetailPanel />
+        <DetailPanel detail={selected} />
       </aside>
     </div>
   );
@@ -143,8 +142,11 @@ function DayCell({ day, selected }: { day: CalDay; selected: boolean }) {
   );
 }
 
-function DetailPanel() {
-  const d = selectedDay;
+function DetailPanel({ detail }: { detail: SelectedDayDetail | null }) {
+  if (!detail) {
+    return <p className="text-sm font-medium text-ink-mute">Select a day to see its bookings.</p>;
+  }
+  const d = detail;
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 lg:max-w-none">
       {d.fullyBooked ? (
@@ -158,6 +160,7 @@ function DetailPanel() {
         <p className="mt-0.5 text-sm font-medium text-ink-mute">{d.summary}</p>
       </div>
 
+      {d.booking ? (
       <div className="border-t border-sand pt-4">
         <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
           Selected booking
@@ -182,19 +185,24 @@ function DetailPanel() {
           </div>
         </div>
       </div>
+      ) : null}
 
-      <StatusRow
-        icon={<SealCheck size={22} weight="fill" className="text-teal" />}
-        label={d.contract.label}
-        detail={d.contract.detail}
-        cls="border-teal-line bg-teal-tint"
-      />
-      <StatusRow
-        icon={<ClockCountdown size={22} weight="fill" className="text-amber-deep" />}
-        label={d.balance.label}
-        detail={d.balance.detail}
-        cls="border-amber-line bg-amber-tint"
-      />
+      {d.contract ? (
+        <StatusRow
+          icon={<SealCheck size={22} weight="fill" className="text-teal" />}
+          label={d.contract.label}
+          detail={d.contract.detail}
+          cls="border-teal-line bg-teal-tint"
+        />
+      ) : null}
+      {d.balance ? (
+        <StatusRow
+          icon={<ClockCountdown size={22} weight="fill" className="text-amber-deep" />}
+          label={d.balance.label}
+          detail={d.balance.detail}
+          cls="border-amber-line bg-amber-tint"
+        />
+      ) : null}
 
       <button className="flex items-center justify-center gap-2 rounded-full bg-brand px-5 py-3.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep">
         <ArrowSquareOut size={16} weight="bold" /> Open booking
