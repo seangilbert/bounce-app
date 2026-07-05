@@ -1,3 +1,25 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer utilities {
+  /* Hide scrollbars on horizontal strips (inventory filters, day rows). */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Diagonal hatched fill used for item thumbnails without a photo. */
+  .bg-hatch {
+    background: repeating-linear-gradient(
+      45deg,
+      #f2e8dc,
+      #f2e8dc 5px,
+      #ebdfd0 5px,
+      #ebdfd0 10px
+    );
+  }
+}
