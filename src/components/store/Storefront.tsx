@@ -11,6 +11,10 @@ import {
   Minus,
   CheckCircle,
   ArrowRight,
+  X,
+  CircleNotch,
+  ShieldCheck,
+  Truck,
 } from "@phosphor-icons/react/dist/ssr";
 
 type Category = "bounce" | "tent" | "tables" | "other";
@@ -62,6 +66,7 @@ export function Storefront() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -173,13 +178,191 @@ export function Storefront() {
               <span className="font-display text-lg font-extrabold text-ink">{money(subtotal)}</span>{" "}
               · {cartCount} {cartCount === 1 ? "item" : "items"} · {prettyDate(date)}
             </div>
-            <button className="flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep">
+            <button
+              onClick={() => setCheckoutOpen(true)}
+              className="flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep"
+            >
               Review &amp; book <ArrowRight size={16} weight="bold" />
             </button>
           </div>
         </div>
       ) : null}
+
+      {checkoutOpen ? (
+        <CheckoutDrawer
+          date={date}
+          lines={cartLines}
+          subtotal={subtotal}
+          onClose={() => setCheckoutOpen(false)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function CheckoutDrawer({
+  date,
+  lines,
+  subtotal,
+  onClose,
+}: {
+  date: string;
+  lines: { item: ApiItem; qty: number }[];
+  subtotal: number;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const valid = form.name.trim() && /.+@.+\..+/.test(form.email) && form.address.trim();
+
+  const field = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const bRes = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: date,
+          items: lines.map((l) => ({ itemId: l.item.id, quantity: l.qty })),
+          customerName: form.name,
+          customerEmail: form.email,
+          deliveryAddress: form.address,
+          deliveryZip: form.zip || undefined,
+        }),
+      });
+      const bJson = await bRes.json();
+      if (!bRes.ok) throw new Error(bJson.error ?? "Could not create your booking.");
+
+      const cRes = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: bJson.booking.id,
+          successUrl: `${location.origin}/book/success`,
+          cancelUrl: `${location.origin}/book`,
+        }),
+      });
+      const cJson = await cRes.json();
+      if (!cRes.ok || !cJson.url) throw new Error(cJson.error ?? "Could not start checkout.");
+      location.href = cJson.url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-ink/40" onClick={onClose}>
+      <div
+        className="flex h-full w-full max-w-md flex-col overflow-y-auto bg-cream shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-sand px-5 py-4">
+          <h2 className="font-display text-xl font-bold text-ink">Review &amp; book</h2>
+          <button
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-ink-soft"
+            aria-label="Close"
+          >
+            <X size={18} weight="bold" />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-5 px-5 py-5">
+          <div className="text-sm font-semibold text-ink-mute">{prettyDate(date)}</div>
+
+          <div className="rounded-2xl border border-sand-line bg-white p-4">
+            {lines.map((l) => (
+              <div key={l.item.id} className="flex items-center justify-between py-1.5 text-sm">
+                <span className="font-semibold text-ink">
+                  {l.qty > 1 ? `${l.qty}× ` : ""}
+                  {l.item.name}
+                </span>
+                <span className="font-bold text-ink">{money(l.item.basePrice * l.qty)}</span>
+              </div>
+            ))}
+            <div className="mt-2 flex items-center justify-between border-t border-sand-line pt-2.5">
+              <span className="font-bold text-ink">Total</span>
+              <span className="font-display text-lg font-extrabold text-ink">{money(subtotal)}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-2xl bg-brand-tint p-4 text-[13px] font-semibold text-brand-deep">
+            <span className="flex items-center gap-2">
+              <Truck size={16} weight="fill" /> Free delivery, setup &amp; pickup
+            </span>
+            <span className="flex items-center gap-2">
+              <ShieldCheck size={16} weight="fill" /> Secure payment · e-signed rental agreement
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            <Field label="Full name" value={form.name} onChange={field("name")} placeholder="Jane Smith" />
+            <Field label="Email" value={form.email} onChange={field("email")} placeholder="jane@email.com" type="email" />
+            <Field label="Phone (optional)" value={form.phone} onChange={field("phone")} placeholder="(508) 555-0000" />
+            <Field label="Delivery address" value={form.address} onChange={field("address")} placeholder="14 Oak St, Plymouth" />
+            <Field label="ZIP" value={form.zip} onChange={field("zip")} placeholder="02360" />
+          </div>
+
+          {error ? (
+            <div className="rounded-xl bg-coral-tint px-4 py-3 text-sm font-semibold text-coral-deep">
+              {error}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="border-t border-sand px-5 py-4">
+          <button
+            onClick={submit}
+            disabled={!valid || submitting}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-brand px-6 py-3.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
+          >
+            {submitting ? (
+              <>
+                <CircleNotch size={18} weight="bold" className="animate-spin" /> Starting checkout…
+              </>
+            ) : (
+              <>Pay {money(subtotal)} deposit</>
+            )}
+          </button>
+          <p className="mt-2 text-center text-xs font-medium text-ink-mute">
+            You&apos;ll confirm on the next screen. No charge until you pay.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[13px] font-bold text-ink-soft">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-sand bg-white px-3.5 py-2.5 text-sm font-medium text-ink outline-none placeholder:text-ink-faint focus:border-brand"
+      />
+    </label>
   );
 }
 
