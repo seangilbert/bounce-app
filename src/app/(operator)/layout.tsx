@@ -1,21 +1,25 @@
 import { BottomNav } from "@/components/operator/BottomNav";
+import { Sidebar } from "@/components/operator/Sidebar";
 
 /**
- * Operator app shell. Mobile-first: a full-bleed cream app column that centers
- * (phone-width) on larger screens, with a fixed bottom tab bar. Content scrolls
- * beneath the bar (padding-bottom clears it).
+ * Operator app shell — responsive.
+ *  • Mobile: full-bleed cream column + fixed bottom tab bar.
+ *  • Desktop (lg+): full-width layout — fixed-width sticky left rail + fluid
+ *    main content that fills the rest of the screen.
  *
- * NOTE: no auth gate yet — operator login is a later milestone (simple gate).
+ * `min-w-0` on the main column lets it shrink to the viewport instead of being
+ * forced wide by its content. No auth gate yet — that's a later milestone.
  */
 export default function OperatorLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className="min-h-dvh bg-sand/40">
-      <div className="relative mx-auto flex min-h-dvh max-w-md flex-col bg-cream shadow-sm">
-        <main className="flex-1 pb-24">{children}</main>
-        <BottomNav />
+    <div className="flex min-h-dvh w-full bg-cream">
+      <Sidebar />
+      <div className="flex min-h-dvh w-full min-w-0 flex-col overflow-x-hidden bg-cream lg:border-l lg:border-sand">
+        <main className="flex-1 pb-24 lg:pb-10">{children}</main>
       </div>
+      <BottomNav />
     </div>
   );
 }

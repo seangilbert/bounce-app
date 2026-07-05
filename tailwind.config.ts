@@ -24,11 +24,10 @@ const config: Config = {
         hatch: { light: "#F2E8DC", dark: "#EBDFD0" }, // item placeholder stripes
         // Brand blue.
         brand: {
-          DEFAULT: "#3B7DF0",
-          deep: "#2A5BD0",
-          tint: "#EFF5FF",
-          tint2: "#E7F0FE",
-          ring: "#CFE0FC",
+          DEFAULT: "#3B7DF0", // primary
+          deep: "#2A5BD0", // pressed states, badge text
+          tint: "#E7F0FE", // light blue background
+          ring: "#CFE0FC", // selection ring (calendar)
         },
         teal: { DEFAULT: "#2E8B7A", deep: "#227766", tint: "#EAF4F1", line: "#CDE6DF" },
         amber: { DEFAULT: "#E0A32B", deep: "#B07E1E", tint: "#FBF1DC", line: "#F0DFB6" },

@@ -23,9 +23,9 @@ import {
 
 export default function DashboardPage() {
   return (
-    <div className="flex flex-col">
+    <div className="flex w-full flex-col">
       {/* ── Bold coral header ───────────────────────────── */}
-      <header className="rounded-b-[28px] bg-gradient-to-br from-coral to-coral-deep px-5 pb-8 pt-9 text-white">
+      <header className="rounded-b-[28px] bg-gradient-to-br from-coral to-coral-deep px-5 pb-8 pt-9 text-white lg:px-8 lg:pt-10">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs font-bold uppercase tracking-[0.14em] text-white/80">
@@ -53,7 +53,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="-mt-3 flex flex-col gap-4 px-4 pt-1">
+      <div className="-mt-3 flex flex-col gap-4 px-4 pt-1 lg:mt-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:px-8">
         <AiAssistantCard />
         <TodaySchedule stops={todayStops} />
       </div>
@@ -69,7 +69,7 @@ function AiAssistantCard() {
           <Sparkle size={17} weight="fill" />
           <span className="text-[13px] font-extrabold text-ink">AI Quote Assistant</span>
         </div>
-        <span className="rounded-full bg-brand-tint2 px-2.5 py-1 text-[11px] font-bold text-brand-deep">
+        <span className="rounded-full bg-brand-tint px-2.5 py-1 text-[11px] font-bold text-brand-deep">
           since {aiSummary.since}
         </span>
       </div>
@@ -85,10 +85,10 @@ function AiAssistantCard() {
       {/* Nested "needs you" flagged inquiry */}
       <Link
         href="/inquiries"
-        className="mt-3.5 block rounded-[18px] border border-brand-ring bg-brand-tint p-3.5 transition-colors hover:bg-brand-tint2"
+        className="mt-3.5 block rounded-[18px] border border-brand-ring bg-brand-tint p-3.5 transition-colors hover:bg-brand-ring"
       >
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-brand-tint2 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-brand-deep">
+          <span className="rounded-full bg-brand-tint px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-brand-deep">
             {aiSummary.needsYou} NEEDS YOU
           </span>
           <span className="text-[11.5px] font-semibold text-ink-mute">
@@ -154,7 +154,7 @@ function StopCard({ stop }: { stop: Stop }) {
       <div className="min-w-0 flex-1">
         <span
           className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-extrabold tracking-wide ${
-            deliver ? "bg-brand-tint2 text-brand-deep" : "bg-teal-tint text-teal-deep"
+            deliver ? "bg-brand-tint text-brand-deep" : "bg-teal-tint text-teal-deep"
           }`}
         >
           {deliver ? <ArrowUp size={9} weight="fill" /> : <ArrowDown size={9} weight="fill" />}
