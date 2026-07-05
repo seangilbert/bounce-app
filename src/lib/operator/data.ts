@@ -6,6 +6,13 @@ import type {
   ItemCategory,
   SelectedDayDetail,
 } from "./calendar";
+import {
+  inquiries as MOCK_INQUIRIES,
+  inquiryDetails as MOCK_DETAILS,
+  type InquiryListItem,
+  type InquiryDetail,
+} from "./inquiries";
+import type { Stop } from "./mock";
 
 /** Booking statuses that occupy inventory (shown on the calendar). */
 const COMMITTED = ["pending_payment", "paid", "contracted", "confirmed", "delivered", "completed"];
@@ -50,6 +57,7 @@ interface BRow {
   customer_name: string | null;
   status: string;
   delivery_window: string | null;
+  delivery_zip?: string | null;
   subtotal: number;
   deposit: number | null;
   booking_items: BItem[];
@@ -189,5 +197,171 @@ function buildDetail(
         item: shortLabel(b.booking_items?.[0]?.items?.name ?? "Booking", b.booking_items?.[0]?.quantity ?? 1),
         time: b.delivery_window ?? "—",
       })),
+  };
+}
+
+/* ══════════════════════ Inquiries ══════════════════════ */
+
+function initials(name: string): string {
+  return name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+}
+
+/**
+ * Inbox from live bookings with status inquiry (needs review) or quoted
+ * (auto-answered). The rich detail (AI draft / conversation) is not yet
+ * persisted, so it's matched from mock content by customer name.
+ */
+export async function getInquiries(operatorId: string): Promise<{
+  list: InquiryListItem[];
+  filters: { all: number; needsYou: number; auto: number };
+  details: Record<string, InquiryDetail>;
+}> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("bookings")
+    .select("id, customer_name, status, notes, created_at")
+    .eq("operator_id", operatorId)
+    .in("status", ["inquiry", "quoted"])
+    .order("created_at", { ascending: false });
+  const rows = data ?? [];
+
+  const mockByName = new Map(MOCK_INQUIRIES.map((m) => [m.name, m]));
+  const list: InquiryListItem[] = rows.map((b) => {
+    const name = b.customer_name ?? "Customer";
+    const m = mockByName.get(name);
+    return {
+      id: b.id,
+      name,
+      initials: initials(name),
+      time: m?.time ?? "Today",
+      status: b.status === "inquiry" ? "needs_review" : "auto",
+      preview: b.notes ?? "",
+      customerType: m?.customerType ?? "New customer",
+      location: m?.location ?? "Plymouth, MA",
+    };
+  });
+  const needsYou = list.filter((l) => l.status === "needs_review").length;
+
+  const details: Record<string, InquiryDetail> = {};
+  for (const b of rows) {
+    const key = Object.keys(MOCK_DETAILS).find(
+      (k) => MOCK_INQUIRIES.find((m) => m.id === k)?.name === b.customer_name,
+    );
+    details[b.id] =
+      key && MOCK_DETAILS[key]
+        ? MOCK_DETAILS[key]
+        : { message: { text: b.notes ?? "", meta: "via your website" }, handledNote: b.notes ?? undefined };
+  }
+
+  return { list, filters: { all: list.length, needsYou, auto: list.length - needsYou }, details };
+}
+
+/* ══════════════════════ Dashboard ══════════════════════ */
+
+const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const WEEKDAY_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const WEEKDAY_ABBR = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+
+export interface DashboardData {
+  dateLabel: string;
+  routeSummary: string;
+  revenue: string;
+  bookings: number;
+  needsYou: number;
+  quotesSent: number;
+  booked: number;
+  flaggedSummary: string | null;
+  todayStops: Stop[];
+  comingUp: { month: string; day: string; title: string; subtitle: string; tone: "coral" | "muted" }[];
+}
+
+function ymd(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+export async function getDashboard(operatorId: string): Promise<DashboardData> {
+  const supabase = createAdminClient();
+  const now = new Date();
+  const today = ymd(now);
+  const dow = now.getUTCDay();
+  const weekStart = new Date(now); weekStart.setUTCDate(now.getUTCDate() - dow);
+  const weekEnd = new Date(weekStart); weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+
+  const { data: items } = await supabase.from("items").select("id, category, quantity").eq("operator_id", operatorId);
+  const bounceOwned = (items ?? []).filter((i) => toCategory(i.category) === "bounce");
+
+  const { data: cData } = await supabase
+    .from("bookings")
+    .select("id, start_date, customer_name, status, delivery_window, delivery_zip, subtotal, booking_items(item_id, quantity, items(name, category))")
+    .eq("operator_id", operatorId)
+    .in("status", COMMITTED)
+    .gte("start_date", today);
+  const committed = (cData ?? []) as unknown as BRow[];
+
+  const { data: weekData } = await supabase
+    .from("bookings")
+    .select("subtotal")
+    .eq("operator_id", operatorId)
+    .in("status", COMMITTED)
+    .gte("start_date", ymd(weekStart))
+    .lte("start_date", ymd(weekEnd));
+  const revenueCents = (weekData ?? []).reduce((s, b) => s + (b.subtotal ?? 0), 0);
+
+  const { data: inq } = await supabase
+    .from("bookings")
+    .select("customer_name, status, notes")
+    .eq("operator_id", operatorId)
+    .in("status", ["inquiry", "quoted"]);
+  const inqRows = inq ?? [];
+  const needsYou = inqRows.filter((r) => r.status === "inquiry").length;
+  const quotesSent = inqRows.filter((r) => r.status === "quoted").length;
+  const flagged = inqRows.find((r) => r.status === "inquiry");
+
+  // Today's route
+  const todayStops: Stop[] = committed
+    .filter((b) => b.start_date === today)
+    .map((b) => {
+      const [time, meridiem] = (b.delivery_window ?? "— ").split(" ");
+      return {
+        time: time ?? "—",
+        meridiem: meridiem ?? "",
+        type: "DELIVER" as const,
+        item: b.booking_items?.[0]?.items?.name ?? "Booking",
+        customer: b.customer_name ?? "Customer",
+        address: b.delivery_zip ? `ZIP ${b.delivery_zip}` : "Plymouth",
+        status: { label: "Scheduled", tone: "muted" as const },
+      };
+    });
+
+  // Coming up: next fully-booked day + the escalated inquiry
+  const byDay = new Map<string, BRow[]>();
+  for (const b of committed) (byDay.get(b.start_date) ?? byDay.set(b.start_date, []).get(b.start_date)!).push(b);
+  const comingUp: DashboardData["comingUp"] = [];
+  const fbDay = [...byDay.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .find(([, bs]) => {
+      const reserved = new Map<string, number>();
+      for (const bk of bs) for (const li of bk.booking_items ?? []) reserved.set(li.item_id, (reserved.get(li.item_id) ?? 0) + li.quantity);
+      return bounceOwned.length > 0 && bounceOwned.every((bi) => (reserved.get(bi.id) ?? 0) >= bi.quantity);
+    });
+  if (fbDay) {
+    const d = new Date(`${fbDay[0]}T00:00:00Z`);
+    comingUp.push({ month: WEEKDAY_ABBR[d.getUTCDay()], day: String(d.getUTCDate()), title: "Fully booked", subtitle: `${fbDay[1].length} bookings out`, tone: "coral" });
+  }
+  if (flagged) {
+    comingUp.push({ month: "NEW", day: "•", title: "Quote to review", subtitle: `${flagged.customer_name} · needs you`, tone: "muted" });
+  }
+
+  return {
+    dateLabel: `${WEEKDAY_FULL[dow]}, ${MONTHS_SHORT[now.getUTCMonth()]} ${now.getUTCDate()}`,
+    routeSummary: `${todayStops.length} ${todayStops.length === 1 ? "stop" : "stops"} on today's route`,
+    revenue: money(revenueCents),
+    bookings: committed.length,
+    needsYou,
+    quotesSent,
+    booked: quotesSent,
+    flaggedSummary: flagged?.notes ?? null,
+    todayStops,
+    comingUp,
   };
 }

@@ -15,13 +15,13 @@ import {
   Paperclip,
   PaperPlaneTilt,
 } from "@phosphor-icons/react/dist/ssr";
-import {
-  inquiries,
-  inquiryDetails,
-  inquiryFilters,
-  type InquiryListItem,
-  type InquiryStatus,
-} from "@/lib/operator/inquiries";
+import type { InquiryListItem, InquiryStatus, InquiryDetail } from "@/lib/operator/inquiries";
+
+interface InquiriesProps {
+  list: InquiryListItem[];
+  details: Record<string, InquiryDetail>;
+  filters: { all: number; needsYou: number; auto: number };
+}
 
 const STATUS: Record<
   InquiryStatus,
@@ -47,17 +47,26 @@ const STATUS: Record<
   },
 };
 
-export function InquiriesView() {
-  const [selectedId, setSelectedId] = useState(inquiries[0].id);
+export function InquiriesView({ list, details, filters }: InquiriesProps) {
+  const initial = list.find((i) => i.status === "needs_review") ?? list[0];
+  const [selectedId, setSelectedId] = useState(initial?.id ?? "");
   const [mobileDetail, setMobileDetail] = useState(false);
 
-  const selected = inquiries.find((i) => i.id === selectedId)!;
-  const detail = inquiryDetails[selectedId];
+  const selected = list.find((i) => i.id === selectedId) ?? list[0];
+  const detail = selected ? details[selected.id] : undefined;
 
   const open = (id: string) => {
     setSelectedId(id);
     setMobileDetail(true);
   };
+
+  if (!selected || !detail) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-8 text-sm font-medium text-ink-mute">
+        No inquiries yet.
+      </div>
+    );
+  }
 
   return (
     <div className="lg:flex lg:h-dvh lg:overflow-hidden">
@@ -73,13 +82,13 @@ export function InquiriesView() {
             </button>
           </div>
           <div className="mt-4 flex gap-2">
-            <FilterPill active>All {inquiryFilters.all}</FilterPill>
-            <FilterPill tone="blue">Needs you {inquiryFilters.needsYou}</FilterPill>
-            <FilterPill tone="green">Auto {inquiryFilters.auto}</FilterPill>
+            <FilterPill active>All {filters.all}</FilterPill>
+            <FilterPill tone="blue">Needs you {filters.needsYou}</FilterPill>
+            <FilterPill tone="green">Auto {filters.auto}</FilterPill>
           </div>
         </div>
         <div className="flex flex-col gap-3 p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-          {inquiries.map((item) => (
+          {list.map((item) => (
             <InquiryCard
               key={item.id}
               item={item}

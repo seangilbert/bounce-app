@@ -11,25 +11,22 @@ import {
   TrendUp,
   CheckCircle,
 } from "@phosphor-icons/react/dist/ssr";
-import {
-  operator,
-  today,
-  weekStats,
-  aiSummary,
-  flaggedInquiry,
-  weatherAdvisory,
-  todayStops,
-  comingUp,
-  type Stop,
-  type ComingUpItem,
-} from "@/lib/operator/mock";
+import { getDefaultOperator } from "@/lib/inventory/repo";
+import { getDashboard, type DashboardData } from "@/lib/operator/data";
+// Operator identity + weather stay mock/config for now (no weather API yet).
+import { operator, aiSummary, weekStats, weatherAdvisory } from "@/lib/operator/mock";
+import type { Stop } from "@/lib/operator/mock";
 
-/**
- * Single responsive dashboard — the same components and colors at every width.
- * Mobile stacks the cards in one column; desktop (lg) splits into a main column
- * + right rail.
- */
-export default function DashboardPage() {
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const op = await getDefaultOperator();
+  if (!op) return <div className="p-8 text-ink-mute">No operator configured.</div>;
+  const data = await getDashboard(op.id);
+  return <DashboardBody data={data} />;
+}
+
+function DashboardBody({ data }: { data: DashboardData }) {
   return (
     <div className="flex w-full flex-col">
       {/* Top bar */}
@@ -39,7 +36,7 @@ export default function DashboardPage() {
             Good morning, {operator.firstName}
           </h1>
           <p className="mt-0.5 text-sm font-medium text-ink-mute">
-            {today.dateLabel} · {today.routeSummary}
+            {data.dateLabel} · {data.routeSummary}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -58,33 +55,32 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Content: stacked on mobile, main + rail on desktop */}
       <div className="flex flex-col gap-5 px-5 py-5 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6 lg:px-8 lg:py-6">
         <div className="flex min-w-0 flex-col gap-5 lg:gap-6">
-          <AiHero />
-          <TodaysRoute stops={todayStops} />
+          <AiHero data={data} />
+          <TodaysRoute stops={data.todayStops} />
         </div>
         <div className="flex flex-col gap-4 lg:gap-5">
           <div className="grid grid-cols-2 gap-3 lg:gap-4">
-            <StatTile label="This week" value={weekStats.revenue}>
+            <StatTile label="This week" value={data.revenue}>
               <span className="flex items-center gap-1 font-bold text-teal">
                 <TrendUp size={14} weight="bold" />
                 {weekStats.change}
               </span>
             </StatTile>
-            <StatTile label="Bookings" value={String(weekStats.bookings)}>
+            <StatTile label="Bookings" value={String(data.bookings)}>
               <span className="font-semibold text-ink-mute">{weekStats.repliedPct}% replied</span>
             </StatTile>
           </div>
           <WeatherCard />
-          <ComingUp items={comingUp} />
+          <ComingUp items={data.comingUp} />
         </div>
       </div>
     </div>
   );
 }
 
-function AiHero() {
+function AiHero({ data }: { data: DashboardData }) {
   return (
     <section className="rounded-[24px] bg-brand p-5 text-white shadow-[0_24px_50px_-26px_rgba(59,125,240,0.65)] lg:rounded-[28px] lg:p-7">
       <div className="flex items-center justify-between">
@@ -100,7 +96,7 @@ function AiHero() {
       <div className="mt-4 flex items-start justify-between gap-4 lg:mt-5 lg:gap-6">
         <div className="flex items-start gap-3 lg:gap-4">
           <span className="font-display text-[48px] font-bold leading-[0.9] lg:text-[64px]">
-            {aiSummary.quotesSent}
+            {data.quotesSent}
           </span>
           <span className="mt-0.5 max-w-[12ch] font-display text-lg font-bold leading-tight lg:mt-1 lg:text-[22px]">
             quotes sent while you were out
@@ -108,26 +104,28 @@ function AiHero() {
         </div>
         <div className="flex flex-shrink-0 gap-5 lg:gap-8">
           <HeroStat label="Avg reply" value={`${aiSummary.avgReplyMin} min`} />
-          <HeroStat label="Booked" value={`${aiSummary.booked} of ${aiSummary.total}`} />
+          <HeroStat label="Booked" value={`${data.booked} of ${data.quotesSent}`} />
         </div>
       </div>
 
-      <div className="mt-5 rounded-[16px] bg-white p-4 lg:mt-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-          <div className="flex items-start gap-3 lg:flex-1">
-            <span className="flex-shrink-0 rounded-full bg-brand-tint px-3 py-1.5 text-[11px] font-extrabold text-brand-deep">
-              {aiSummary.needsYou} NEEDS YOU
-            </span>
-            <p className="text-sm font-medium leading-snug text-ink">{flaggedInquiry.summary}</p>
+      {data.needsYou > 0 && data.flaggedSummary ? (
+        <div className="mt-5 rounded-[16px] bg-white p-4 lg:mt-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+            <div className="flex items-start gap-3 lg:flex-1">
+              <span className="flex-shrink-0 rounded-full bg-brand-tint px-3 py-1.5 text-[11px] font-extrabold text-brand-deep">
+                {data.needsYou} NEEDS YOU
+              </span>
+              <p className="text-sm font-medium leading-snug text-ink">{data.flaggedSummary}</p>
+            </div>
+            <Link
+              href="/inquiries"
+              className="flex items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep lg:flex-shrink-0"
+            >
+              Review &amp; reply <ArrowRight size={15} weight="bold" />
+            </Link>
           </div>
-          <Link
-            href="/inquiries"
-            className="flex items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep lg:flex-shrink-0"
-          >
-            Review &amp; reply <ArrowRight size={15} weight="bold" />
-          </Link>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }
@@ -152,11 +150,15 @@ function TodaysRoute({ stops }: { stops: Stop[] }) {
           <ArrowUpRight size={15} weight="bold" />
         </button>
       </div>
-      <ol className="mt-2 divide-y divide-sand-line">
-        {stops.map((stop, i) => (
-          <RouteRow key={i} stop={stop} />
-        ))}
-      </ol>
+      {stops.length === 0 ? (
+        <p className="py-6 text-sm font-medium text-ink-mute">No deliveries scheduled today.</p>
+      ) : (
+        <ol className="mt-2 divide-y divide-sand-line">
+          {stops.map((stop, i) => (
+            <RouteRow key={i} stop={stop} />
+          ))}
+        </ol>
+      )}
     </section>
   );
 }
@@ -253,28 +255,32 @@ function WeatherCard() {
   );
 }
 
-function ComingUp({ items }: { items: ComingUpItem[] }) {
+function ComingUp({ items }: { items: DashboardData["comingUp"] }) {
   return (
     <div className="rounded-[20px] border border-sand-line bg-white p-5">
       <h3 className="font-display text-lg font-bold text-ink">Coming up</h3>
-      <ul className="mt-3 flex flex-col gap-3.5">
-        {items.map((c, i) => (
-          <li key={i} className="flex items-center gap-3">
-            <div
-              className={`flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-xl leading-none ${
-                c.tone === "coral" ? "bg-coral-tint text-coral-deep" : "bg-sand text-ink-soft"
-              }`}
-            >
-              <span className="text-[9px] font-extrabold">{c.month}</span>
-              <span className="font-display text-[15px] font-bold">{c.day}</span>
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-bold text-ink">{c.title}</div>
-              <div className="truncate text-[12.5px] font-medium text-ink-mute">{c.subtitle}</div>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {items.length === 0 ? (
+        <p className="mt-2 text-sm font-medium text-ink-mute">Nothing upcoming.</p>
+      ) : (
+        <ul className="mt-3 flex flex-col gap-3.5">
+          {items.map((c, i) => (
+            <li key={i} className="flex items-center gap-3">
+              <div
+                className={`flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-xl leading-none ${
+                  c.tone === "coral" ? "bg-coral-tint text-coral-deep" : "bg-sand text-ink-soft"
+                }`}
+              >
+                <span className="text-[9px] font-extrabold">{c.month}</span>
+                <span className="font-display text-[15px] font-bold">{c.day}</span>
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-ink">{c.title}</div>
+                <div className="truncate text-[12.5px] font-medium text-ink-mute">{c.subtitle}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
