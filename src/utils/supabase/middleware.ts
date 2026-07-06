@@ -69,6 +69,7 @@ export async function updateSession(request: NextRequest) {
     "/more",
     "/billing",
     "/connect",
+    "/onboarding",
   ];
   const isOperatorRoute =
     path === "/" || OPERATOR_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));

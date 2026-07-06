@@ -61,7 +61,7 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 
 1. **Auth + session-scoped operator resolution** (keystone; schema is already tenant-ready). **← now**
 2. **Stripe Connect** (onboarding needs it).
-3. **Operator onboarding wizard** + **inventory management UI** (self-serve).
+3. ~~**Operator onboarding wizard** + **inventory management UI**~~ ✅ (`/onboarding` checklist: geocoded location → add rentals → connect Stripe; new signups land here).
 4. **Transactional email** + **balance collection** + **delivery fees/tax**.
 5. **Prod DB split, migration tooling, durable rate limit, legal pages** (go-live checklist).
 6. **Overbooking hardening, tests/CI, monitoring.**

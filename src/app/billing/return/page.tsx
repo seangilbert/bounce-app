@@ -47,5 +47,5 @@ export default async function BillingReturnPage({
     console.error("[billing] return confirmation failed:", err);
   }
 
-  redirect("/dashboard?welcome=1");
+  redirect("/onboarding");
 }

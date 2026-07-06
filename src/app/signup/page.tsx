@@ -55,9 +55,9 @@ export default function SignupPage() {
           window.location.href = bJson.url;
           return;
         }
-        // If billing can't start, still land them in the app; they can retry later.
+        // If billing can't start, still continue to onboarding; they can retry later.
       }
-      router.push("/dashboard");
+      router.push("/onboarding");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
