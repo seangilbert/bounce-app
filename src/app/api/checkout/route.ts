@@ -95,15 +95,17 @@ export async function POST(req: Request) {
       );
     }
     bookingId = booking.id;
+    const operator = await getOperatorById(booking.operatorId);
+    const depositPct = operator?.depositPercent ?? DEPOSIT_PERCENT;
 
     // booking.subtotal is range-aware (line_total already applies the rental
     // duration). Charge either a deposit or the full amount.
     const subtotal = booking.subtotal;
     let lineItems;
     if (data.paymentType === "deposit") {
-      const dep = depositAmount(subtotal);
+      const dep = depositAmount(subtotal, depositPct);
       lineItems = [
-        { name: `Deposit (${DEPOSIT_PERCENT}%) — balance due on delivery`, quantity: 1, unitAmount: dep },
+        { name: `Deposit (${depositPct}%) — balance due on delivery`, quantity: 1, unitAmount: dep },
       ];
       depositToRecord = dep;
     } else {
@@ -120,7 +122,6 @@ export async function POST(req: Request) {
     // Stripe Connect: if this booking's operator has connected their Stripe
     // account, route the funds to them (destination charge). Otherwise the
     // charge stays on the platform account (single-tenant / not-yet-connected).
-    const operator = await getOperatorById(booking.operatorId);
     const chargedAmount = lineItems.reduce((s, li) => s + li.quantity * li.unitAmount, 0);
     const connect =
       operator?.stripeConnectId && operator.connectChargesEnabled

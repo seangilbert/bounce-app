@@ -17,6 +17,10 @@ export interface Operator {
   subscriptionStatus: string | null;
   stripeConnectId: string | null;
   connectChargesEnabled: boolean;
+  phone: string | null;
+  depositPercent: number;
+  autoQuoteCapCents: number;
+  minLeadHours: number;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

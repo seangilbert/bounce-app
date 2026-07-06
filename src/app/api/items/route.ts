@@ -44,9 +44,19 @@ export async function GET(req: Request) {
         ? await availabilityForOperator(operator.id, start, end)
         : await listItems(operator.id, { activeOnly: true });
 
+    // Public storefront payload — expose only public operator fields (never the
+    // Stripe ids, subscription status, or contact email).
+    const publicOperator = {
+      name: operator.name,
+      slug: operator.slug,
+      location: operator.location,
+      phone: operator.phone,
+      depositPercent: operator.depositPercent,
+    };
+
     // Availability is real-time — never let a browser/CDN serve a stale copy.
     return NextResponse.json(
-      { operator, startDate: start, endDate: end, items },
+      { operator: publicOperator, startDate: start, endDate: end, items },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (err) {

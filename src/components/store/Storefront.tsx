@@ -32,7 +32,7 @@ interface ApiItem {
   availability?: { owned: number; reserved: number; available: number };
 }
 interface ApiResponse {
-  operator: { name: string } | null;
+  operator: { name: string; depositPercent?: number } | null;
   items: ApiItem[];
 }
 
@@ -371,6 +371,7 @@ export function Storefront({ operatorId }: { operatorId?: string }) {
           lines={cartLines}
           subtotal={subtotal}
           operatorId={operatorId}
+          depositPercent={data?.operator?.depositPercent ?? DEPOSIT_PERCENT}
           onClose={() => setCheckoutOpen(false)}
         />
       ) : null}
@@ -385,6 +386,7 @@ function CheckoutDrawer({
   lines,
   subtotal,
   operatorId,
+  depositPercent,
   onClose,
 }: {
   date: string;
@@ -393,6 +395,7 @@ function CheckoutDrawer({
   lines: { item: ApiItem; qty: number }[];
   subtotal: number;
   operatorId?: string;
+  depositPercent: number;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
@@ -401,7 +404,7 @@ function CheckoutDrawer({
   const [error, setError] = useState<string | null>(null);
   const valid = form.name.trim() && /.+@.+\..+/.test(form.email) && form.address.trim();
 
-  const deposit = depositAmount(subtotal);
+  const deposit = depositAmount(subtotal, depositPercent);
   const balance = subtotal - deposit;
   const amountNow = payType === "deposit" ? deposit : subtotal;
 
@@ -497,7 +500,7 @@ function CheckoutDrawer({
               <PayOption
                 active={payType === "deposit"}
                 onClick={() => setPayType("deposit")}
-                title={`Pay ${DEPOSIT_PERCENT}% deposit`}
+                title={`Pay ${depositPercent}% deposit`}
                 subtitle={`${money(deposit)} today · ${money(balance)} due on delivery`}
               />
               <PayOption

@@ -5,7 +5,7 @@
  */
 export const DEPOSIT_PERCENT = 30;
 
-/** Deposit amount (minor units) for a given subtotal. */
-export function depositAmount(subtotalCents: number): number {
-  return Math.round((subtotalCents * DEPOSIT_PERCENT) / 100);
+/** Deposit amount (minor units) for a subtotal at a given percent (default 30). */
+export function depositAmount(subtotalCents: number, percent: number = DEPOSIT_PERCENT): number {
+  return Math.round((subtotalCents * percent) / 100);
 }

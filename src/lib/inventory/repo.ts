@@ -21,6 +21,10 @@ interface OperatorRow {
   subscription_status: string | null;
   stripe_connect_id: string | null;
   connect_charges_enabled: boolean | null;
+  phone: string | null;
+  deposit_percent: number | null;
+  auto_quote_cap_cents: number | null;
+  min_lead_hours: number | null;
 }
 
 interface ItemRow {
@@ -60,6 +64,10 @@ function rowToOperator(r: OperatorRow): Operator {
     subscriptionStatus: r.subscription_status,
     stripeConnectId: r.stripe_connect_id,
     connectChargesEnabled: r.connect_charges_enabled ?? false,
+    phone: r.phone,
+    depositPercent: r.deposit_percent ?? 30,
+    autoQuoteCapCents: r.auto_quote_cap_cents ?? 75_000,
+    minLeadHours: r.min_lead_hours ?? 48,
   };
 }
 

@@ -12,10 +12,7 @@ import type { Operator } from "@/lib/inventory/types";
 /** Model for the quote assistant. Haiku is a valid cost swap (spec 7.2). */
 const ASSISTANT_MODEL = "claude-opus-4-8";
 
-/** Auto-quote only up to this subtotal (minor units). Above it → operator review. */
-const AUTO_QUOTE_CAP = Number(process.env.QUOTE_AUTO_CAP_CENTS ?? 75_000); // $750
-/** Events sooner than this need a human. */
-const MIN_LEAD_HOURS = 48;
+// Auto-quote cap + minimum lead time are now per-operator settings (see Settings).
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -279,14 +276,17 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
   }
 
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  const suggestedDeposit = Math.round(subtotal * 0.3);
+  const suggestedDeposit = Math.round((subtotal * operator.depositPercent) / 100);
 
   // Escalation gate — much lighter now that ambiguity is handled by asking.
   const reasons: string[] = [];
   if (out.unmatchedRequests.length) reasons.push(`unmatched requests: ${out.unmatchedRequests.join(", ")}`);
-  if (subtotal > AUTO_QUOTE_CAP)
-    reasons.push(`subtotal $${(subtotal / 100).toFixed(2)} over auto-quote cap $${(AUTO_QUOTE_CAP / 100).toFixed(2)}`);
-  if (hoursUntil(startDate) < MIN_LEAD_HOURS) reasons.push("rental starts within 48 hours");
+  if (subtotal > operator.autoQuoteCapCents)
+    reasons.push(
+      `subtotal $${(subtotal / 100).toFixed(2)} over auto-quote cap $${(operator.autoQuoteCapCents / 100).toFixed(2)}`,
+    );
+  if (hoursUntil(startDate) < operator.minLeadHours)
+    reasons.push(`rental starts within ${operator.minLeadHours} hours`);
   const auto = reasons.length === 0;
 
   // Persist to the operator inbox once per conversation (first quote only).
