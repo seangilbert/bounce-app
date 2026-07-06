@@ -1,0 +1,96 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { createAdminClient } from "@/utils/supabase/admin";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+export const dynamic = "force-dynamic";
+
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 60_000;
+
+function clientIp(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0]!.trim();
+  return req.headers.get("x-real-ip") ?? "unknown";
+}
+
+const SignupSchema = z.object({
+  businessName: z.string().trim().min(1, "Business name is required.").max(120),
+  ownerName: z.string().trim().max(120).optional(),
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters."),
+});
+
+/**
+ * Self-serve operator sign-up: creates the auth user, a new operator tenant, and
+ * the owner membership. Auto-confirms the email since transactional email isn't
+ * wired yet (email verification is a roadmap follow-up). All writes use the
+ * service role; on partial failure we roll back what we created.
+ */
+export async function POST(req: Request) {
+  const rl = checkRateLimit(`signup:${clientIp(req)}`, RATE_LIMIT, RATE_WINDOW_MS);
+  if (!rl.allowed) {
+    const retryAfter = Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000));
+    return NextResponse.json(
+      { error: "Too many attempts. Try again later." },
+      { status: 429, headers: { "retry-after": String(retryAfter) } },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  const parsed = SignupSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid request." },
+      { status: 400 },
+    );
+  }
+  const { businessName, ownerName, email, password } = parsed.data;
+  const admin = createAdminClient();
+
+  // 1) Create the auth user (auto-confirmed).
+  const userRes = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+  if (userRes.error) {
+    const dup = /already|registered|exists/i.test(userRes.error.message);
+    return NextResponse.json(
+      { error: dup ? "An account with this email already exists." : userRes.error.message },
+      { status: dup ? 409 : 500 },
+    );
+  }
+  const userId = userRes.data.user.id;
+
+  // 2) Create the operator tenant.
+  const opRes = await admin
+    .from("operators")
+    .insert({
+      name: businessName,
+      contact_email: email,
+      owner_name: ownerName ?? null,
+      plan: "solo",
+    })
+    .select("id")
+    .single();
+  if (opRes.error) {
+    await admin.auth.admin.deleteUser(userId).catch(() => {});
+    return NextResponse.json({ error: "Could not create your workspace." }, { status: 500 });
+  }
+  const operatorId = opRes.data.id as string;
+
+  // 3) Link the user as owner.
+  const memRes = await admin
+    .from("operator_members")
+    .insert({ operator_id: operatorId, user_id: userId, role: "owner" });
+  if (memRes.error) {
+    await admin.from("operators").delete().eq("id", operatorId);
+    await admin.auth.admin.deleteUser(userId).catch(() => {});
+    return NextResponse.json({ error: "Could not finish setting up your account." }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true }, { status: 201 });
+}

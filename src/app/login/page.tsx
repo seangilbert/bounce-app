@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Confetti, CircleNotch } from "@phosphor-icons/react/dist/ssr";
 import { createClient } from "@/utils/supabase/client";
@@ -96,8 +97,11 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-xs font-medium text-ink-mute">
-          Operator accounts are provisioned during onboarding.
+        <p className="mt-4 text-center text-sm font-medium text-ink-mute">
+          New here?{" "}
+          <Link href="/signup" className="font-bold text-brand hover:text-brand-deep">
+            Create an account
+          </Link>
         </p>
       </div>
     </div>
