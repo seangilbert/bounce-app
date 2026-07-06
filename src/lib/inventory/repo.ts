@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
-import type { Item, NewItem, Operator } from "./types";
+import type { Item, NewItem, Operator, PriceUnit } from "./types";
 
 const OPERATORS = "operators";
 const ITEMS = "items";
@@ -98,6 +98,57 @@ export async function getOperatorById(id: string): Promise<Operator | null> {
   const { data, error } = await supabase.from(OPERATORS).select().eq("id", id).maybeSingle();
   if (error) throw new Error(`getOperatorById failed: ${error.message}`);
   return data ? rowToOperator(data as OperatorRow) : null;
+}
+
+export interface ItemPatch {
+  name?: string;
+  description?: string | null;
+  category?: string | null;
+  quantity?: number;
+  basePrice?: number;
+  priceUnit?: PriceUnit;
+  powerRequired?: boolean;
+  active?: boolean;
+}
+
+/** Update an item, scoped to its operator (an operator can't touch another's). */
+export async function updateItem(operatorId: string, id: string, patch: ItemPatch): Promise<Item> {
+  const supabase = createAdminClient();
+  const row: Record<string, unknown> = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.description !== undefined) row.description = patch.description;
+  if (patch.category !== undefined) row.category = patch.category;
+  if (patch.quantity !== undefined) row.quantity = patch.quantity;
+  if (patch.basePrice !== undefined) row.base_price = patch.basePrice;
+  if (patch.priceUnit !== undefined) row.price_unit = patch.priceUnit;
+  if (patch.powerRequired !== undefined) row.power_required = patch.powerRequired;
+  if (patch.active !== undefined) row.active = patch.active;
+
+  const { data, error } = await supabase
+    .from(ITEMS)
+    .update(row)
+    .eq("id", id)
+    .eq("operator_id", operatorId)
+    .select()
+    .single();
+  if (error) throw new Error(`updateItem failed: ${error.message}`);
+  return rowToItem(data as ItemRow);
+}
+
+/** Delete an item. Fails gracefully if it's referenced by bookings. */
+export async function deleteItem(
+  operatorId: string,
+  id: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from(ITEMS).delete().eq("id", id).eq("operator_id", operatorId);
+  if (error) {
+    if (/foreign key|violates|referenced|constraint/i.test(error.message)) {
+      return { ok: false, reason: "This item has bookings — deactivate it instead of deleting." };
+    }
+    throw new Error(`deleteItem failed: ${error.message}`);
+  }
+  return { ok: true };
 }
 
 export async function listItems(

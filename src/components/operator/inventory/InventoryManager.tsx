@@ -1,0 +1,406 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  CastleTurret,
+  Tent,
+  Chair,
+  Package,
+  Plus,
+  X,
+  CircleNotch,
+  Trash,
+  Lightning,
+} from "@phosphor-icons/react/dist/ssr";
+import type { Item } from "@/lib/inventory/types";
+import { createItemAction, updateItemAction, deleteItemAction } from "@/app/(operator)/inventory/actions";
+
+type Category = "bounce" | "tent" | "tables" | "other";
+
+const CATS: { value: Category; label: string; Icon: typeof Tent; tint: string; ink: string }[] = [
+  { value: "bounce", label: "Bounce house", Icon: CastleTurret, tint: "bg-brand-tint", ink: "text-brand" },
+  { value: "tent", label: "Tent", Icon: Tent, tint: "bg-teal-tint", ink: "text-teal" },
+  { value: "tables", label: "Tables & chairs", Icon: Chair, tint: "bg-amber-tint", ink: "text-amber-deep" },
+  { value: "other", label: "Other", Icon: Package, tint: "bg-sand", ink: "text-ink-soft" },
+];
+const catMeta = (c: string | null) => CATS.find((x) => x.value === c) ?? CATS[3];
+const money = (cents: number) => `$${(cents / 100).toLocaleString("en-US")}`;
+const unitLabel = (u: string) => (u === "per_hour" ? "/ hour" : u === "flat" ? "flat" : "/ day");
+
+interface DraftForm {
+  name: string;
+  category: Category;
+  price: string; // dollars, as typed
+  quantity: string;
+  priceUnit: "per_day" | "per_hour" | "flat";
+  description: string;
+  powerRequired: boolean;
+  active: boolean;
+}
+
+const emptyDraft: DraftForm = {
+  name: "",
+  category: "bounce",
+  price: "",
+  quantity: "1",
+  priceUnit: "per_day",
+  description: "",
+  powerRequired: false,
+  active: true,
+};
+
+function itemToDraft(i: Item): DraftForm {
+  return {
+    name: i.name,
+    category: (catMeta(i.category).value as Category) ?? "other",
+    price: (i.basePrice / 100).toString(),
+    quantity: i.quantity.toString(),
+    priceUnit: i.priceUnit,
+    description: i.description ?? "",
+    powerRequired: i.powerRequired,
+    active: i.active,
+  };
+}
+
+export function InventoryManager({ items }: { items: Item[] }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState<Item | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const open = creating || editing != null;
+  const close = () => {
+    setCreating(false);
+    setEditing(null);
+  };
+
+  return (
+    <div className="flex w-full flex-col">
+      {/* Top bar */}
+      <div className="flex items-center justify-between border-b border-sand px-5 py-5 lg:px-8 lg:py-6">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">Inventory</h1>
+          <p className="mt-0.5 text-sm font-medium text-ink-mute">
+            {items.length} {items.length === 1 ? "item" : "items"} in your catalog
+          </p>
+        </div>
+        <button
+          onClick={() => setCreating(true)}
+          className="flex flex-shrink-0 items-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep"
+        >
+          <Plus size={16} weight="bold" /> <span className="hidden sm:inline">Add item</span>
+          <span className="sm:hidden">Add</span>
+        </button>
+      </div>
+
+      <div className="px-5 py-5 lg:px-8 lg:py-6">
+        {items.length === 0 ? (
+          <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sand text-ink-mute">
+              <Package size={26} />
+            </div>
+            <h2 className="font-display text-xl font-bold text-ink">No items yet</h2>
+            <p className="max-w-sm text-sm font-medium text-ink-mute">
+              Add your first rental item so customers can browse and book it on your storefront.
+            </p>
+            <button
+              onClick={() => setCreating(true)}
+              className="mt-2 flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-deep"
+            >
+              <Plus size={15} weight="bold" /> Add your first item
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {items.map((item) => {
+              const m = catMeta(item.category);
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setEditing(item)}
+                  className="flex items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 text-left transition-colors hover:border-sand"
+                >
+                  <span className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl ${m.tint}`}>
+                    <m.Icon size={24} weight="fill" className={m.ink} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-bold text-ink">{item.name}</span>
+                      {!item.active ? (
+                        <span className="flex-shrink-0 rounded-full bg-sand px-2 py-0.5 text-[10px] font-extrabold text-ink-mute">
+                          HIDDEN
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-0.5 text-[13px] font-medium text-ink-mute">
+                      {m.label} · {item.quantity} in stock
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <div className="font-display text-lg font-bold text-ink">{money(item.basePrice)}</div>
+                    <div className="text-[12px] font-semibold text-ink-mute">{unitLabel(item.priceUnit)}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {open ? (
+        <ItemDrawer
+          item={editing}
+          onClose={close}
+          onSaved={() => {
+            close();
+            router.refresh();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ItemDrawer({
+  item,
+  onClose,
+  onSaved,
+}: {
+  item: Item | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [draft, setDraft] = useState<DraftForm>(item ? itemToDraft(item) : emptyDraft);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const set = <K extends keyof DraftForm>(k: K, v: DraftForm[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  const priceCents = Math.round(parseFloat(draft.price || "0") * 100);
+  const qty = parseInt(draft.quantity || "0", 10);
+  const valid = draft.name.trim() && priceCents >= 0 && Number.isFinite(priceCents) && qty >= 0;
+
+  async function save() {
+    setSubmitting(true);
+    setError(null);
+    const payload = {
+      name: draft.name.trim(),
+      category: draft.category,
+      description: draft.description.trim() || null,
+      quantity: qty,
+      basePrice: priceCents,
+      priceUnit: draft.priceUnit,
+      powerRequired: draft.powerRequired,
+      active: draft.active,
+    };
+    const res = item ? await updateItemAction(item.id, payload) : await createItemAction(payload);
+    if (res.ok) onSaved();
+    else {
+      setError(res.error);
+      setSubmitting(false);
+    }
+  }
+
+  async function remove() {
+    if (!item) return;
+    setDeleting(true);
+    setError(null);
+    const res = await deleteItemAction(item.id);
+    if (res.ok) onSaved();
+    else {
+      setError(res.error);
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-ink/40" onClick={onClose}>
+      <div
+        className="flex h-full w-full max-w-md flex-col overflow-y-auto bg-cream shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-sand px-5 py-4">
+          <h2 className="font-display text-xl font-bold text-ink">{item ? "Edit item" : "Add item"}</h2>
+          <button
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-ink-soft"
+            aria-label="Close"
+          >
+            <X size={18} weight="bold" />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 px-5 py-5">
+          <Field label="Name">
+            <input
+              value={draft.name}
+              onChange={(e) => set("name", e.target.value)}
+              placeholder="Rainbow 15×15 Bounce Castle"
+              className="input"
+            />
+          </Field>
+
+          <Field label="Category">
+            <div className="grid grid-cols-2 gap-2">
+              {CATS.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => set("category", c.value)}
+                  className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-bold transition-colors ${
+                    draft.category === c.value
+                      ? "border-brand bg-brand-tint/40 text-ink"
+                      : "border-sand-line bg-white text-ink-soft hover:border-sand"
+                  }`}
+                >
+                  <c.Icon size={18} weight="fill" className={c.ink} /> {c.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <div className="flex gap-3">
+            <Field label="Price (USD)" className="flex-1">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={draft.price}
+                onChange={(e) => set("price", e.target.value)}
+                placeholder="190"
+                className="input"
+              />
+            </Field>
+            <Field label="Rate" className="w-32">
+              <select
+                value={draft.priceUnit}
+                onChange={(e) => set("priceUnit", e.target.value as DraftForm["priceUnit"])}
+                className="input"
+              >
+                <option value="per_day">Per day</option>
+                <option value="per_hour">Per hour</option>
+                <option value="flat">Flat</option>
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Quantity owned">
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={draft.quantity}
+              onChange={(e) => set("quantity", e.target.value)}
+              className="input"
+            />
+          </Field>
+
+          <Field label="Description (optional)">
+            <textarea
+              value={draft.description}
+              onChange={(e) => set("description", e.target.value)}
+              rows={3}
+              placeholder="A colorful 15×15 castle, big enough for a dozen kids."
+              className="input resize-none"
+            />
+          </Field>
+
+          <div className="space-y-2.5">
+            <Toggle checked={draft.active} onChange={(v) => set("active", v)}>
+              Visible on storefront
+            </Toggle>
+            <Toggle
+              checked={draft.powerRequired}
+              onChange={(v) => set("powerRequired", v)}
+              icon={<Lightning size={15} weight="fill" className="text-amber-deep" />}
+            >
+              Needs power / a blower
+            </Toggle>
+          </div>
+
+          {error ? (
+            <div className="rounded-xl bg-coral-tint px-4 py-3 text-sm font-semibold text-coral-deep">
+              {error}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex items-center gap-3 border-t border-sand px-5 py-4">
+          {item ? (
+            <button
+              onClick={remove}
+              disabled={deleting || submitting}
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-sand bg-white text-coral transition-colors hover:bg-coral-tint disabled:opacity-50"
+              aria-label="Delete item"
+            >
+              {deleting ? <CircleNotch size={18} weight="bold" className="animate-spin" /> : <Trash size={18} />}
+            </button>
+          ) : null}
+          <button
+            onClick={save}
+            disabled={!valid || submitting || deleting}
+            className="flex flex-1 items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
+          >
+            {submitting ? (
+              <>
+                <CircleNotch size={18} weight="bold" className="animate-spin" /> Saving…
+              </>
+            ) : item ? (
+              "Save changes"
+            ) : (
+              "Add item"
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`block ${className}`}>
+      <span className="mb-1 block text-[13px] font-bold text-ink-soft">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Toggle({
+  checked,
+  onChange,
+  children,
+  icon,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-center justify-between rounded-xl border border-sand-line bg-white px-4 py-3 text-left"
+    >
+      <span className="flex items-center gap-2 text-sm font-bold text-ink">
+        {icon} {children}
+      </span>
+      <span
+        className={`relative h-6 w-10 flex-shrink-0 rounded-full transition-colors ${checked ? "bg-brand" : "bg-sand"}`}
+      >
+        <span
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${checked ? "left-[18px]" : "left-0.5"}`}
+        />
+      </span>
+    </button>
+  );
+}

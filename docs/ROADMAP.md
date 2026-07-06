@@ -37,7 +37,7 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 
 ## Tier 1 — Operator product completeness
 
-- [ ] **Inventory management UI** (stub today) — add/edit items, prices, quantities, and **photos** (Supabase Storage; icon placeholders today).
+- [x] **Inventory management UI** — `/inventory` lists the operator's catalog; add/edit/delete items (name, category, price, rate, quantity, description, visibility, power) via a drawer + server actions (operator-scoped). _Follow-up: item **photos** (Supabase Storage; icon placeholders today)._
 - [ ] **Settings** (stub) — profile, business hours, **delivery zones + fees**, **sales tax**, deposit %, auto-quote cap, blackout dates, min lead time (global 48h constant today).
 - [ ] **Booking management** — calendar is read-only; add open/edit/cancel, mark delivered/completed, and **refunds** (Stripe refund exists in code, not wired to UI).
 - [ ] **Wire the Inquiries "Send reply"** — the inbox composer is a stub; operators can't respond/adjust a quote.

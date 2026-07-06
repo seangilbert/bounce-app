@@ -8,6 +8,13 @@ body {
   max-width: 100%;
 }
 
+@layer components {
+  /* Shared form control (inventory drawer, settings). */
+  .input {
+    @apply w-full rounded-xl border border-sand bg-white px-3.5 py-2.5 text-sm font-medium text-ink outline-none placeholder:text-ink-faint focus:border-brand;
+  }
+}
+
 @layer utilities {
   /* Hide scrollbars on horizontal strips (inventory filters, day rows). */
   .no-scrollbar {
