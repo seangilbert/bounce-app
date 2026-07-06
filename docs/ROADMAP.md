@@ -47,6 +47,7 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 
 ## Tier 2 — Reliability & scale
 
+- [ ] **Performance (infra) follow-ups** — _(app-level nav perf already done: cached session/operator resolution, parallelized queries, loading skeletons.)_ Remaining: (a) **co-locate Supabase + Vercel in the same region** — each DB query is ~130ms; cross-region latency adds up. (b) **local JWT verification** (`getClaims` w/ asymmetric keys) to drop the ~300ms `auth.getUser()` round-trip the middleware makes on every request.
 - [ ] **Overbooking race hardening** — availability check → booking creation isn't atomic; two simultaneous checkouts for the last unit can both pass (oversell guard only logs after the fact). Needs a transaction/lock or DB exclusion constraint.
 - [ ] **Error monitoring** (Sentry) + structured logging.
 - [ ] **Automated tests** — none exist; prioritize the availability engine, quote/escalation logic, webhook handlers. Add CI (typecheck/build/test gates) + a staging environment.
