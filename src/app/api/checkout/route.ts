@@ -98,25 +98,33 @@ export async function POST(req: Request) {
     const operator = await getOperatorById(booking.operatorId);
     const depositPct = operator?.depositPercent ?? DEPOSIT_PERCENT;
 
-    // booking.subtotal is range-aware (line_total already applies the rental
-    // duration). Charge either a deposit or the full amount.
-    const subtotal = booking.subtotal;
+    // booking.total = range-aware subtotal + delivery + tax. Charge either a
+    // deposit (% of total) or the full amount (itemized + delivery + tax).
+    const total = booking.total;
     let lineItems;
     if (data.paymentType === "deposit") {
-      const dep = depositAmount(subtotal, depositPct);
+      const dep = depositAmount(total, depositPct);
       lineItems = [
         { name: `Deposit (${depositPct}%) — balance due on delivery`, quantity: 1, unitAmount: dep },
       ];
       depositToRecord = dep;
     } else {
       // Per-unit for the whole rental = line_total / quantity (integer for our
-      // pricing: unit_price × days). Charging this fixes the prior single-day bug.
-      lineItems = booking.items.map((li) => ({
-        name: li.name,
-        quantity: li.quantity,
-        unitAmount: Math.round(li.lineTotal / li.quantity),
-      }));
-      depositToRecord = subtotal; // paid in full
+      // pricing: unit_price × days), plus delivery + tax as their own lines.
+      lineItems = [
+        ...booking.items.map((li) => ({
+          name: li.name,
+          quantity: li.quantity,
+          unitAmount: Math.round(li.lineTotal / li.quantity),
+        })),
+        ...(booking.deliveryFee > 0
+          ? [{ name: "Delivery", quantity: 1, unitAmount: booking.deliveryFee }]
+          : []),
+        ...(booking.taxAmount > 0
+          ? [{ name: "Sales tax", quantity: 1, unitAmount: booking.taxAmount }]
+          : []),
+      ];
+      depositToRecord = total; // paid in full
     }
 
     // Stripe Connect: if this booking's operator has connected their Stripe

@@ -80,7 +80,7 @@ export function BookingDetail({
   const canCancel = !["completed", "canceled"].includes(s);
   const canRefund = payment?.status === "paid";
   const paid = booking.deposit ?? 0;
-  const balance = booking.subtotal - paid;
+  const balance = booking.total - paid;
   const meta = STATUS_META[s];
 
   return (
@@ -113,7 +113,12 @@ export function BookingDetail({
           </div>
         ))}
         <div className="mt-2 space-y-1 border-t border-sand-line pt-2.5 text-sm">
-          <Row label="Total" value={money(booking.subtotal)} bold />
+          {booking.deliveryFee > 0 || booking.taxAmount > 0 ? (
+            <Row label="Subtotal" value={money(booking.subtotal)} />
+          ) : null}
+          {booking.deliveryFee > 0 ? <Row label="Delivery" value={money(booking.deliveryFee)} /> : null}
+          {booking.taxAmount > 0 ? <Row label="Sales tax" value={money(booking.taxAmount)} /> : null}
+          <Row label="Total" value={money(booking.total)} bold />
           {paid > 0 ? <Row label="Paid" value={`− ${money(paid)}`} /> : null}
           {balance > 0 ? <Row label="Balance due on delivery" value={money(balance)} accent /> : null}
         </div>

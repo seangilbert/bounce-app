@@ -21,3 +21,25 @@ export function lineTotal(
   const multiplier = priceUnit === "per_day" ? days : 1;
   return basePrice * quantity * multiplier;
 }
+
+export interface PriceBreakdown {
+  subtotal: number;
+  deliveryFee: number;
+  tax: number;
+  total: number;
+}
+
+/**
+ * Canonical price breakdown (minor units). Tax applies to the taxable base
+ * (items + delivery). Single source of truth for createBooking, the AI quote,
+ * the storefront, and checkout so every surface shows the same numbers.
+ */
+export function priceBreakdown(
+  subtotal: number,
+  deliveryFeeCents: number,
+  taxPercent: number,
+): PriceBreakdown {
+  const deliveryFee = deliveryFeeCents;
+  const tax = Math.round(((subtotal + deliveryFee) * taxPercent) / 100);
+  return { subtotal, deliveryFee, tax, total: subtotal + deliveryFee + tax };
+}

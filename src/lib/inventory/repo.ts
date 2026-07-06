@@ -25,6 +25,8 @@ interface OperatorRow {
   deposit_percent: number | null;
   auto_quote_cap_cents: number | null;
   min_lead_hours: number | null;
+  tax_percent: number | string | null;
+  delivery_fee_cents: number | null;
 }
 
 interface ItemRow {
@@ -68,6 +70,8 @@ function rowToOperator(r: OperatorRow): Operator {
     depositPercent: r.deposit_percent ?? 30,
     autoQuoteCapCents: r.auto_quote_cap_cents ?? 75_000,
     minLeadHours: r.min_lead_hours ?? 48,
+    taxPercent: Number(r.tax_percent ?? 0),
+    deliveryFeeCents: r.delivery_fee_cents ?? 0,
   };
 }
 

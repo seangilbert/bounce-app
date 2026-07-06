@@ -21,6 +21,8 @@ export interface Operator {
   depositPercent: number;
   autoQuoteCapCents: number;
   minLeadHours: number;
+  taxPercent: number;
+  deliveryFeeCents: number;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

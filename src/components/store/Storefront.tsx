@@ -19,6 +19,7 @@ import {
   PaperPlaneTilt,
 } from "@phosphor-icons/react/dist/ssr";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
+import { priceBreakdown } from "@/lib/inventory/pricing";
 
 type Category = "bounce" | "tent" | "tables" | "other";
 
@@ -32,7 +33,12 @@ interface ApiItem {
   availability?: { owned: number; reserved: number; available: number };
 }
 interface ApiResponse {
-  operator: { name: string; depositPercent?: number } | null;
+  operator: {
+    name: string;
+    depositPercent?: number;
+    taxPercent?: number;
+    deliveryFeeCents?: number;
+  } | null;
   items: ApiItem[];
 }
 
@@ -44,11 +50,20 @@ interface QuoteLine {
   lineTotal: number;
 }
 type ChatMsg = { role: "user" | "assistant"; content: string };
+interface QuoteBreakdown {
+  lineItems: QuoteLine[];
+  subtotal: number;
+  deliveryFee: number;
+  tax: number;
+  total: number;
+  suggestedDeposit: number;
+  currency: string;
+}
 interface ConversationResult {
   reply: string;
   status: "gathering" | "quoted" | "review";
   eventDate: string | null;
-  quote: { lineItems: QuoteLine[]; subtotal: number; suggestedDeposit: number; currency: string } | null;
+  quote: QuoteBreakdown | null;
   auto: boolean;
   unmatchedRequests: string[];
   inquiryId: string | null;
@@ -372,6 +387,8 @@ export function Storefront({ operatorId }: { operatorId?: string }) {
           subtotal={subtotal}
           operatorId={operatorId}
           depositPercent={data?.operator?.depositPercent ?? DEPOSIT_PERCENT}
+          taxPercent={data?.operator?.taxPercent ?? 0}
+          deliveryFeeCents={data?.operator?.deliveryFeeCents ?? 0}
           onClose={() => setCheckoutOpen(false)}
         />
       ) : null}
@@ -387,6 +404,8 @@ function CheckoutDrawer({
   subtotal,
   operatorId,
   depositPercent,
+  taxPercent,
+  deliveryFeeCents,
   onClose,
 }: {
   date: string;
@@ -396,6 +415,8 @@ function CheckoutDrawer({
   subtotal: number;
   operatorId?: string;
   depositPercent: number;
+  taxPercent: number;
+  deliveryFeeCents: number;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
@@ -404,9 +425,10 @@ function CheckoutDrawer({
   const [error, setError] = useState<string | null>(null);
   const valid = form.name.trim() && /.+@.+\..+/.test(form.email) && form.address.trim();
 
-  const deposit = depositAmount(subtotal, depositPercent);
-  const balance = subtotal - deposit;
-  const amountNow = payType === "deposit" ? deposit : subtotal;
+  const bd = priceBreakdown(subtotal, deliveryFeeCents, taxPercent);
+  const deposit = depositAmount(bd.total, depositPercent);
+  const balance = bd.total - deposit;
+  const amountNow = payType === "deposit" ? deposit : bd.total;
 
   const field = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -487,9 +509,29 @@ function CheckoutDrawer({
                 <span className="font-bold text-ink">{money(lineTotalOf(l.item, l.qty, days))}</span>
               </div>
             ))}
-            <div className="mt-2 flex items-center justify-between border-t border-sand-line pt-2.5">
-              <span className="font-bold text-ink">Total</span>
-              <span className="font-display text-lg font-extrabold text-ink">{money(subtotal)}</span>
+            <div className="mt-2 space-y-1 border-t border-sand-line pt-2.5 text-sm">
+              {bd.deliveryFee > 0 || bd.tax > 0 ? (
+                <div className="flex items-center justify-between text-ink-mute">
+                  <span>Subtotal</span>
+                  <span className="font-semibold text-ink">{money(bd.subtotal)}</span>
+                </div>
+              ) : null}
+              {bd.deliveryFee > 0 ? (
+                <div className="flex items-center justify-between text-ink-mute">
+                  <span>Delivery</span>
+                  <span className="font-semibold text-ink">{money(bd.deliveryFee)}</span>
+                </div>
+              ) : null}
+              {bd.tax > 0 ? (
+                <div className="flex items-center justify-between text-ink-mute">
+                  <span>Sales tax</span>
+                  <span className="font-semibold text-ink">{money(bd.tax)}</span>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-between pt-0.5">
+                <span className="font-bold text-ink">Total</span>
+                <span className="font-display text-lg font-extrabold text-ink">{money(bd.total)}</span>
+              </div>
             </div>
           </div>
 
@@ -507,14 +549,15 @@ function CheckoutDrawer({
                 active={payType === "full"}
                 onClick={() => setPayType("full")}
                 title="Pay in full"
-                subtitle={`${money(subtotal)} today · nothing due later`}
+                subtitle={`${money(bd.total)} today · nothing due later`}
               />
             </div>
           </div>
 
           <div className="flex flex-col gap-2 rounded-2xl bg-brand-tint p-4 text-[13px] font-semibold text-brand-deep">
             <span className="flex items-center gap-2">
-              <Truck size={16} weight="fill" /> Free delivery, setup &amp; pickup
+              <Truck size={16} weight="fill" />{" "}
+              {deliveryFeeCents > 0 ? "Delivery, setup & pickup" : "Free delivery, setup & pickup"}
             </span>
             <span className="flex items-center gap-2">
               <ShieldCheck size={16} weight="fill" /> Secure payment · e-signed rental agreement
@@ -654,7 +697,7 @@ function ChatQuoteCard({
   date,
   onBook,
 }: {
-  quote: { lineItems: QuoteLine[]; subtotal: number; suggestedDeposit: number; currency: string };
+  quote: QuoteBreakdown;
   date: string | null;
   onBook: () => void;
 }) {
@@ -675,9 +718,29 @@ function ChatQuoteCard({
             <span className="font-bold text-ink">{money(l.lineTotal)}</span>
           </div>
         ))}
-        <div className="mt-2 flex items-center justify-between border-t border-sand-line pt-2.5">
-          <span className="font-bold text-ink">Total</span>
-          <span className="font-display text-lg font-extrabold text-ink">{money(quote.subtotal)}</span>
+        <div className="mt-2 space-y-1 border-t border-sand-line pt-2.5 text-sm">
+          {quote.deliveryFee > 0 || quote.tax > 0 ? (
+            <div className="flex items-center justify-between text-ink-mute">
+              <span>Subtotal</span>
+              <span className="font-semibold text-ink">{money(quote.subtotal)}</span>
+            </div>
+          ) : null}
+          {quote.deliveryFee > 0 ? (
+            <div className="flex items-center justify-between text-ink-mute">
+              <span>Delivery</span>
+              <span className="font-semibold text-ink">{money(quote.deliveryFee)}</span>
+            </div>
+          ) : null}
+          {quote.tax > 0 ? (
+            <div className="flex items-center justify-between text-ink-mute">
+              <span>Sales tax</span>
+              <span className="font-semibold text-ink">{money(quote.tax)}</span>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between pt-0.5">
+            <span className="font-bold text-ink">Total</span>
+            <span className="font-display text-lg font-extrabold text-ink">{money(quote.total)}</span>
+          </div>
         </div>
         {quote.suggestedDeposit > 0 ? (
           <div className="mt-1 text-right text-xs font-semibold text-ink-mute">

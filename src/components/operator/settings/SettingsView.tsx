@@ -9,7 +9,12 @@ import {
   CreditCard,
   ArrowSquareOut,
 } from "@phosphor-icons/react/dist/ssr";
-import { updateProfileAction, updatePolicyAction, type ActionResult } from "@/app/(operator)/settings/actions";
+import {
+  updateProfileAction,
+  updatePolicyAction,
+  updatePricingAction,
+  type ActionResult,
+} from "@/app/(operator)/settings/actions";
 
 interface OperatorSettings {
   name: string;
@@ -24,6 +29,8 @@ interface OperatorSettings {
   depositPercent: number;
   autoQuoteCapCents: number;
   minLeadHours: number;
+  taxPercent: number;
+  deliveryFeeCents: number;
 }
 
 export function SettingsView({ operator }: { operator: OperatorSettings }) {
@@ -31,6 +38,7 @@ export function SettingsView({ operator }: { operator: OperatorSettings }) {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 py-6 lg:px-8">
       <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">Settings</h1>
       <ProfileSection operator={operator} />
+      <PricingSection operator={operator} />
       <PolicySection operator={operator} />
       <AccountSection operator={operator} />
     </div>
@@ -191,6 +199,38 @@ function PolicySection({ operator }: { operator: OperatorSettings }) {
               depositPercent: parseInt(deposit || "0", 10),
               autoQuoteCapCents: Math.round(parseFloat(cap || "0") * 100),
               minLeadHours: parseInt(lead || "0", 10),
+            }),
+          )
+        }
+      />
+    </Section>
+  );
+}
+
+function PricingSection({ operator }: { operator: OperatorSettings }) {
+  const { busy, saved, error, save } = useSaver();
+  const [tax, setTax] = useState(String(operator.taxPercent));
+  const [delivery, setDelivery] = useState(String(Math.round(operator.deliveryFeeCents / 100)));
+
+  return (
+    <Section title="Pricing" desc="Applied to every quote and checkout. 0 = free delivery / no tax.">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Sales tax %" hint="On items + delivery">
+          <input type="number" min="0" max="100" step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} className="input" />
+        </Field>
+        <Field label="Delivery fee ($)" hint="Flat fee per booking">
+          <input type="number" min="0" value={delivery} onChange={(e) => setDelivery(e.target.value)} className="input" />
+        </Field>
+      </div>
+      <SaveBar
+        busy={busy}
+        saved={saved}
+        error={error}
+        onSave={() =>
+          save(() =>
+            updatePricingAction({
+              taxPercent: parseFloat(tax || "0"),
+              deliveryFeeCents: Math.round(parseFloat(delivery || "0") * 100),
             }),
           )
         }

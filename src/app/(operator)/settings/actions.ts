@@ -70,3 +70,23 @@ export async function updatePolicyAction(input: unknown): Promise<ActionResult> 
   revalidatePath("/dashboard");
   return { ok: true };
 }
+
+const PricingInput = z.object({
+  taxPercent: z.number().min(0).max(100),
+  deliveryFeeCents: z.number().int().min(0),
+});
+
+export async function updatePricingAction(input: unknown): Promise<ActionResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  const p = PricingInput.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
+  const { error } = await createAdminClient()
+    .from("operators")
+    .update({ tax_percent: p.data.taxPercent, delivery_fee_cents: p.data.deliveryFeeCents })
+    .eq("id", op.id);
+  if (error) return { ok: false, error: "Could not save pricing." };
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}

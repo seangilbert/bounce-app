@@ -23,6 +23,8 @@ export default async function SettingsPage() {
         depositPercent: op.depositPercent,
         autoQuoteCapCents: op.autoQuoteCapCents,
         minLeadHours: op.minLeadHours,
+        taxPercent: op.taxPercent,
+        deliveryFeeCents: op.deliveryFeeCents,
       }}
     />
   );

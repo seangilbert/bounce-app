@@ -51,6 +51,9 @@ export interface Booking {
   deliveryAddress: string | null;
   deliveryZip: string | null;
   subtotal: number;
+  deliveryFee: number;
+  taxAmount: number;
+  total: number;
   deposit: number | null;
   currency: string;
   notes: string | null;

@@ -52,6 +52,8 @@ export async function GET(req: Request) {
       location: operator.location,
       phone: operator.phone,
       depositPercent: operator.depositPercent,
+      taxPercent: operator.taxPercent,
+      deliveryFeeCents: operator.deliveryFeeCents,
     };
 
     // Availability is real-time — never let a browser/CDN serve a stale copy.

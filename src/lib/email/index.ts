@@ -49,13 +49,17 @@ function lineTable(rows: { label: string; value: string; bold?: boolean }[]): st
 
 /** Confirmation/receipt to the customer after a paid booking. */
 export async function notifyBookingConfirmed(booking: Booking, operator: Operator, amountPaid: number) {
-  const balance = booking.subtotal - amountPaid;
+  const balance = booking.total - amountPaid;
   const items = booking.items.map((li) => ({
     label: `${li.quantity > 1 ? `${li.quantity}× ` : ""}${li.name}`,
     value: money(li.lineTotal),
   }));
+  const hasExtras = booking.deliveryFee > 0 || booking.taxAmount > 0;
   const totals = [
-    { label: "Total", value: money(booking.subtotal), bold: true },
+    ...(hasExtras ? [{ label: "Subtotal", value: money(booking.subtotal) }] : []),
+    ...(booking.deliveryFee > 0 ? [{ label: "Delivery", value: money(booking.deliveryFee) }] : []),
+    ...(booking.taxAmount > 0 ? [{ label: "Sales tax", value: money(booking.taxAmount) }] : []),
+    { label: "Total", value: money(booking.total), bold: true },
     { label: "Paid", value: money(amountPaid) },
     ...(balance > 0 ? [{ label: "Balance due on delivery", value: money(balance) }] : []),
   ];

@@ -4,7 +4,7 @@ import { getAnthropicClient } from "./client";
 import { getDefaultOperator, getOperatorById } from "@/lib/inventory/repo";
 import { listItems } from "@/lib/inventory/repo";
 import { availabilityForOperator } from "@/lib/inventory/availability";
-import { durationDays, lineTotal } from "@/lib/inventory/pricing";
+import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing";
 import { createInquiry } from "@/lib/inquiries/repo";
 import { notifyOperatorNewInquiry } from "@/lib/email";
 import type { Operator } from "@/lib/inventory/types";
@@ -87,6 +87,9 @@ export interface ConversationResult {
   quote: {
     lineItems: QuoteLine[];
     subtotal: number;
+    deliveryFee: number;
+    tax: number;
+    total: number;
     suggestedDeposit: number;
     currency: string;
   } | null;
@@ -276,14 +279,15 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
   }
 
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  const suggestedDeposit = Math.round((subtotal * operator.depositPercent) / 100);
+  const bd = priceBreakdown(subtotal, operator.deliveryFeeCents, operator.taxPercent);
+  const suggestedDeposit = Math.round((bd.total * operator.depositPercent) / 100);
 
   // Escalation gate — much lighter now that ambiguity is handled by asking.
   const reasons: string[] = [];
   if (out.unmatchedRequests.length) reasons.push(`unmatched requests: ${out.unmatchedRequests.join(", ")}`);
-  if (subtotal > operator.autoQuoteCapCents)
+  if (bd.total > operator.autoQuoteCapCents)
     reasons.push(
-      `subtotal $${(subtotal / 100).toFixed(2)} over auto-quote cap $${(operator.autoQuoteCapCents / 100).toFixed(2)}`,
+      `total $${(bd.total / 100).toFixed(2)} over auto-quote cap $${(operator.autoQuoteCapCents / 100).toFixed(2)}`,
     );
   if (hoursUntil(startDate) < operator.minLeadHours)
     reasons.push(`rental starts within ${operator.minLeadHours} hours`);
@@ -307,7 +311,7 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
         aiSummary: out.reply,
         escalationReasons: reasons,
         unmatchedRequests: out.unmatchedRequests,
-        quote: { lineItems: lines, subtotal, suggestedDeposit, currency: "usd" },
+        quote: { lineItems: lines, subtotal, deliveryFee: bd.deliveryFee, tax: bd.tax, total: bd.total, suggestedDeposit, currency: "usd" },
       });
       inquiryId = created.id;
     } catch (err) {
@@ -335,7 +339,7 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
     reply: out.reply,
     status: auto ? "quoted" : "review",
     eventDate: startDate,
-    quote: { lineItems: lines, subtotal, suggestedDeposit, currency: "usd" },
+    quote: { lineItems: lines, subtotal, deliveryFee: bd.deliveryFee, tax: bd.tax, total: bd.total, suggestedDeposit, currency: "usd" },
     auto,
     unmatchedRequests: out.unmatchedRequests,
     inquiryId,

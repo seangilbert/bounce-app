@@ -11,6 +11,9 @@ export interface InquiryQuoteLine {
 export interface InquiryQuote {
   lineItems: InquiryQuoteLine[];
   subtotal: number;
+  deliveryFee?: number;
+  tax?: number;
+  total?: number;
   suggestedDeposit: number;
   currency: string;
 }

@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { checkAvailability } from "@/lib/inventory/availability";
-import { durationDays, lineTotal } from "@/lib/inventory/pricing";
+import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing";
 import type { PriceUnit } from "@/lib/inventory/types";
 import type { Booking, BookingLineItem, BookingStatus, NewBooking } from "./types";
 
@@ -21,6 +21,9 @@ interface BookingRow {
   delivery_address: string | null;
   delivery_zip: string | null;
   subtotal: number;
+  delivery_fee: number | null;
+  tax_amount: number | null;
+  total: number | null;
   deposit: number | null;
   currency: string;
   notes: string | null;
@@ -49,6 +52,9 @@ function rowToBooking(row: BookingRow, items: BookingLineItem[]): Booking {
     deliveryAddress: row.delivery_address,
     deliveryZip: row.delivery_zip,
     subtotal: row.subtotal,
+    deliveryFee: row.delivery_fee ?? 0,
+    taxAmount: row.tax_amount ?? 0,
+    total: row.total ?? row.subtotal,
     deposit: row.deposit,
     currency: row.currency,
     notes: row.notes,
@@ -123,6 +129,14 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
   });
   const subtotal = lines.reduce((sum, l) => sum + l.line_total, 0);
 
+  // Snapshot the operator's tax + delivery fee into the booking total.
+  const { data: op } = await supabase
+    .from("operators")
+    .select("tax_percent, delivery_fee_cents")
+    .eq("id", input.operatorId)
+    .single();
+  const bd = priceBreakdown(subtotal, op?.delivery_fee_cents ?? 0, Number(op?.tax_percent ?? 0));
+
   const { data: booking, error: bErr } = await supabase
     .from(BOOKINGS)
     .insert({
@@ -137,6 +151,9 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
       delivery_zip: input.deliveryZip ?? null,
       notes: input.notes ?? null,
       subtotal,
+      delivery_fee: bd.deliveryFee,
+      tax_amount: bd.tax,
+      total: bd.total,
       currency: "usd",
     })
     .select("id")
