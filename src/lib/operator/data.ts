@@ -242,8 +242,8 @@ function rowToListItem(r: InquiryRow): InquiryListItem {
     name,
     initials: initials(name),
     time: relTime(r.created_at),
-    status: r.status === "auto" ? "auto" : "needs_review",
-    preview,
+    status: r.status === "needs_review" ? "needs_review" : r.status === "replied" ? "replied" : "auto",
+    preview: r.status === "replied" ? `You replied · ${r.operator_reply ?? ""}` : preview,
     customerType: r.customer_type ?? "New customer",
     location: r.location ?? r.customer_email ?? "via your website",
   };
@@ -252,6 +252,10 @@ function rowToListItem(r: InquiryRow): InquiryListItem {
 function rowToDetail(r: InquiryRow): InquiryDetail {
   const message = { text: r.inbound_message, meta: `${relTime(r.created_at)} · via your ${r.channel}` };
   const q = r.quote;
+
+  if (r.status === "replied") {
+    return { message, handledNote: r.operator_reply ?? r.ai_summary ?? "Replied." };
+  }
 
   if (r.status === "auto") {
     const note = q?.lineItems.length
@@ -290,7 +294,7 @@ export async function getInquiries(operatorId: string): Promise<{
   filters: { all: number; needsYou: number; auto: number };
   details: Record<string, InquiryDetail>;
 }> {
-  const rows = await listInquiries(operatorId);
+  const rows = (await listInquiries(operatorId)).filter((r) => r.status !== "dismissed");
   const list = rows.map(rowToListItem);
   const details: Record<string, InquiryDetail> = {};
   for (const r of rows) details[r.id] = rowToDetail(r);

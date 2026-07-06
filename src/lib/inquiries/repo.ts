@@ -54,6 +54,7 @@ export interface InquiryRow {
   quote: InquiryQuote | null;
   customer_type: string | null;
   location: string | null;
+  operator_reply: string | null;
 }
 
 /** Persist a handled inquiry so the operator inbox can show the real AI draft. */
@@ -94,6 +95,28 @@ export async function countNeedsReview(operatorId: string): Promise<number> {
     .eq("status", "needs_review");
   if (error) throw new Error(`countNeedsReview failed: ${error.message}`);
   return count ?? 0;
+}
+
+/** Record the operator's reply and mark the inquiry replied (operator-scoped). */
+export async function replyToInquiry(operatorId: string, id: string, reply: string): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("inquiries")
+    .update({ status: "replied", operator_reply: reply, replied_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("operator_id", operatorId);
+  if (error) throw new Error(`replyToInquiry failed: ${error.message}`);
+}
+
+/** Dismiss an inquiry so it drops out of the inbox (operator-scoped). */
+export async function dismissInquiry(operatorId: string, id: string): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("inquiries")
+    .update({ status: "dismissed" })
+    .eq("id", id)
+    .eq("operator_id", operatorId);
+  if (error) throw new Error(`dismissInquiry failed: ${error.message}`);
 }
 
 /** All inquiries for an operator, newest first (the inbox). */

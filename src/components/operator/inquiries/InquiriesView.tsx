@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   SlidersHorizontal,
   Sparkle,
@@ -14,8 +15,10 @@ import {
   CalendarBlank,
   Paperclip,
   PaperPlaneTilt,
+  CircleNotch,
 } from "@phosphor-icons/react/dist/ssr";
 import type { InquiryListItem, InquiryStatus, InquiryDetail } from "@/lib/operator/inquiries";
+import { replyInquiryAction, dismissInquiryAction } from "@/app/(operator)/inquiries/actions";
 
 interface InquiriesProps {
   list: InquiryListItem[];
@@ -45,12 +48,22 @@ const STATUS: Record<
     text: "text-teal-deep",
     avatar: "bg-sand text-ink-soft",
   },
+  replied: {
+    label: "REPLIED",
+    icon: PaperPlaneTilt,
+    text: "text-teal-deep",
+    avatar: "bg-teal-tint text-teal-deep",
+  },
 };
 
 export function InquiriesView({ list, details, filters }: InquiriesProps) {
   const initial = list.find((i) => i.status === "needs_review") ?? list[0];
   const [selectedId, setSelectedId] = useState(initial?.id ?? "");
   const [mobileDetail, setMobileDetail] = useState(false);
+  const router = useRouter();
+  const replyRef = useRef<HTMLTextAreaElement>(null);
+  const [busy, setBusy] = useState<null | "send" | "dismiss">(null);
+  const [actionErr, setActionErr] = useState<string | null>(null);
 
   const selected = list.find((i) => i.id === selectedId) ?? list[0];
   const detail = selected ? details[selected.id] : undefined;
@@ -59,6 +72,34 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
     setSelectedId(id);
     setMobileDetail(true);
   };
+
+  async function sendReply() {
+    if (!selected) return;
+    setBusy("send");
+    setActionErr(null);
+    const res = await replyInquiryAction(selected.id, replyRef.current?.value ?? "");
+    if (res.ok) {
+      router.refresh();
+      setBusy(null);
+    } else {
+      setActionErr(res.error);
+      setBusy(null);
+    }
+  }
+
+  async function dismiss() {
+    if (!selected) return;
+    setBusy("dismiss");
+    setActionErr(null);
+    const res = await dismissInquiryAction(selected.id);
+    if (res.ok) {
+      router.refresh();
+      setBusy(null);
+    } else {
+      setActionErr(res.error);
+      setBusy(null);
+    }
+  }
 
   if (!selected || !detail) {
     return (
@@ -220,6 +261,7 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
             <div className="mt-2 rounded-2xl border-2 border-brand bg-white p-4">
               <textarea
                 key={selectedId}
+                ref={replyRef}
                 defaultValue={detail.aiDraft.replyDraft}
                 rows={2}
                 className="w-full resize-none bg-transparent text-[15px] leading-relaxed text-ink outline-none"
@@ -231,14 +273,31 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
                   <ComposerChip icon={Paperclip}>Attach photo</ComposerChip>
                 </div>
                 <div className="flex gap-2.5">
-                  <button className="rounded-full border border-sand bg-white px-4 py-2.5 text-sm font-bold text-ink-soft">
+                  <button
+                    onClick={dismiss}
+                    disabled={busy !== null}
+                    className="flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2.5 text-sm font-bold text-ink-soft transition-colors hover:bg-sand disabled:opacity-50"
+                  >
+                    {busy === "dismiss" ? <CircleNotch size={15} weight="bold" className="animate-spin" /> : null}
                     Dismiss
                   </button>
-                  <button className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep">
-                    <PaperPlaneTilt size={16} weight="fill" /> Send reply
+                  <button
+                    onClick={sendReply}
+                    disabled={busy !== null}
+                    className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
+                  >
+                    {busy === "send" ? (
+                      <CircleNotch size={16} weight="bold" className="animate-spin" />
+                    ) : (
+                      <PaperPlaneTilt size={16} weight="fill" />
+                    )}
+                    Send reply
                   </button>
                 </div>
               </div>
+              {actionErr ? (
+                <p className="mt-2 text-[13px] font-semibold text-coral-deep">{actionErr}</p>
+              ) : null}
             </div>
           </div>
         ) : null}

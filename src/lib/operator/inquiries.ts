@@ -1,4 +1,4 @@
-export type InquiryStatus = "needs_review" | "escalated" | "auto";
+export type InquiryStatus = "needs_review" | "escalated" | "auto" | "replied";
 
 export interface InquiryListItem {
   id: string;
