@@ -71,29 +71,27 @@ export async function getCalendarMonth(
   month: number,
 ): Promise<CalendarMonth> {
   const supabase = createAdminClient();
-  await expireStaleCheckouts();
   const pad = (n: number) => String(n).padStart(2, "0");
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const first = `${year}-${pad(month)}-01`;
   const last = `${year}-${pad(month)}-${pad(daysInMonth)}`;
 
-  const { data: items } = await supabase
-    .from("items")
-    .select("id, category, quantity")
-    .eq("operator_id", operatorId);
-  const bounceOwned = (items ?? []).filter((i) => toCategory(i.category) === "bounce");
-
-  const { data, error } = await supabase
-    .from("bookings")
-    .select(
-      "id, start_date, customer_name, status, delivery_window, subtotal, deposit, booking_items(item_id, quantity, unit_price, items(name, category))",
-    )
-    .eq("operator_id", operatorId)
-    .in("status", COMMITTED)
-    .gte("start_date", first)
-    .lte("start_date", last);
-  if (error) throw new Error(`getCalendarMonth failed: ${error.message}`);
-  const rows = (data ?? []) as unknown as BRow[];
+  const [, itemsRes, bookingsRes] = await Promise.all([
+    expireStaleCheckouts(),
+    supabase.from("items").select("id, category, quantity").eq("operator_id", operatorId),
+    supabase
+      .from("bookings")
+      .select(
+        "id, start_date, customer_name, status, delivery_window, subtotal, deposit, booking_items(item_id, quantity, unit_price, items(name, category))",
+      )
+      .eq("operator_id", operatorId)
+      .in("status", COMMITTED)
+      .gte("start_date", first)
+      .lte("start_date", last),
+  ]);
+  const bounceOwned = (itemsRes.data ?? []).filter((i) => toCategory(i.category) === "bounce");
+  if (bookingsRes.error) throw new Error(`getCalendarMonth failed: ${bookingsRes.error.message}`);
+  const rows = (bookingsRes.data ?? []) as unknown as BRow[];
 
   const byDay = new Map<number, BRow[]>();
   for (const b of rows) {
@@ -327,34 +325,34 @@ function ymd(d: Date): string {
 
 export async function getDashboard(operatorId: string): Promise<DashboardData> {
   const supabase = createAdminClient();
-  await expireStaleCheckouts();
   const now = new Date();
   const today = ymd(now);
   const dow = now.getUTCDay();
   const weekStart = new Date(now); weekStart.setUTCDate(now.getUTCDate() - dow);
   const weekEnd = new Date(weekStart); weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
 
-  const { data: items } = await supabase.from("items").select("id, category, quantity").eq("operator_id", operatorId);
-  const bounceOwned = (items ?? []).filter((i) => toCategory(i.category) === "bounce");
-
-  const { data: cData } = await supabase
-    .from("bookings")
-    .select("id, start_date, customer_name, status, delivery_window, delivery_zip, subtotal, booking_items(item_id, quantity, items(name, category))")
-    .eq("operator_id", operatorId)
-    .in("status", COMMITTED)
-    .gte("start_date", today);
-  const committed = (cData ?? []) as unknown as BRow[];
-
-  const { data: weekData } = await supabase
-    .from("bookings")
-    .select("subtotal")
-    .eq("operator_id", operatorId)
-    .in("status", COMMITTED)
-    .gte("start_date", ymd(weekStart))
-    .lte("start_date", ymd(weekEnd));
-  const revenueCents = (weekData ?? []).reduce((s, b) => s + (b.subtotal ?? 0), 0);
-
-  const inqRows = await listInquiries(operatorId);
+  // Independent — fetch in parallel instead of one round-trip after another.
+  const [, itemsRes, cRes, weekRes, inqRows] = await Promise.all([
+    expireStaleCheckouts(),
+    supabase.from("items").select("id, category, quantity").eq("operator_id", operatorId),
+    supabase
+      .from("bookings")
+      .select("id, start_date, customer_name, status, delivery_window, delivery_zip, subtotal, booking_items(item_id, quantity, items(name, category))")
+      .eq("operator_id", operatorId)
+      .in("status", COMMITTED)
+      .gte("start_date", today),
+    supabase
+      .from("bookings")
+      .select("subtotal")
+      .eq("operator_id", operatorId)
+      .in("status", COMMITTED)
+      .gte("start_date", ymd(weekStart))
+      .lte("start_date", ymd(weekEnd)),
+    listInquiries(operatorId),
+  ]);
+  const bounceOwned = (itemsRes.data ?? []).filter((i) => toCategory(i.category) === "bounce");
+  const committed = (cRes.data ?? []) as unknown as BRow[];
+  const revenueCents = (weekRes.data ?? []).reduce((s, b) => s + (b.subtotal ?? 0), 0);
   const needsYou = inqRows.filter((r) => r.status === "needs_review").length;
   const quotesSent = inqRows.filter((r) => r.status === "auto").length;
   const flagged = inqRows.find((r) => r.status === "needs_review");
