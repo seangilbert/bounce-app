@@ -15,6 +15,9 @@ interface OperatorRow {
   contact_email: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  subscription_status: string | null;
 }
 
 interface ItemRow {
@@ -48,6 +51,9 @@ function rowToOperator(r: OperatorRow): Operator {
     contactEmail: r.contact_email,
     brandColor: r.brand_color,
     logoUrl: r.logo_url,
+    stripeCustomerId: r.stripe_customer_id,
+    stripeSubscriptionId: r.stripe_subscription_id,
+    subscriptionStatus: r.subscription_status,
   };
 }
 

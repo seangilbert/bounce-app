@@ -11,6 +11,9 @@ export interface Operator {
   contactEmail: string | null;
   brandColor: string | null;
   logoUrl: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  subscriptionStatus: string | null;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

@@ -22,6 +22,12 @@ function client(): Stripe {
   return stripe;
 }
 
+/** The shared Stripe SDK client, for flows beyond the PaymentProvider interface
+ * (e.g. operator subscription billing). */
+export function getStripeClient(): Stripe {
+  return client();
+}
+
 /** Map Stripe event types onto our normalized set. */
 function normalizeEventType(stripeType: string): PaymentEventType {
   switch (stripeType) {

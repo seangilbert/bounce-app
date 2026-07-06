@@ -19,6 +19,7 @@ const SignupSchema = z.object({
   ownerName: z.string().trim().max(120).optional(),
   email: z.string().email(),
   password: z.string().min(8, "Password must be at least 8 characters."),
+  plan: z.enum(["free", "solo", "growing"]).default("free"),
 });
 
 /**
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const { businessName, ownerName, email, password } = parsed.data;
+  const { businessName, ownerName, email, password, plan } = parsed.data;
   const admin = createAdminClient();
 
   // 1) Create the auth user (auto-confirmed).
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
       name: businessName,
       contact_email: email,
       owner_name: ownerName ?? null,
-      plan: "solo",
+      plan,
     })
     .select("id")
     .single();
@@ -92,5 +93,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not finish setting up your account." }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  return NextResponse.json({ ok: true, plan }, { status: 201 });
 }

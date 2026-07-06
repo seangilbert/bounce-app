@@ -27,7 +27,7 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 
 ## Tier 0 — Production blockers
 
-- [ ] **Auth + operator accounts** — Supabase Auth (email/password + magic link); `users ↔ operator_members` mapping; middleware gates `/(operator)` routes; `getSessionOperator()` replaces the 16 `getDefaultOperator()` call sites in the operator app. **← in progress (#1)**
+- [x] **Auth + operator accounts + plan billing** — Supabase Auth login + self-serve sign-up (creates an isolated tenant); `operator_members` mapping; middleware gates operator routes; `getSessionOperator()` in the operator app. Plan selection (Free / Solo $29 / Growing $59) with **Stripe subscription billing + 14-day trial**. _Follow-ups: **billing webhook** (renewal/failure/cancellation sync — return-page confirms the happy path today), email verification (needs Resend), plan feature-gating/limits, Stripe Customer Portal for self-service management._
 - [ ] **Multi-tenancy** — session-scoped queries everywhere; RLS policies keyed to membership (defense-in-depth); per-operator storefront routing (`slug` → `/s/[slug]`, subdomain, or custom domain — `/book` is single-operator today); per-operator API keys for bring-your-own-frontend.
 - [ ] **Stripe Connect** — connected accounts (Express), Connect onboarding, destination charges + platform fee, payouts per operator. Required for multi-tenant money movement.
 - [ ] **Transactional email** (Resend) — booking confirmation/receipt, balance reminders, operator "new inquiry/booking" alerts.
