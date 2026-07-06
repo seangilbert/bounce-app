@@ -43,9 +43,9 @@ const CheckoutSchema = z
     currency: z.string().default("usd"),
     customerEmail: z.string().email().optional(),
     metadata: z.record(z.string(), z.string()).optional(),
-    // Booking checkouts can collect a deposit now (balance due on delivery) or
-    // the full amount. Ignored for raw-lineItems checkouts.
-    paymentType: z.enum(["deposit", "full"]).default("full"),
+    // Booking checkouts collect a deposit, the full amount, or the remaining
+    // balance (operator-initiated). Ignored for raw-lineItems checkouts.
+    paymentType: z.enum(["deposit", "full", "balance"]).default("full"),
   })
   .refine((d) => d.bookingId || d.lineItems, {
     message: "Provide either bookingId or lineItems.",
@@ -88,9 +88,15 @@ export async function POST(req: Request) {
     if (!booking) {
       return NextResponse.json({ error: "Booking not found." }, { status: 404 });
     }
-    if (booking.status !== "quoted" && booking.status !== "pending_payment") {
+    // Deposit/full pay a fresh quote; balance is collected on an already-paid
+    // booking, so it allows the committed statuses instead.
+    const okStatuses =
+      data.paymentType === "balance"
+        ? ["paid", "contracted", "confirmed", "delivered"]
+        : ["quoted", "pending_payment"];
+    if (!okStatuses.includes(booking.status)) {
       return NextResponse.json(
-        { error: `Booking cannot be paid from status "${booking.status}".` },
+        { error: `Booking cannot be charged from status "${booking.status}".` },
         { status: 409 },
       );
     }
@@ -102,7 +108,14 @@ export async function POST(req: Request) {
     // deposit (% of total) or the full amount (itemized + delivery + tax).
     const total = booking.total;
     let lineItems;
-    if (data.paymentType === "deposit") {
+    if (data.paymentType === "balance") {
+      const bal = total - (booking.deposit ?? 0);
+      if (bal <= 0) return NextResponse.json({ error: "No balance due." }, { status: 400 });
+      lineItems = [
+        { name: `Balance — booking #${booking.id.slice(0, 8).toUpperCase()}`, quantity: 1, unitAmount: bal },
+      ];
+      depositToRecord = null; // deposit becomes the total on completion (webhook)
+    } else if (data.paymentType === "deposit") {
       const dep = depositAmount(total, depositPct);
       lineItems = [
         { name: `Deposit (${depositPct}%) — balance due on delivery`, quantity: 1, unitAmount: dep },
@@ -183,7 +196,8 @@ export async function POST(req: Request) {
     // Move the booking into checkout + record what's being collected up front.
     // (Still doesn't reserve inventory — that happens when payment is confirmed.)
     if (bookingId) {
-      await setBookingStatus(bookingId, "pending_payment");
+      // A balance charge is on an already-committed booking — don't reset it.
+      if (data.paymentType !== "balance") await setBookingStatus(bookingId, "pending_payment");
       if (depositToRecord != null) await setBookingDeposit(bookingId, depositToRecord);
     }
 

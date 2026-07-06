@@ -7,7 +7,7 @@ import {
   setOrderStatusBySessionId,
 } from "@/lib/orders/repo";
 import { autoSendEnabled, sendAgreementForOrder } from "@/lib/esign/agreements";
-import { confirmBookingPaid, getBooking } from "@/lib/bookings/repo";
+import { confirmBookingPaid, getBooking, setBookingDeposit } from "@/lib/bookings/repo";
 import { getOperatorById } from "@/lib/inventory/repo";
 import { notifyBookingConfirmed, notifyOperatorNewBooking } from "@/lib/email";
 
@@ -58,6 +58,15 @@ export async function POST(req: Request) {
             console.warn(
               `[webhook] checkout.completed: no local order for session ${event.sessionId}`,
             );
+            break;
+          }
+
+          // A balance payment is on an already-committed booking: just mark it
+          // paid-in-full; don't re-confirm, re-notify, or re-send the agreement.
+          const isBalance = order.metadata?.payment_type === "balance";
+          if (order.bookingId && isBalance) {
+            const booking = await getBooking(order.bookingId);
+            if (booking) await setBookingDeposit(order.bookingId, booking.total);
             break;
           }
 

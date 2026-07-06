@@ -20,6 +20,7 @@ import {
   markCompletedAction,
   cancelBookingAction,
   refundBookingAction,
+  markBalancePaidAction,
   type ActionResult,
 } from "@/app/(operator)/bookings/actions";
 
@@ -74,13 +75,39 @@ export function BookingDetail({
     }
   }
 
+  async function collectBalance() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          paymentType: "balance",
+          successUrl: `${location.origin}/bookings/${booking.id}`,
+          cancelUrl: `${location.origin}/bookings/${booking.id}`,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) throw new Error(json.error ?? "Could not start balance checkout.");
+      window.open(json.url, "_blank");
+      setBusy(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setBusy(false);
+    }
+  }
+
   const s = booking.status;
+  const paid = booking.deposit ?? 0;
+  const balance = booking.total - paid;
   const canDeliver = s === "paid" || s === "contracted" || s === "confirmed";
+  const canCollectBalance =
+    balance > 0 && ["paid", "contracted", "confirmed", "delivered"].includes(s);
   const canComplete = s === "delivered";
   const canCancel = !["completed", "canceled"].includes(s);
   const canRefund = payment?.status === "paid";
-  const paid = booking.deposit ?? 0;
-  const balance = booking.total - paid;
   const meta = STATUS_META[s];
 
   return (
@@ -161,6 +188,29 @@ export function BookingDetail({
 
       {error ? (
         <div className="rounded-xl bg-coral-tint px-4 py-3 text-sm font-semibold text-coral-deep">{error}</div>
+      ) : null}
+
+      {/* Balance collection */}
+      {canCollectBalance ? (
+        <div className="rounded-2xl border border-amber-line bg-amber-tint p-4">
+          <div className="text-sm font-bold text-[#5C4B22]">Balance due: {money(balance)}</div>
+          <div className="mt-3 flex gap-2.5">
+            <button
+              onClick={collectBalance}
+              disabled={busy}
+              className="flex flex-1 items-center justify-center gap-2 rounded-full bg-amber px-4 py-2.5 text-sm font-extrabold text-white transition-colors hover:bg-amber-deep disabled:opacity-60"
+            >
+              {busy ? <CircleNotch size={15} weight="bold" className="animate-spin" /> : null} Collect balance
+            </button>
+            <button
+              onClick={() => run(() => markBalancePaidAction(booking.id))}
+              disabled={busy}
+              className="flex-1 rounded-full border border-amber-line bg-white px-4 py-2.5 text-sm font-bold text-ink-soft transition-colors hover:bg-white/60 disabled:opacity-60"
+            >
+              Mark paid (cash)
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {/* Actions */}

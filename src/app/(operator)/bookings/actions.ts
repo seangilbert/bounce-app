@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getSessionOperator } from "@/lib/operator/session";
-import { getBooking, setBookingStatus } from "@/lib/bookings/repo";
+import { getBooking, setBookingStatus, setBookingDeposit } from "@/lib/bookings/repo";
 import { getOrderByBookingId, setOrderStatusByPaymentId } from "@/lib/orders/repo";
 import { getPaymentProvider } from "@/lib/payments";
 import type { Booking } from "@/lib/bookings/types";
@@ -44,6 +44,15 @@ export async function cancelBookingAction(id: string): Promise<ActionResult> {
   const a = await authorize(id);
   if ("error" in a) return { ok: false, error: a.error };
   await setBookingStatus(id, "canceled"); // frees inventory (canceled doesn't reserve)
+  revalidate(id);
+  return { ok: true };
+}
+
+/** Record the remaining balance as collected (e.g. cash on delivery). */
+export async function markBalancePaidAction(id: string): Promise<ActionResult> {
+  const a = await authorize(id);
+  if ("error" in a) return { ok: false, error: a.error };
+  await setBookingDeposit(id, a.booking.total); // deposit = total → balance 0
   revalidate(id);
   return { ok: true };
 }
