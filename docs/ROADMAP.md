@@ -37,7 +37,8 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 
 ## Tier 1 — Operator product completeness
 
-- [x] **Inventory management UI** — `/inventory` lists the operator's catalog; add/edit/delete items (name, category, price, rate, quantity, description, visibility, power) via a drawer + server actions (operator-scoped). _Follow-up: item **photos** (Supabase Storage; icon placeholders today)._
+- [x] **Inventory management UI** — `/inventory` lists the operator's catalog; add/edit/delete items (name, category, price, rate, quantity, description, visibility, power) via a drawer + server actions (operator-scoped). (Item photos: separate item below.)
+- [ ] **Inventory item photos (image upload)** — let operators upload photos of each rental item; today the storefront + inventory show category icon placeholders (`.bg-hatch`). Scope: a Supabase **Storage** bucket (per-operator path, public read), an image upload/drop control in the inventory item drawer (multiple images, choose a primary, remove), client-side resize/thumbnail, store URLs in the existing `items.images` column, and render them on the storefront item cards + operator inventory list (falling back to the icon when none). Consider basic validation (type/size) and cleanup of orphaned files on item delete.
 - [ ] **Settings** (stub) — profile, business hours, **delivery zones + fees**, **sales tax**, deposit %, auto-quote cap, blackout dates, min lead time (global 48h constant today).
 - [ ] **Booking management** — calendar is read-only; add open/edit/cancel, mark delivered/completed, and **refunds** (Stripe refund exists in code, not wired to UI).
 - [ ] **Wire the Inquiries "Send reply"** — the inbox composer is a stub; operators can't respond/adjust a quote.
