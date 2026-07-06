@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Confetti, CaretUpDown } from "@phosphor-icons/react/dist/ssr";
+import { usePathname, useRouter } from "next/navigation";
+import { Confetti, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { NAV, type NavItem } from "@/lib/operator/nav";
 import { calFilters } from "@/lib/operator/calendar";
+import { createClient } from "@/utils/supabase/client";
 import type { Operator } from "@/lib/inventory/types";
 
 function initialsOf(name: string): string {
@@ -46,7 +47,14 @@ export function Sidebar({
   needsCount: number;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const onCalendar = pathname === "/calendar" || pathname.startsWith("/calendar/");
+
+  async function signOut() {
+    await createClient().auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   const business = operator?.name ?? "Your business";
   const location = operator?.location ?? "";
@@ -104,16 +112,23 @@ export function Sidebar({
       {/* Settings + account, pinned to the bottom */}
       <div className="mt-auto flex flex-col gap-1 pt-4">
         {SETTINGS ? <NavLink item={SETTINGS} /> : null}
-        <button className="mt-1 flex items-center gap-3 rounded-2xl bg-sand/50 px-3 py-3 text-left transition-colors hover:bg-sand/70">
-          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold text-white">
+        <div className="mt-1 flex items-center gap-2 rounded-2xl bg-sand/50 px-3 py-2.5">
+          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold text-white">
             {initialsOf(ownerName)}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[15px] font-bold text-ink">{ownerName}</span>
             <span className="block truncate text-[13px] font-medium text-ink-mute">{planLabel}</span>
           </span>
-          <CaretUpDown size={18} className="flex-shrink-0 text-ink-faint" />
-        </button>
+          <button
+            onClick={signOut}
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-ink-mute transition-colors hover:bg-sand hover:text-ink"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <SignOut size={17} weight="bold" />
+          </button>
+        </div>
       </div>
     </aside>
   );

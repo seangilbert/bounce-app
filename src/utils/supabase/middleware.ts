@@ -52,7 +52,36 @@ export async function updateSession(request: NextRequest) {
 
   // IMPORTANT: getUser() revalidates the token with the Supabase Auth
   // server on every request. Do not trust getSession() in server code.
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Gate the operator app. The public storefront (/book, /api/items, …) and the
+  // login page stay open.
+  const path = request.nextUrl.pathname;
+  const OPERATOR_PREFIXES = [
+    "/dashboard",
+    "/calendar",
+    "/inquiries",
+    "/deliveries",
+    "/inventory",
+    "/settings",
+    "/more",
+  ];
+  const isOperatorRoute =
+    path === "/" || OPERATOR_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
+
+  if (!user && isOperatorRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    if (path !== "/") url.searchParams.set("next", path);
+    return NextResponse.redirect(url);
+  }
+  if (user && path === "/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
+  }
 
   return supabaseResponse;
 }

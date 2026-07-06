@@ -1,6 +1,6 @@
 import { BottomNav } from "@/components/operator/BottomNav";
 import { Sidebar } from "@/components/operator/Sidebar";
-import { getDefaultOperator } from "@/lib/inventory/repo";
+import { getSessionOperator } from "@/lib/operator/session";
 import { countNeedsReview } from "@/lib/inquiries/repo";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function OperatorLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const operator = await getDefaultOperator();
+  const operator = await getSessionOperator();
   const needsCount = operator ? await countNeedsReview(operator.id) : 0;
   return (
     <div className="flex min-h-dvh w-full bg-cream">

@@ -86,6 +86,14 @@ export async function getDefaultOperator(): Promise<Operator | null> {
   return data ? rowToOperator(data as OperatorRow) : null;
 }
 
+/** Load a single operator by id (used to resolve the session's operator). */
+export async function getOperatorById(id: string): Promise<Operator | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.from(OPERATORS).select().eq("id", id).maybeSingle();
+  if (error) throw new Error(`getOperatorById failed: ${error.message}`);
+  return data ? rowToOperator(data as OperatorRow) : null;
+}
+
 export async function listItems(
   operatorId: string,
   opts: { activeOnly?: boolean } = {},

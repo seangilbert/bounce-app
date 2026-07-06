@@ -12,7 +12,7 @@ import {
   TrendUp,
   CheckCircle,
 } from "@phosphor-icons/react/dist/ssr";
-import { getDefaultOperator } from "@/lib/inventory/repo";
+import { getSessionOperator } from "@/lib/operator/session";
 import type { Operator } from "@/lib/inventory/types";
 import { getDashboard, type DashboardData } from "@/lib/operator/data";
 import { getWeatherAdvisory, type WeatherAdvisory } from "@/lib/operator/weather";
@@ -23,8 +23,8 @@ import type { Stop } from "@/lib/operator/mock";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const op = await getDefaultOperator();
-  if (!op) return <div className="p-8 text-ink-mute">No operator configured.</div>;
+  const op = await getSessionOperator();
+  if (!op) return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
   const data = await getDashboard(op.id);
   const weather = await getWeatherAdvisory(op, data.todayStops);
   return <DashboardBody data={data} operator={op} weather={weather} />;
