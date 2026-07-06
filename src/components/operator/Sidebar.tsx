@@ -64,7 +64,7 @@ export function Sidebar({
     : "";
 
   return (
-    <aside className="hidden w-[272px] flex-shrink-0 flex-col border-r border-sand bg-cream px-4 py-5 lg:sticky lg:top-0 lg:flex lg:h-dvh">
+    <aside className="hidden w-[272px] flex-shrink-0 flex-col overflow-y-auto border-r border-sand bg-cream px-4 py-5 lg:flex lg:h-dvh">
       {/* Brand */}
       <div className="flex items-center gap-3 px-2 pb-7 pt-1">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand text-white">

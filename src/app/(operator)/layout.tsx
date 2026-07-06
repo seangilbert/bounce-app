@@ -7,12 +7,14 @@ export const dynamic = "force-dynamic";
 
 /**
  * Operator app shell — responsive.
- *  • Mobile: full-bleed cream column + fixed bottom tab bar.
- *  • Desktop (lg+): full-width layout — fixed-width sticky left rail + fluid
- *    main content that fills the rest of the screen.
+ *  • Mobile: full-bleed cream column that scrolls (body) + fixed bottom tab bar.
+ *  • Desktop (lg+): the shell is locked to the viewport height (`h-dvh` +
+ *    `overflow-hidden`) so the left rail stays put and ONLY the main content
+ *    column scrolls (`overflow-y-auto`). Relying on `position: sticky` here
+ *    doesn't work — `overflow-x: hidden` on <body> breaks it.
  *
  * `min-w-0` on the main column lets it shrink to the viewport instead of being
- * forced wide by its content. No auth gate yet — that's a later milestone.
+ * forced wide by its content.
  */
 export default async function OperatorLayout({
   children,
@@ -20,9 +22,9 @@ export default async function OperatorLayout({
   const operator = await getSessionOperator();
   const needsCount = operator ? await countNeedsReview(operator.id) : 0;
   return (
-    <div className="flex min-h-dvh w-full bg-cream">
+    <div className="flex min-h-dvh w-full bg-cream lg:h-dvh lg:overflow-hidden">
       <Sidebar operator={operator} needsCount={needsCount} />
-      <div className="flex min-h-dvh w-full min-w-0 flex-col overflow-x-hidden bg-cream lg:border-l lg:border-sand">
+      <div className="flex min-h-dvh w-full min-w-0 flex-col overflow-x-hidden bg-cream lg:h-dvh lg:min-h-0 lg:overflow-y-auto">
         <main className="flex flex-1 flex-col pb-20 lg:pb-0">{children}</main>
       </div>
       <BottomNav needsCount={needsCount} />
