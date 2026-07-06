@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { generateUniqueSlug } from "@/lib/inventory/repo";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +75,7 @@ export async function POST(req: Request) {
       contact_email: email,
       owner_name: ownerName ?? null,
       plan,
+      slug: await generateUniqueSlug(businessName),
     })
     .select("id")
     .single();

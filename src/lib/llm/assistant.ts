@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropicClient } from "./client";
-import { getDefaultOperator } from "@/lib/inventory/repo";
+import { getDefaultOperator, getOperatorById } from "@/lib/inventory/repo";
 import { listItems } from "@/lib/inventory/repo";
 import { availabilityForOperator } from "@/lib/inventory/availability";
 import { durationDays, lineTotal } from "@/lib/inventory/pricing";
@@ -41,6 +41,8 @@ export const InquirySchema = z.object({
   // Set once an inquiry has been persisted, so we don't create duplicate inbox
   // rows as the conversation continues.
   inquiryId: z.string().uuid().optional(),
+  // Which operator's storefront this inquiry is for (else the default operator).
+  operatorId: z.string().uuid().optional(),
 });
 export type Inquiry = z.infer<typeof InquirySchema>;
 
@@ -164,7 +166,9 @@ ${hasDate ? "- Availability for the chosen date is shown above; do not recommend
  * recomputed from authoritative DB prices; the model's numbers are advisory.
  */
 export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResult> {
-  const operator = await getDefaultOperator();
+  const operator = inquiry.operatorId
+    ? await getOperatorById(inquiry.operatorId)
+    : await getDefaultOperator();
   if (!operator) throw new Error("No operator configured.");
 
   const today = new Date().toISOString().slice(0, 10);

@@ -1,10 +1,10 @@
-import { Storefront } from "@/components/store/Storefront";
+import { redirect } from "next/navigation";
+import { getDefaultOperator } from "@/lib/inventory/repo";
 
-export const metadata = {
-  title: "Book — Bounce USA",
-  description: "Bounce houses, tents, and party rentals — delivered and set up.",
-};
+export const dynamic = "force-dynamic";
 
-export default function BookPage() {
-  return <Storefront />;
+/** Legacy entry point — send to the default operator's slug-based storefront. */
+export default async function BookPage() {
+  const op = await getDefaultOperator();
+  redirect(op?.slug ? `/s/${op.slug}` : "/s/bounce-usa");
 }

@@ -13,6 +13,7 @@ export default async function OnboardingPage() {
   return (
     <OnboardingWizard
       businessName={op.name}
+      slug={op.slug}
       location={op.location}
       itemCount={items.length}
       paymentsConnected={op.connectChargesEnabled}

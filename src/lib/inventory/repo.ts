@@ -7,6 +7,7 @@ const ITEMS = "items";
 interface OperatorRow {
   id: string;
   name: string;
+  slug: string | null;
   owner_name: string | null;
   location: string | null;
   plan: string | null;
@@ -45,6 +46,7 @@ function rowToOperator(r: OperatorRow): Operator {
   return {
     id: r.id,
     name: r.name,
+    slug: r.slug,
     ownerName: r.owner_name,
     location: r.location,
     plan: r.plan ?? "solo",
@@ -102,6 +104,40 @@ export async function getOperatorById(id: string): Promise<Operator | null> {
   const { data, error } = await supabase.from(OPERATORS).select().eq("id", id).maybeSingle();
   if (error) throw new Error(`getOperatorById failed: ${error.message}`);
   return data ? rowToOperator(data as OperatorRow) : null;
+}
+
+/** Load an operator by their public storefront slug. */
+export async function getOperatorBySlug(slug: string): Promise<Operator | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.from(OPERATORS).select().eq("slug", slug).maybeSingle();
+  if (error) throw new Error(`getOperatorBySlug failed: ${error.message}`);
+  return data ? rowToOperator(data as OperatorRow) : null;
+}
+
+/** URL-safe handle from a business name. */
+export function slugify(s: string): string {
+  return (
+    s
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "operator"
+  );
+}
+
+/** A slug for this business name that isn't already taken (appends -2, -3, …). */
+export async function generateUniqueSlug(name: string): Promise<string> {
+  const supabase = createAdminClient();
+  const base = slugify(name);
+  const { data } = await supabase.from(OPERATORS).select("slug").ilike("slug", `${base}%`);
+  const taken = new Set((data ?? []).map((r) => r.slug as string | null).filter(Boolean));
+  if (!taken.has(base)) return base;
+  for (let i = 2; i < 1000; i++) {
+    const candidate = `${base}-${i}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${base}-${Math.floor(Math.random() * 1e6)}`;
 }
 
 export interface ItemPatch {

@@ -16,15 +16,18 @@ import { saveLocationAction } from "@/app/onboarding/actions";
 
 export function OnboardingWizard({
   businessName,
+  slug,
   location,
   itemCount,
   paymentsConnected,
 }: {
   businessName: string;
+  slug: string | null;
   location: string | null;
   itemCount: number;
   paymentsConnected: boolean;
 }) {
+  const storefrontPath = slug ? `/s/${slug}` : "/book";
   const hasLocation = Boolean(location);
   const hasItems = itemCount > 0;
   const doneCount = [hasLocation, hasItems, paymentsConnected].filter(Boolean).length;
@@ -53,9 +56,20 @@ export function OnboardingWizard({
           <PaymentsStep done={paymentsConnected} />
         </div>
 
+        {slug ? (
+          <div className="mt-5 rounded-2xl border border-sand-line bg-white px-4 py-3">
+            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+              Your storefront
+            </div>
+            <div className="mt-0.5 truncate font-display text-sm font-bold text-ink">
+              bounce-app.vercel.app{storefrontPath}
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-6 flex items-center justify-between">
           <Link
-            href="/book"
+            href={storefrontPath}
             className="text-sm font-bold text-ink-mute hover:text-ink"
             target="_blank"
           >

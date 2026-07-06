@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getDefaultOperator } from "@/lib/inventory/repo";
+import { getDefaultOperator, getOperatorById } from "@/lib/inventory/repo";
 import { checkAvailability } from "@/lib/inventory/availability";
 import { createBooking } from "@/lib/bookings/repo";
 import { expireStaleCheckouts } from "@/lib/bookings/expire";
@@ -33,6 +33,7 @@ const BookingSchema = z
     deliveryAddress: z.string().optional(),
     deliveryZip: z.string().optional(),
     notes: z.string().optional(),
+    operatorId: z.string().uuid().optional(),
   })
   .refine((d) => !d.endDate || d.endDate >= d.startDate, {
     message: "endDate must be on or after startDate.",
@@ -68,9 +69,11 @@ export async function POST(req: Request) {
   const endDate = input.endDate ?? input.startDate;
 
   try {
-    const operator = await getDefaultOperator();
+    const operator = input.operatorId
+      ? await getOperatorById(input.operatorId)
+      : await getDefaultOperator();
     if (!operator) {
-      return NextResponse.json({ error: "No operator configured." }, { status: 503 });
+      return NextResponse.json({ error: "Storefront not found." }, { status: 404 });
     }
 
     // Free up any abandoned checkouts before checking availability.

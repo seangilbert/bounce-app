@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDefaultOperator, listItems } from "@/lib/inventory/repo";
+import { getDefaultOperator, getOperatorById, listItems } from "@/lib/inventory/repo";
 import { availabilityForOperator } from "@/lib/inventory/availability";
 
 export const dynamic = "force-dynamic";
@@ -14,12 +14,15 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  */
 export async function GET(req: Request) {
   try {
-    const operator = await getDefaultOperator();
+    const params = new URL(req.url).searchParams;
+
+    // Scope to a specific operator's storefront (?operator=<id>); else default.
+    const operatorId = params.get("operator");
+    const operator = operatorId ? await getOperatorById(operatorId) : await getDefaultOperator();
     if (!operator) {
-      return NextResponse.json({ error: "No operator configured." }, { status: 503 });
+      return NextResponse.json({ error: "Storefront not found." }, { status: 404 });
     }
 
-    const params = new URL(req.url).searchParams;
     const date = params.get("date");
     const start = params.get("start") ?? date;
     const end = params.get("end") ?? date;

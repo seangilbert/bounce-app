@@ -102,7 +102,8 @@ function rangeLabel(start: string, end: string): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-export function Storefront() {
+export function Storefront({ operatorId }: { operatorId?: string }) {
+  const opParam = operatorId ? `&operator=${operatorId}` : "";
   const [date, setDate] = useState(nextSaturday);
   const [endDate, setEndDate] = useState(nextSaturday);
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -143,6 +144,7 @@ export function Storefront() {
           messages: next,
           startDate: chatDate ?? undefined,
           inquiryId: chatInquiryId ?? undefined,
+          operatorId,
         }),
       });
       const json = (await res.json()) as ConversationResult & { error?: string };
@@ -171,14 +173,14 @@ export function Storefront() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetch(`/api/items?start=${date}&end=${endDate}`)
+    fetch(`/api/items?start=${date}&end=${endDate}${opParam}`)
       .then((r) => r.json())
       .then((d: ApiResponse) => active && setData(d))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [date, endDate]);
+  }, [date, endDate, opParam]);
 
   const items = data?.items ?? [];
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
@@ -368,6 +370,7 @@ export function Storefront() {
           days={days}
           lines={cartLines}
           subtotal={subtotal}
+          operatorId={operatorId}
           onClose={() => setCheckoutOpen(false)}
         />
       ) : null}
@@ -381,6 +384,7 @@ function CheckoutDrawer({
   days,
   lines,
   subtotal,
+  operatorId,
   onClose,
 }: {
   date: string;
@@ -388,6 +392,7 @@ function CheckoutDrawer({
   days: number;
   lines: { item: ApiItem; qty: number }[];
   subtotal: number;
+  operatorId?: string;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
@@ -418,6 +423,7 @@ function CheckoutDrawer({
           customerEmail: form.email,
           deliveryAddress: form.address,
           deliveryZip: form.zip || undefined,
+          operatorId,
         }),
       });
       const bJson = await bRes.json();
