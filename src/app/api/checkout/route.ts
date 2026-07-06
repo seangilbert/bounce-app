@@ -4,8 +4,12 @@ import { getPaymentProvider } from "@/lib/payments";
 import type { CheckoutInput } from "@/lib/payments";
 import { createPendingOrder } from "@/lib/orders/repo";
 import { getBooking, setBookingStatus, setBookingDeposit } from "@/lib/bookings/repo";
+import { getOperatorById } from "@/lib/inventory/repo";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
+
+/** Optional platform fee on connected-account charges, in basis points (0 = none). */
+const PLATFORM_FEE_BPS = Number(process.env.PLATFORM_FEE_BPS ?? 0);
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +116,22 @@ export async function POST(req: Request) {
       }));
       depositToRecord = subtotal; // paid in full
     }
+
+    // Stripe Connect: if this booking's operator has connected their Stripe
+    // account, route the funds to them (destination charge). Otherwise the
+    // charge stays on the platform account (single-tenant / not-yet-connected).
+    const operator = await getOperatorById(booking.operatorId);
+    const chargedAmount = lineItems.reduce((s, li) => s + li.quantity * li.unitAmount, 0);
+    const connect =
+      operator?.stripeConnectId && operator.connectChargesEnabled
+        ? {
+            transferDestination: operator.stripeConnectId,
+            ...(PLATFORM_FEE_BPS > 0
+              ? { applicationFeeAmount: Math.round((chargedAmount * PLATFORM_FEE_BPS) / 10000) }
+              : {}),
+          }
+        : {};
+
     checkoutInput = {
       currency: booking.currency,
       successUrl: data.successUrl,
@@ -119,6 +139,7 @@ export async function POST(req: Request) {
       customerEmail: booking.customerEmail ?? undefined,
       metadata: { booking_id: booking.id, payment_type: data.paymentType },
       lineItems,
+      ...connect,
     };
   } else {
     checkoutInput = {

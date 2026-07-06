@@ -14,6 +14,8 @@ export interface Operator {
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   subscriptionStatus: string | null;
+  stripeConnectId: string | null;
+  connectChargesEnabled: boolean;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

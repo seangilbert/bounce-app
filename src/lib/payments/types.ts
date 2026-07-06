@@ -32,6 +32,10 @@ export interface CheckoutInput {
   customerEmail?: string;
   /** Arbitrary key/value data echoed back on webhook events. */
   metadata?: Record<string, string>;
+  /** Stripe Connect: route funds to this connected account (destination charge). */
+  transferDestination?: string;
+  /** Optional platform fee (minor units) retained when using transferDestination. */
+  applicationFeeAmount?: number;
 }
 
 export interface CheckoutResult {

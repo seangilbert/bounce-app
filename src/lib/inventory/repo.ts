@@ -18,6 +18,8 @@ interface OperatorRow {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   subscription_status: string | null;
+  stripe_connect_id: string | null;
+  connect_charges_enabled: boolean | null;
 }
 
 interface ItemRow {
@@ -54,6 +56,8 @@ function rowToOperator(r: OperatorRow): Operator {
     stripeCustomerId: r.stripe_customer_id,
     stripeSubscriptionId: r.stripe_subscription_id,
     subscriptionStatus: r.subscription_status,
+    stripeConnectId: r.stripe_connect_id,
+    connectChargesEnabled: r.connect_charges_enabled ?? false,
   };
 }
 

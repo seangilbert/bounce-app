@@ -49,6 +49,19 @@ export const stripeProvider: PaymentProvider = {
   name: "stripe",
 
   async createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
+    // Stripe Connect: route the charge's funds to the operator's connected
+    // account (destination charge), optionally retaining a platform fee.
+    const paymentIntentData = input.transferDestination
+      ? {
+          payment_intent_data: {
+            transfer_data: { destination: input.transferDestination },
+            ...(input.applicationFeeAmount && input.applicationFeeAmount > 0
+              ? { application_fee_amount: input.applicationFeeAmount }
+              : {}),
+          },
+        }
+      : {};
+
     const session = await client().checkout.sessions.create({
       mode: "payment",
       // Expire the session with the inventory hold, so a stale session can't be
@@ -58,6 +71,7 @@ export const stripeProvider: PaymentProvider = {
       cancel_url: input.cancelUrl,
       customer_email: input.customerEmail,
       metadata: input.metadata,
+      ...paymentIntentData,
       line_items: input.lineItems.map((li) => ({
         quantity: li.quantity,
         price_data: {

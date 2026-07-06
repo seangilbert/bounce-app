@@ -16,6 +16,7 @@ import { getSessionOperator } from "@/lib/operator/session";
 import type { Operator } from "@/lib/inventory/types";
 import { getDashboard, type DashboardData } from "@/lib/operator/data";
 import { getWeatherAdvisory, type WeatherAdvisory } from "@/lib/operator/weather";
+import { ConnectBanner } from "@/components/operator/ConnectBanner";
 // Reply-time + weekly deltas remain lightweight config (no historical series yet).
 import { aiSummary, weekStats } from "@/lib/operator/mock";
 import type { Stop } from "@/lib/operator/mock";
@@ -67,6 +68,12 @@ function DashboardBody({
           </button>
         </div>
       </div>
+
+      {!operator.connectChargesEnabled ? (
+        <div className="px-5 pt-5 lg:px-8 lg:pt-6">
+          <ConnectBanner />
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-5 px-5 py-5 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6 lg:px-8 lg:py-6">
         <div className="flex min-w-0 flex-col gap-5 lg:gap-6">
