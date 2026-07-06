@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   CaretLeft,
   CaretRight,
@@ -204,9 +205,14 @@ function DetailPanel({ detail }: { detail: SelectedDayDetail | null }) {
         />
       ) : null}
 
-      <button className="flex items-center justify-center gap-2 rounded-full bg-brand px-5 py-3.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep">
-        <ArrowSquareOut size={16} weight="bold" /> Open booking
-      </button>
+      {d.booking ? (
+        <Link
+          href={`/bookings/${d.booking.id}`}
+          className="flex items-center justify-center gap-2 rounded-full bg-brand px-5 py-3.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep"
+        >
+          <ArrowSquareOut size={16} weight="bold" /> Open booking
+        </Link>
+      ) : null}
 
       <div>
         <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">

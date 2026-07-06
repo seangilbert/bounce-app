@@ -13,6 +13,7 @@ export interface CalDay {
 }
 
 export interface SelectedBooking {
+  id: string;
   customer: string;
   bookingNo: string;
   item: string;

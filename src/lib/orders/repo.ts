@@ -84,6 +84,20 @@ export async function getOrderBySessionId(
   return data ? rowToOrder(data as OrderRow) : null;
 }
 
+/** The most recent order for a booking (used for payment status + refunds). */
+export async function getOrderByBookingId(bookingId: string): Promise<Order | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from(ORDERS)
+    .select()
+    .eq("booking_id", bookingId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getOrderByBookingId failed: ${error.message}`);
+  return data ? rowToOrder(data as OrderRow) : null;
+}
+
 /**
  * Transition the order for a checkout session to a terminal status.
  * Returns the updated order, or null if no order matched that session.

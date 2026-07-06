@@ -62,6 +62,7 @@ export async function updateSession(request: NextRequest) {
   const OPERATOR_PREFIXES = [
     "/dashboard",
     "/calendar",
+    "/bookings",
     "/inquiries",
     "/deliveries",
     "/inventory",

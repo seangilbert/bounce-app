@@ -172,6 +172,7 @@ function buildDetail(
     summary: `${dayBookings.length} bookings out${fullyBooked ? " · all inventory reserved" : ""}`,
     booking: {
       customer: primary.customer_name ?? "Customer",
+      id: primary.id,
       bookingNo: `Booking #${primary.id.slice(0, 4).toUpperCase()}`,
       item: pItem?.items?.name ?? "—",
       price: pItem ? `${money(pItem.unit_price)} / day` : "—",
