@@ -97,15 +97,29 @@ export async function countNeedsReview(operatorId: string): Promise<number> {
   return count ?? 0;
 }
 
-/** Record the operator's reply and mark the inquiry replied (operator-scoped). */
-export async function replyToInquiry(operatorId: string, id: string, reply: string): Promise<void> {
+/** Record the operator's reply and mark the inquiry replied (operator-scoped).
+ * Returns the customer's contact so the caller can email the reply. */
+export async function replyToInquiry(
+  operatorId: string,
+  id: string,
+  reply: string,
+): Promise<{ customerEmail: string | null; customerName: string | null; inboundMessage: string } | null> {
   const supabase = createAdminClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("inquiries")
     .update({ status: "replied", operator_reply: reply, replied_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("operator_id", operatorId);
+    .eq("operator_id", operatorId)
+    .select("customer_email, customer_name, inbound_message")
+    .maybeSingle();
   if (error) throw new Error(`replyToInquiry failed: ${error.message}`);
+  return data
+    ? {
+        customerEmail: data.customer_email,
+        customerName: data.customer_name,
+        inboundMessage: data.inbound_message,
+      }
+    : null;
 }
 
 /** Dismiss an inquiry so it drops out of the inbox (operator-scoped). */

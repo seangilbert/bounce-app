@@ -6,6 +6,7 @@ import { listItems } from "@/lib/inventory/repo";
 import { availabilityForOperator } from "@/lib/inventory/availability";
 import { durationDays, lineTotal } from "@/lib/inventory/pricing";
 import { createInquiry } from "@/lib/inquiries/repo";
+import { notifyOperatorNewInquiry } from "@/lib/email";
 import type { Operator } from "@/lib/inventory/types";
 
 /** Model for the quote assistant. Haiku is a valid cost swap (spec 7.2). */
@@ -311,6 +312,22 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
       inquiryId = created.id;
     } catch (err) {
       console.error("[inquiries] failed to persist inquiry:", err);
+    }
+
+    // Alert the operator to inquiries that need their review (best-effort).
+    if (!auto && operator.contactEmail) {
+      const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://bounce-app.vercel.app";
+      try {
+        await notifyOperatorNewInquiry({
+          to: operator.contactEmail,
+          businessName: operator.name,
+          customer: inquiry.customerName ?? "A customer",
+          message: firstUser,
+          link: `${base}/inquiries`,
+        });
+      } catch (err) {
+        console.error("[inquiries] operator alert failed:", err);
+      }
     }
   }
 

@@ -7,7 +7,9 @@ import {
   setOrderStatusBySessionId,
 } from "@/lib/orders/repo";
 import { autoSendEnabled, sendAgreementForOrder } from "@/lib/esign/agreements";
-import { confirmBookingPaid } from "@/lib/bookings/repo";
+import { confirmBookingPaid, getBooking } from "@/lib/bookings/repo";
+import { getOperatorById } from "@/lib/inventory/repo";
+import { notifyBookingConfirmed, notifyOperatorNewBooking } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +68,17 @@ export async function POST(req: Request) {
               console.warn(
                 `[webhook] OVERSOLD booking ${order.bookingId}: ${JSON.stringify(oversold)}`,
               );
+            }
+            // Confirmation to the customer + alert to the operator (best-effort).
+            try {
+              const booking = await getBooking(order.bookingId);
+              const operator = booking ? await getOperatorById(booking.operatorId) : null;
+              if (booking && operator) {
+                await notifyBookingConfirmed(booking, operator, order.amountTotal);
+                await notifyOperatorNewBooking(booking, operator, order.amountTotal);
+              }
+            } catch (e) {
+              console.error("[webhook] booking emails failed:", e);
             }
           }
 
