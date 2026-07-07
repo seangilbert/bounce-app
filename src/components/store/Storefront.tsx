@@ -20,6 +20,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
 import { priceBreakdown } from "@/lib/inventory/pricing";
+import { brandVars } from "@/lib/branding/palette";
 
 type Category = "bounce" | "tent" | "tables" | "other";
 
@@ -117,7 +118,13 @@ function rangeLabel(start: string, end: string): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-export function Storefront({ operatorId }: { operatorId?: string }) {
+export function Storefront({
+  operatorId,
+  brandColor,
+}: {
+  operatorId?: string;
+  brandColor?: string | null;
+}) {
   const opParam = operatorId ? `&operator=${operatorId}` : "";
   const [date, setDate] = useState(nextSaturday);
   const [endDate, setEndDate] = useState(nextSaturday);
@@ -215,7 +222,7 @@ export function Storefront({ operatorId }: { operatorId?: string }) {
   const subtotal = cartLines.reduce((s, l) => s + lineTotalOf(l.item, l.qty, days), 0);
 
   return (
-    <div className="min-h-dvh bg-cream pb-28">
+    <div className="min-h-dvh bg-cream pb-28" style={brandVars(brandColor)}>
       {/* Header */}
       <header className="border-b border-sand bg-cream/90 px-5 py-4 backdrop-blur lg:px-10">
         <div className="mx-auto flex max-w-6xl items-center justify-between">

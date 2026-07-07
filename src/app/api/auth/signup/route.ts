@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { generateUniqueSlug } from "@/lib/inventory/repo";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { accentForIndex } from "@/lib/branding/palette";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,12 @@ export async function POST(req: Request) {
   }
   const userId = userRes.data.user.id;
 
-  // 2) Create the operator tenant.
+  // 2) Create the operator tenant. Assign a demo accent color round-robin by
+  // existing operator count so consecutive signups look visually distinct
+  // (operators will customize this later).
+  const { count: opCount } = await admin
+    .from("operators")
+    .select("id", { count: "exact", head: true });
   const opRes = await admin
     .from("operators")
     .insert({
@@ -76,6 +82,7 @@ export async function POST(req: Request) {
       owner_name: ownerName ?? null,
       plan,
       slug: await generateUniqueSlug(businessName),
+      brand_color: accentForIndex(opCount ?? 0).base,
     })
     .select("id")
     .single();

@@ -16,5 +16,5 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function StorefrontPage({ params }: { params: { slug: string } }) {
   const op = await getOperatorBySlug(params.slug);
   if (!op) notFound();
-  return <Storefront operatorId={op.id} />;
+  return <Storefront operatorId={op.id} brandColor={op.brandColor} />;
 }

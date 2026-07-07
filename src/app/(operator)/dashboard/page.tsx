@@ -102,7 +102,7 @@ function DashboardBody({
 
 function AiHero({ data }: { data: DashboardData }) {
   return (
-    <section className="rounded-[24px] bg-brand p-5 text-white shadow-[0_24px_50px_-26px_rgba(59,125,240,0.65)] lg:rounded-[28px] lg:p-7">
+    <section className="rounded-[24px] bg-brand p-5 text-white shadow-[0_24px_50px_-26px_var(--brand-glow,rgba(59,125,240,0.65))] lg:rounded-[28px] lg:p-7">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkle size={18} weight="fill" />

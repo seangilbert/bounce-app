@@ -349,7 +349,7 @@ function InquiryCard({
   const s = STATUS[item.status];
   const StatusIcon = s.icon;
   const border = active
-    ? "border-2 border-brand bg-white shadow-[0_10px_24px_-16px_rgba(59,125,240,0.5)]"
+    ? "border-2 border-brand bg-white shadow-[0_10px_24px_-16px_var(--brand-glow,rgba(59,125,240,0.5))]"
     : item.status === "escalated"
       ? "border border-amber-line border-l-[3px] border-l-amber bg-white"
       : "border border-sand-line bg-white";
