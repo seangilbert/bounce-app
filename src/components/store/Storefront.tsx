@@ -329,7 +329,7 @@ export function StoreShell({
                     </ChatBubble>
                   ))}
                   {chatQuote ? (
-                    <ChatQuoteCard quote={chatQuote} date={chatDate} onBook={bookChatQuote} />
+                    <ChatQuoteCard quote={chatQuote} date={chatDate} onBook={bookChatQuote} byId={byId} />
                   ) : null}
                   {chatLoading ? (
                     <ChatBubble role="assistant">
@@ -829,14 +829,33 @@ function TypingDots() {
   );
 }
 
+function QuoteThumb({ item }: { item?: ApiItem }) {
+  const img = item?.images?.[0];
+  const meta = CAT_META[toCategory(item?.category ?? null)];
+  return (
+    <span
+      className={`flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg ${img ? "" : meta.tint}`}
+    >
+      {img ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={img} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <meta.Icon size={20} weight="fill" className={meta.ink} />
+      )}
+    </span>
+  );
+}
+
 function ChatQuoteCard({
   quote,
   date,
   onBook,
+  byId,
 }: {
   quote: QuoteBreakdown;
   date: string | null;
   onBook: () => void;
+  byId: Map<string, ApiItem>;
 }) {
   return (
     <div className="max-w-[92%] self-start rounded-2xl border border-brand-ring bg-brand-tint/40 p-3.5">
@@ -847,12 +866,13 @@ function ChatQuoteCard({
       ) : null}
       <div className="rounded-xl bg-white p-3.5">
         {quote.lineItems.map((l) => (
-          <div key={l.itemId} className="flex items-center justify-between py-1 text-sm">
-            <span className="font-semibold text-ink">
+          <div key={l.itemId} className="flex items-center gap-2.5 py-1 text-sm">
+            <QuoteThumb item={byId.get(l.itemId)} />
+            <span className="min-w-0 flex-1 font-semibold text-ink">
               {l.quantity > 1 ? `${l.quantity}× ` : ""}
               {l.name}
             </span>
-            <span className="font-bold text-ink">{money(l.lineTotal)}</span>
+            <span className="flex-shrink-0 font-bold text-ink">{money(l.lineTotal)}</span>
           </div>
         ))}
         <div className="mt-2 space-y-1 border-t border-sand-line pt-2.5 text-sm">
