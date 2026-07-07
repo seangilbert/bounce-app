@@ -135,14 +135,19 @@ export async function getCalendarData(
       .map((b) => ({ ...b, booking_items: (b.booking_items ?? []).filter(catMatches) }))
       .filter((b) => b.booking_items.length > 0);
 
-    const events: CalEvent[] = [];
-    for (const b of dayBookings)
-      for (const li of b.booking_items)
-        events.push({
-          label: shortLabel(li.items?.name ?? "Item", li.quantity),
-          category: toCategory(li.items?.category ?? null),
-          bookingId: b.id,
-        });
+    // One pill per booking, headlined by its main item (prefer the bounce house,
+    // the constrained inventory) with a "+N" when the booking has more items.
+    const events: CalEvent[] = dayBookings.map((b) => {
+      const lis = b.booking_items;
+      const primary = lis.find((li) => toCategory(li.items?.category ?? null) === "bounce") ?? lis[0];
+      const base = shortLabel(primary?.items?.name ?? "Item", primary?.quantity ?? 1);
+      const extra = lis.length - 1;
+      return {
+        label: extra > 0 ? `${base} +${extra}` : base,
+        category: toCategory(primary?.items?.category ?? null),
+        bookingId: b.id,
+      };
+    });
 
     days.push({
       iso,
