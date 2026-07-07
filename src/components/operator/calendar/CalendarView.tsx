@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import {
   CaretLeft,
@@ -8,12 +11,14 @@ import {
   SealCheck,
   ClockCountdown,
   ArrowSquareOut,
+  X,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   weekdays,
-  type CalDay,
+  calFilters,
+  type CalDayData,
   type CalEvent,
-  type CalendarMonth,
+  type CalendarData,
   type ItemCategory,
   type SelectedDayDetail,
 } from "@/lib/operator/calendar";
@@ -24,33 +29,81 @@ const CAT_BG: Record<ItemCategory, string> = {
   tables: "bg-amber",
 };
 
-export function CalendarView({ monthLabel, monthDays, selected }: CalendarMonth) {
+const MONTH_CAP = 2; // pills shown per day in month view before "+N more"
+
+export function CalendarView({ data }: { data: CalendarData }) {
+  const [view, setView] = useState<"month" | "week">("month");
+  const [selectedIso, setSelectedIso] = useState<string | null>(data.defaultSelectedIso);
+
+  // Fall back to the default day when the selection isn't in the current month
+  // (e.g. after navigating months) so the panel always has a valid day.
+  const active =
+    data.days.find((d) => d.iso === selectedIso) ??
+    data.days.find((d) => d.iso === data.defaultSelectedIso) ??
+    null;
+
+  const catSuffix = data.category !== "all" ? `&cat=${data.category}` : "";
+  const monthHref = (y: number, m: number) => `/calendar?y=${y}&m=${m}${catSuffix}`;
+  const prev = data.month === 1 ? { y: data.year - 1, m: 12 } : { y: data.year, m: data.month - 1 };
+  const next = data.month === 12 ? { y: data.year + 1, m: 1 } : { y: data.year, m: data.month + 1 };
+  const [todayY, todayM] = data.todayIso.split("-").map(Number);
+
+  // Week view: the 7 days sharing a grid row with the active day.
+  const activeIdx = active ? data.days.findIndex((d) => d.iso === active.iso) : -1;
+  const weekStart = activeIdx >= 0 ? Math.floor(activeIdx / 7) * 7 : 0;
+  const weekDays = data.days.slice(weekStart, weekStart + 7);
+
+  const activeFilter = calFilters.find((f) => f.cat === data.category);
+
   return (
     <div className="lg:flex lg:h-dvh lg:overflow-hidden">
       {/* Calendar */}
       <div className="flex min-w-0 flex-1 flex-col lg:h-dvh">
         {/* Top bar */}
         <div className="flex flex-col gap-3 border-b border-sand px-5 py-4 sm:flex-row sm:items-center sm:justify-between lg:px-8 lg:py-5">
-          <div className="flex items-center gap-3">
-            <h1 className="font-display text-2xl font-bold text-ink lg:text-[28px]">{monthLabel}</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-display text-2xl font-bold text-ink lg:text-[28px]">{data.monthLabel}</h1>
             <div className="flex gap-1.5">
-              <NavBtn>
+              <NavBtn href={monthHref(prev.y, prev.m)} label="Previous month">
                 <CaretLeft size={16} weight="bold" />
               </NavBtn>
-              <NavBtn>
+              <NavBtn href={monthHref(next.y, next.m)} label="Next month">
                 <CaretRight size={16} weight="bold" />
               </NavBtn>
             </div>
-            <button className="text-sm font-bold text-brand">Today</button>
+            <Link href={monthHref(todayY, todayM)} className="text-sm font-bold text-brand hover:text-brand-deep">
+              Today
+            </Link>
+            {activeFilter && data.category !== "all" ? (
+              <Link
+                href={monthHref(data.year, data.month).replace(catSuffix, "")}
+                className="flex items-center gap-1.5 rounded-full bg-brand-tint px-3 py-1 text-xs font-bold text-brand-deep"
+              >
+                <span className={`h-2 w-2 rounded-full ${activeFilter.dot}`} />
+                {activeFilter.label}
+                <X size={12} weight="bold" />
+              </Link>
+            ) : null}
           </div>
           <div className="flex items-center gap-3">
             <div className="flex rounded-full bg-sand/70 p-1">
-              <span className="rounded-full px-4 py-1.5 text-sm font-bold text-ink-soft">Week</span>
-              <span className="rounded-full bg-white px-4 py-1.5 text-sm font-bold text-ink shadow-sm">
-                Month
-              </span>
+              {(["week", "month"] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-bold capitalize transition-colors ${
+                    view === v ? "bg-white text-ink shadow-sm" : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
             </div>
-            <button className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep">
+            <button
+              type="button"
+              title="Coming soon"
+              className="flex cursor-not-allowed items-center gap-2 rounded-full bg-brand/60 px-5 py-2.5 text-sm font-bold text-white shadow-sm"
+            >
               <Plus size={16} weight="bold" />
               <span className="hidden sm:inline">New booking</span>
               <span className="sm:hidden">New</span>
@@ -67,79 +120,178 @@ export function CalendarView({ monthLabel, monthDays, selected }: CalendarMonth)
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-1.5 lg:gap-2">
-            {monthDays.map((day, i) => (
-              <DayCell key={i} day={day} selected={selected != null && day.date === selected.date} />
-            ))}
-          </div>
+          {view === "month" ? (
+            <div className="grid grid-cols-7 gap-1.5 lg:gap-2">
+              {data.days.map((day) => (
+                <DayCell
+                  key={day.iso}
+                  day={day}
+                  selected={active?.iso === day.iso}
+                  today={day.iso === data.todayIso}
+                  onSelect={() => setSelectedIso(day.iso)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-7 gap-1.5 lg:gap-2">
+              {weekDays.map((day) => (
+                <WeekColumn
+                  key={day.iso}
+                  day={day}
+                  selected={active?.iso === day.iso}
+                  today={day.iso === data.todayIso}
+                  onSelect={() => setSelectedIso(day.iso)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Detail panel */}
       <aside className="border-t border-sand p-5 lg:h-dvh lg:w-[360px] lg:flex-shrink-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
-        <DetailPanel detail={selected} />
+        <DetailPanel detail={active?.detail ?? null} />
       </aside>
     </div>
   );
 }
 
-function NavBtn({ children }: { children: React.ReactNode }) {
+function NavBtn({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
   return (
-    <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand bg-white text-ink-soft">
+    <Link
+      href={href}
+      aria-label={label}
+      className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand bg-white text-ink-soft transition-colors hover:bg-sand/50"
+    >
       {children}
-    </button>
+    </Link>
   );
 }
 
 function EventPill({ event }: { event: CalEvent }) {
   return (
-    <span
-      className={`block truncate rounded-md px-2 py-1 text-[11px] font-bold text-white ${CAT_BG[event.category]}`}
+    <Link
+      href={`/bookings/${event.bookingId}`}
+      onClick={(e) => e.stopPropagation()}
+      className={`block truncate rounded-md px-2 py-1 text-[11px] font-bold text-white transition-opacity hover:opacity-90 ${CAT_BG[event.category]}`}
+      title={event.label}
     >
       {event.label}
-    </span>
+    </Link>
   );
 }
 
-function DayCell({ day, selected }: { day: CalDay; selected: boolean }) {
-  if (day.date === null) {
-    return <div className="min-h-[64px] rounded-xl bg-sand/20 lg:min-h-[140px]" />;
-  }
+function DayCell({
+  day,
+  selected,
+  today,
+  onSelect,
+}: {
+  day: CalDayData;
+  selected: boolean;
+  today: boolean;
+  onSelect: () => void;
+}) {
   const fb = day.fullyBooked;
   const shell = selected
     ? "border-2 border-coral bg-coral-tint/50"
     : fb
       ? "border border-coral bg-coral-tint/40"
-      : "border border-sand-line bg-white";
+      : day.inMonth
+        ? "border border-sand-line bg-white hover:border-sand"
+        : "border border-transparent bg-sand/20";
+  const shown = day.events.slice(0, MONTH_CAP);
+  const more = day.events.length - shown.length;
   return (
-    <button className={`flex min-h-[64px] flex-col rounded-xl p-1.5 text-left lg:min-h-[140px] lg:p-2 ${shell}`}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`flex min-h-[64px] cursor-pointer flex-col rounded-xl p-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand-ring lg:min-h-[140px] lg:p-2 ${shell}`}
+    >
       <div className="flex items-center justify-between">
-        <span className={`text-[13px] font-bold ${fb ? "text-coral-deep" : "text-ink"}`}>
-          {day.date}
+        <span
+          className={`flex h-6 w-6 items-center justify-center rounded-full text-[13px] font-bold ${
+            today ? "bg-brand text-white" : fb ? "text-coral-deep" : day.inMonth ? "text-ink" : "text-ink-faint"
+          }`}
+        >
+          {day.dayNum}
         </span>
         {fb ? <LockSimple size={12} weight="fill" className="text-coral-deep" /> : null}
       </div>
 
       {/* Desktop: full pills */}
       <div className="mt-1 hidden flex-col gap-1 lg:flex">
-        {day.events.map((e, i) => (
+        {shown.map((e, i) => (
           <EventPill key={i} event={e} />
         ))}
-        {day.moreCount > 0 ? (
-          <span className="px-1 text-[11px] font-bold text-coral-deep">+{day.moreCount} more</span>
-        ) : null}
+        {more > 0 ? <span className="px-1 text-[11px] font-bold text-coral-deep">+{more} more</span> : null}
       </div>
 
       {/* Mobile: colored dots */}
       {day.events.length > 0 ? (
         <div className="mt-1 flex flex-wrap gap-1 lg:hidden">
-          {day.events.map((e, i) => (
+          {day.events.slice(0, 4).map((e, i) => (
             <span key={i} className={`h-1.5 w-1.5 rounded-full ${CAT_BG[e.category]}`} />
           ))}
-          {day.moreCount > 0 ? <span className="h-1.5 w-1.5 rounded-full bg-ink-faint" /> : null}
+          {day.events.length > 4 ? <span className="h-1.5 w-1.5 rounded-full bg-ink-faint" /> : null}
         </div>
       ) : null}
-    </button>
+    </div>
+  );
+}
+
+function WeekColumn({
+  day,
+  selected,
+  today,
+  onSelect,
+}: {
+  day: CalDayData;
+  selected: boolean;
+  today: boolean;
+  onSelect: () => void;
+}) {
+  const shell = selected
+    ? "border-2 border-coral bg-coral-tint/40"
+    : day.fullyBooked
+      ? "border border-coral bg-coral-tint/30"
+      : "border border-sand-line bg-white hover:border-sand";
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`flex min-h-[220px] cursor-pointer flex-col gap-1 rounded-xl p-2 outline-none focus-visible:ring-2 focus-visible:ring-brand-ring lg:min-h-[440px] ${shell}`}
+    >
+      <div className="mb-1 flex items-center gap-2">
+        <span
+          className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${
+            today ? "bg-brand text-white" : "text-ink"
+          }`}
+        >
+          {day.dayNum}
+        </span>
+        {day.fullyBooked ? <LockSimple size={12} weight="fill" className="text-coral-deep" /> : null}
+      </div>
+      {day.events.length > 0 ? (
+        day.events.map((e, i) => <EventPill key={i} event={e} />)
+      ) : (
+        <span className="px-1 text-[11px] font-medium text-ink-faint">—</span>
+      )}
+    </div>
   );
 }
 
@@ -162,30 +314,30 @@ function DetailPanel({ detail }: { detail: SelectedDayDetail | null }) {
       </div>
 
       {d.booking ? (
-      <div className="border-t border-sand pt-4">
-        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-          Selected booking
-        </div>
-        <div className="mt-3 rounded-2xl bg-brand-tint/50 p-4">
-          <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white text-brand">
-              <CastleTurret size={22} weight="fill" />
-            </span>
-            <div className="min-w-0">
-              <div className="font-bold text-ink">{d.booking.customer}</div>
-              <div className="text-xs font-semibold text-ink-mute">{d.booking.bookingNo}</div>
+        <div className="border-t border-sand pt-4">
+          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+            Selected booking
+          </div>
+          <div className="mt-3 rounded-2xl bg-brand-tint/50 p-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white text-brand">
+                <CastleTurret size={22} weight="fill" />
+              </span>
+              <div className="min-w-0">
+                <div className="font-bold text-ink">{d.booking.customer}</div>
+                <div className="text-xs font-semibold text-ink-mute">{d.booking.bookingNo}</div>
+              </div>
+            </div>
+            <div className="mt-3 text-[15px] font-bold text-ink">{d.booking.item}</div>
+            <div className="text-[13px] font-medium text-ink-mute">
+              {d.booking.price} · {d.booking.location}
+            </div>
+            <div className="mt-3 flex gap-2.5">
+              <TimeBox label="Deliver" value={d.booking.deliver} />
+              <TimeBox label="Pick up" value={d.booking.pickup} />
             </div>
           </div>
-          <div className="mt-3 text-[15px] font-bold text-ink">{d.booking.item}</div>
-          <div className="text-[13px] font-medium text-ink-mute">
-            {d.booking.price} · {d.booking.location}
-          </div>
-          <div className="mt-3 flex gap-2.5">
-            <TimeBox label="Deliver" value={d.booking.deliver} />
-            <TimeBox label="Pick up" value={d.booking.pickup} />
-          </div>
         </div>
-      </div>
       ) : null}
 
       {d.contract ? (
@@ -214,22 +366,29 @@ function DetailPanel({ detail }: { detail: SelectedDayDetail | null }) {
         </Link>
       ) : null}
 
-      <div>
-        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-          Also out this day
+      {d.alsoOut.length > 0 ? (
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+            Also out this day
+          </div>
+          <ul className="mt-3 flex flex-col gap-1">
+            {d.alsoOut.map((a, i) => (
+              <li key={i}>
+                <Link
+                  href={`/bookings/${a.bookingId}`}
+                  className="-mx-2 flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-sand/50"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className="h-2 w-2 rounded-full bg-brand" />
+                    <span className="text-sm font-bold text-ink">{a.item}</span>
+                  </span>
+                  <span className="text-sm font-medium text-ink-mute">{a.time}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
-        <ul className="mt-3 flex flex-col gap-3">
-          {d.alsoOut.map((a, i) => (
-            <li key={i} className="flex items-center justify-between">
-              <span className="flex items-center gap-2.5">
-                <span className="h-2 w-2 rounded-full bg-brand" />
-                <span className="text-sm font-bold text-ink">{a.item}</span>
-              </span>
-              <span className="text-sm font-medium text-ink-mute">{a.time}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      ) : null}
     </div>
   );
 }

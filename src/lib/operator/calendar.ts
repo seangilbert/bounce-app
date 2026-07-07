@@ -1,15 +1,10 @@
 export type ItemCategory = "bounce" | "tent" | "tables";
+export type CatFilter = "all" | ItemCategory;
 
 export interface CalEvent {
   label: string;
   category: ItemCategory;
-}
-
-export interface CalDay {
-  date: number | null; // null = padding cell
-  events: CalEvent[];
-  fullyBooked: boolean;
-  moreCount: number;
+  bookingId: string;
 }
 
 export interface SelectedBooking {
@@ -24,28 +19,47 @@ export interface SelectedBooking {
 }
 
 export interface SelectedDayDetail {
-  date: number;
+  iso: string;
   dateLabel: string;
   fullyBooked: boolean;
   summary: string;
   booking: SelectedBooking | null;
   contract: { label: string; detail: string } | null;
   balance: { label: string; detail: string } | null;
-  alsoOut: { item: string; time: string }[];
+  alsoOut: { item: string; time: string; bookingId: string }[];
 }
 
-export interface CalendarMonth {
+/** One grid cell — a real day (padding/adjacent-month days carry `inMonth: false`). */
+export interface CalDayData {
+  iso: string; // YYYY-MM-DD
+  dayNum: number; // 1..31
+  weekday: number; // 0 (Sun) .. 6 (Sat)
+  inMonth: boolean; // belongs to the displayed month
+  events: CalEvent[]; // all events that day (month view caps; week view shows all)
+  fullyBooked: boolean;
+  detail: SelectedDayDetail;
+}
+
+export interface CalendarData {
+  year: number;
+  month: number; // 1..12
   monthLabel: string;
-  monthDays: CalDay[];
-  selected: SelectedDayDetail | null;
+  todayIso: string;
+  days: CalDayData[]; // whole visible grid (full weeks), month + adjacent days
+  defaultSelectedIso: string | null;
+  category: CatFilter;
 }
 
 export const weekdays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
-// Category color legend (also used by the sidebar filter).
-export const calFilters = [
-  { label: "All items", dot: "bg-brand", active: true },
-  { label: "Bounce houses", dot: "bg-brand/50" },
-  { label: "Tents", dot: "bg-teal" },
-  { label: "Tables & chairs", dot: "bg-amber" },
+/** Sidebar "Filter by item" — each maps to a `?cat=` value. */
+export const calFilters: { label: string; cat: CatFilter; dot: string }[] = [
+  { label: "All items", cat: "all", dot: "bg-brand" },
+  { label: "Bounce houses", cat: "bounce", dot: "bg-brand" },
+  { label: "Tents", cat: "tent", dot: "bg-teal" },
+  { label: "Tables & chairs", cat: "tables", dot: "bg-amber" },
 ];
+
+export function isCatFilter(v: string | null | undefined): v is CatFilter {
+  return v === "all" || v === "bounce" || v === "tent" || v === "tables";
+}

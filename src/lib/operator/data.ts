@@ -1,8 +1,9 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import type {
-  CalDay,
+  CalDayData,
   CalEvent,
-  CalendarMonth,
+  CalendarData,
+  CatFilter,
   ItemCategory,
   SelectedDayDetail,
 } from "./calendar";
@@ -40,8 +41,6 @@ function money(cents: number): string {
   return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
 }
 
-const blank = (): CalDay => ({ date: null, events: [], fullyBooked: false, moreCount: 0 });
-
 interface BItem {
   item_id: string;
   quantity: number;
@@ -61,20 +60,33 @@ interface BRow {
 }
 
 /**
- * Month view model for the operator calendar, computed from live bookings.
+ * Calendar view model for the operator calendar, computed from live bookings.
+ * Covers the full visible grid (whole weeks, including adjacent-month days so the
+ * Week view has data), with a per-day detail precomputed so the client can select
+ * days instantly. Optionally filtered to a single item category.
+ *
  * "Fully booked" = every bounce-house unit is reserved that day (the constrained
  * inventory), i.e. the same reservation logic the availability engine enforces.
  */
-export async function getCalendarMonth(
+export async function getCalendarData(
   operatorId: string,
   year: number,
   month: number,
-): Promise<CalendarMonth> {
+  category: CatFilter = "all",
+): Promise<CalendarData> {
   const supabase = createAdminClient();
   const pad = (n: number) => String(n).padStart(2, "0");
+  const isoOf = (ts: number) => {
+    const dt = new Date(ts);
+    return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+  };
+
+  // Visible grid: from the Sunday on/before the 1st, padded to whole weeks.
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const first = `${year}-${pad(month)}-01`;
-  const last = `${year}-${pad(month)}-${pad(daysInMonth)}`;
+  const leading = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7;
+  const gridStartTs = Date.UTC(year, month - 1, 1) - leading * 86_400_000;
+  const gridEndTs = gridStartTs + (totalCells - 1) * 86_400_000;
 
   const [, itemsRes, bookingsRes] = await Promise.all([
     expireStaleCheckouts(),
@@ -86,76 +98,90 @@ export async function getCalendarMonth(
       )
       .eq("operator_id", operatorId)
       .in("status", COMMITTED)
-      .gte("start_date", first)
-      .lte("start_date", last),
+      .gte("start_date", isoOf(gridStartTs))
+      .lte("start_date", isoOf(gridEndTs)),
   ]);
   const bounceOwned = (itemsRes.data ?? []).filter((i) => toCategory(i.category) === "bounce");
-  if (bookingsRes.error) throw new Error(`getCalendarMonth failed: ${bookingsRes.error.message}`);
+  if (bookingsRes.error) throw new Error(`getCalendarData failed: ${bookingsRes.error.message}`);
   const rows = (bookingsRes.data ?? []) as unknown as BRow[];
 
-  const byDay = new Map<number, BRow[]>();
+  const byIso = new Map<string, BRow[]>();
   for (const b of rows) {
-    const day = Number(b.start_date.slice(8, 10));
-    (byDay.get(day) ?? byDay.set(day, []).get(day)!).push(b);
+    const key = b.start_date.slice(0, 10);
+    (byIso.get(key) ?? byIso.set(key, []).get(key)!).push(b);
   }
 
-  const leadingBlanks = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
-  const cells: CalDay[] = [];
-  for (let i = 0; i < leadingBlanks; i++) cells.push(blank());
+  const catMatches = (li: BItem) => category === "all" || toCategory(li.items?.category ?? null) === category;
 
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dayBookings = byDay.get(d) ?? [];
-    const events: CalEvent[] = [];
+  const days: CalDayData[] = [];
+  for (let i = 0; i < totalCells; i++) {
+    const ts = gridStartTs + i * 86_400_000;
+    const dt = new Date(ts);
+    const iso = isoOf(ts);
+    const mm = dt.getUTCMonth() + 1;
+    const allDay = byIso.get(iso) ?? [];
+
+    // Fully-booked reflects real bounce inventory (independent of the filter).
     const reserved = new Map<string, number>();
-    for (const b of dayBookings) {
-      for (const li of b.booking_items ?? []) {
+    for (const b of allDay)
+      for (const li of b.booking_items ?? [])
+        reserved.set(li.item_id, (reserved.get(li.item_id) ?? 0) + li.quantity);
+    const fullyBooked =
+      bounceOwned.length > 0 && bounceOwned.every((bi) => (reserved.get(bi.id) ?? 0) >= bi.quantity);
+
+    // Events + detail respect the category filter.
+    const dayBookings = allDay
+      .map((b) => ({ ...b, booking_items: (b.booking_items ?? []).filter(catMatches) }))
+      .filter((b) => b.booking_items.length > 0);
+
+    const events: CalEvent[] = [];
+    for (const b of dayBookings)
+      for (const li of b.booking_items)
         events.push({
           label: shortLabel(li.items?.name ?? "Item", li.quantity),
           category: toCategory(li.items?.category ?? null),
+          bookingId: b.id,
         });
-        reserved.set(li.item_id, (reserved.get(li.item_id) ?? 0) + li.quantity);
-      }
-    }
-    const fullyBooked =
-      bounceOwned.length > 0 &&
-      bounceOwned.every((bi) => (reserved.get(bi.id) ?? 0) >= bi.quantity);
-    cells.push({
-      date: d,
-      events: events.slice(0, 2),
+
+    days.push({
+      iso,
+      dayNum: dt.getUTCDate(),
+      weekday: dt.getUTCDay(),
+      inMonth: mm === month,
+      events,
       fullyBooked,
-      moreCount: Math.max(0, events.length - 2),
+      detail: buildDayDetail(iso, dt, dayBookings, fullyBooked),
     });
   }
-  while (cells.length % 7 !== 0) cells.push(blank());
 
-  const selDay = byDay.has(12) ? 12 : [...byDay.keys()].sort((a, b) => a - b)[0] ?? 1;
-  const selected = buildDetail(year, month, selDay, byDay.get(selDay) ?? [], bounceOwned, byDay);
+  // Default selection: a day-of-the-month with bookings, else the 1st.
+  const withBookings = days.find((d) => d.inMonth && d.events.length > 0);
+  const firstOfMonth = days.find((d) => d.inMonth);
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
-  return { monthLabel: `${MONTHS[month - 1]} ${year}`, monthDays: cells, selected };
+  return {
+    year,
+    month,
+    monthLabel: `${MONTHS[month - 1]} ${year}`,
+    todayIso,
+    days,
+    defaultSelectedIso: (withBookings ?? firstOfMonth)?.iso ?? null,
+    category,
+  };
 }
 
-function buildDetail(
-  year: number,
-  month: number,
-  day: number,
+function buildDayDetail(
+  iso: string,
+  dt: Date,
   dayBookings: BRow[],
-  bounceOwned: { id: string; quantity: number }[],
-  byDay: Map<number, BRow[]>,
-): SelectedDayDetail | null {
-  const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-  const dateLabel = `${WEEKDAY[dow]}, ${MONTHS[month - 1].slice(0, 3)} ${day}`;
+  fullyBooked: boolean,
+): SelectedDayDetail {
+  const dateLabel = `${WEEKDAY[dt.getUTCDay()]}, ${MONTHS[dt.getUTCMonth()].slice(0, 3)} ${dt.getUTCDate()}`;
 
   if (dayBookings.length === 0) {
-    return { date: day, dateLabel, fullyBooked: false, summary: "No bookings", booking: null, contract: null, balance: null, alsoOut: [] };
+    return { iso, dateLabel, fullyBooked, summary: "No bookings", booking: null, contract: null, balance: null, alsoOut: [] };
   }
-
-  // Fully booked if every bounce unit is reserved this day.
-  const reserved = new Map<string, number>();
-  for (const b of dayBookings)
-    for (const li of b.booking_items ?? [])
-      reserved.set(li.item_id, (reserved.get(li.item_id) ?? 0) + li.quantity);
-  const fullyBooked =
-    bounceOwned.length > 0 && bounceOwned.every((bi) => (reserved.get(bi.id) ?? 0) >= bi.quantity);
 
   // Primary booking: prefer a contracted one (contract on file), else the first.
   const primary = dayBookings.find((b) => b.status === "contracted") ?? dayBookings[0];
@@ -164,10 +190,10 @@ function buildDetail(
   const balanceDue = primary.subtotal - (primary.deposit ?? 0);
 
   return {
-    date: day,
+    iso,
     dateLabel,
     fullyBooked,
-    summary: `${dayBookings.length} bookings out${fullyBooked ? " · all inventory reserved" : ""}`,
+    summary: `${dayBookings.length} booking${dayBookings.length === 1 ? "" : "s"} out${fullyBooked ? " · all inventory reserved" : ""}`,
     booking: {
       customer: primary.customer_name ?? "Customer",
       id: primary.id,
@@ -193,6 +219,7 @@ function buildDetail(
       .map((b) => ({
         item: shortLabel(b.booking_items?.[0]?.items?.name ?? "Booking", b.booking_items?.[0]?.quantity ?? 1),
         time: b.delivery_window ?? "—",
+        bookingId: b.id,
       })),
   };
 }

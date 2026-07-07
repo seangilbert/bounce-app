@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Confetti, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { NAV, type NavItem } from "@/lib/operator/nav";
-import { calFilters } from "@/lib/operator/calendar";
+import { calFilters, type CatFilter } from "@/lib/operator/calendar";
 import { createClient } from "@/utils/supabase/client";
 import type { Operator } from "@/lib/inventory/types";
 
@@ -48,7 +48,21 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const onCalendar = pathname === "/calendar" || pathname.startsWith("/calendar/");
+  const activeCat = (searchParams.get("cat") ?? "all") as CatFilter;
+
+  // Keep the current month (y/m) when switching the item filter.
+  const filterHref = (cat: CatFilter) => {
+    const p = new URLSearchParams();
+    const y = searchParams.get("y");
+    const m = searchParams.get("m");
+    if (y) p.set("y", y);
+    if (m) p.set("m", m);
+    if (cat !== "all") p.set("cat", cat);
+    const qs = p.toString();
+    return qs ? `/calendar?${qs}` : "/calendar";
+  };
 
   async function signOut() {
     await createClient().auth.signOut();
@@ -94,17 +108,27 @@ export function Sidebar({
           <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
             Filter by item
           </div>
-          <div className="mt-3 flex flex-col gap-2.5">
-            {calFilters.map((f) => (
-              <div key={f.label} className="flex items-center gap-2.5">
-                <span className={`h-2.5 w-2.5 rounded-full ${f.dot}`} />
-                <span
-                  className={`text-[14px] ${f.active ? "font-extrabold text-ink" : "font-semibold text-ink-soft"}`}
+          <div className="mt-2 flex flex-col gap-0.5">
+            {calFilters.map((f) => {
+              const active = activeCat === f.cat;
+              return (
+                <Link
+                  key={f.cat}
+                  href={filterHref(f.cat)}
+                  aria-current={active ? "true" : undefined}
+                  className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors ${
+                    active ? "bg-brand-tint" : "hover:bg-sand/60"
+                  }`}
                 >
-                  {f.label}
-                </span>
-              </div>
-            ))}
+                  <span className={`h-2.5 w-2.5 rounded-full ${f.dot}`} />
+                  <span
+                    className={`text-[14px] ${active ? "font-extrabold text-brand-deep" : "font-semibold text-ink-soft"}`}
+                  >
+                    {f.label}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         </div>
       ) : null}
