@@ -20,6 +20,7 @@ import {
   type CalEvent,
   type CalendarData,
   type ItemCategory,
+  type SelectedBooking,
   type SelectedDayDetail,
 } from "@/lib/operator/calendar";
 
@@ -313,82 +314,78 @@ function DetailPanel({ detail }: { detail: SelectedDayDetail | null }) {
         <p className="mt-0.5 text-sm font-medium text-ink-mute">{d.summary}</p>
       </div>
 
-      {d.booking ? (
-        <div className="border-t border-sand pt-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-            Selected booking
-          </div>
-          <div className="mt-3 rounded-2xl bg-brand-tint/50 p-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white text-brand">
-                <CastleTurret size={22} weight="fill" />
-              </span>
-              <div className="min-w-0">
-                <div className="font-bold text-ink">{d.booking.customer}</div>
-                <div className="text-xs font-semibold text-ink-mute">{d.booking.bookingNo}</div>
-              </div>
-            </div>
-            <div className="mt-3 text-[15px] font-bold text-ink">{d.booking.item}</div>
-            <div className="text-[13px] font-medium text-ink-mute">
-              {d.booking.price} · {d.booking.location}
-            </div>
-            <div className="mt-3 flex gap-2.5">
-              <TimeBox label="Deliver" value={d.booking.deliver} />
-              <TimeBox label="Pick up" value={d.booking.pickup} />
-            </div>
+      {d.bookings.length === 0 ? (
+        <p className="border-t border-sand pt-4 text-sm font-medium text-ink-mute">
+          Nothing scheduled this day.
+        </p>
+      ) : (
+        d.bookings.map((b, i) => (
+          <BookingCard key={b.id} booking={b} label={d.bookings.length > 1 ? `Booking ${i + 1} of ${d.bookings.length}` : "Booking"} />
+        ))
+      )}
+    </div>
+  );
+}
+
+function BookingCard({ booking, label }: { booking: SelectedBooking; label: string }) {
+  const b = booking;
+  return (
+    <div className="border-t border-sand pt-4">
+      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">{label}</div>
+      <div className="mt-3 rounded-2xl bg-brand-tint/50 p-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white text-brand">
+            <CastleTurret size={22} weight="fill" />
+          </span>
+          <div className="min-w-0">
+            <div className="font-bold text-ink">{b.customer}</div>
+            <div className="text-xs font-semibold text-ink-mute">{b.bookingNo}</div>
           </div>
         </div>
-      ) : null}
 
-      {d.contract ? (
+        {/* All line items on this booking. */}
+        <ul className="mt-3 flex flex-col gap-2">
+          {b.lineItems.map((li, i) => (
+            <li key={i} className="flex items-start justify-between gap-3">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${CAT_BG[li.category]}`} />
+                <span className="text-[15px] font-bold text-ink">
+                  {li.name}
+                  {li.qty > 1 ? <span className="text-ink-mute"> ×{li.qty}</span> : null}
+                </span>
+              </span>
+              <span className="flex-shrink-0 text-[13px] font-medium text-ink-mute">{li.price}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-2 text-[13px] font-medium text-ink-mute">{b.location}</div>
+
+        <div className="mt-3 flex gap-2.5">
+          <TimeBox label="Deliver" value={b.deliver} />
+          <TimeBox label="Pick up" value={b.pickup} />
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-col gap-3">
         <StatusRow
           icon={<SealCheck size={22} weight="fill" className="text-teal" />}
-          label={d.contract.label}
-          detail={d.contract.detail}
+          label={b.contract.label}
+          detail={b.contract.detail}
           cls="border-teal-line bg-teal-tint"
         />
-      ) : null}
-      {d.balance ? (
         <StatusRow
           icon={<ClockCountdown size={22} weight="fill" className="text-amber-deep" />}
-          label={d.balance.label}
-          detail={d.balance.detail}
+          label={b.balance.label}
+          detail={b.balance.detail}
           cls="border-amber-line bg-amber-tint"
         />
-      ) : null}
-
-      {d.booking ? (
         <Link
-          href={`/bookings/${d.booking.id}`}
+          href={`/bookings/${b.id}`}
           className="flex items-center justify-center gap-2 rounded-full bg-brand px-5 py-3.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep"
         >
           <ArrowSquareOut size={16} weight="bold" /> Open booking
         </Link>
-      ) : null}
-
-      {d.alsoOut.length > 0 ? (
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-            Also out this day
-          </div>
-          <ul className="mt-3 flex flex-col gap-1">
-            {d.alsoOut.map((a, i) => (
-              <li key={i}>
-                <Link
-                  href={`/bookings/${a.bookingId}`}
-                  className="-mx-2 flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-sand/50"
-                >
-                  <span className="flex items-center gap-2.5">
-                    <span className="h-2 w-2 rounded-full bg-brand" />
-                    <span className="text-sm font-bold text-ink">{a.item}</span>
-                  </span>
-                  <span className="text-sm font-medium text-ink-mute">{a.time}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      </div>
     </div>
   );
 }

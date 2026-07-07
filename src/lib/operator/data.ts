@@ -5,6 +5,7 @@ import type {
   CalendarData,
   CatFilter,
   ItemCategory,
+  SelectedBooking,
   SelectedDayDetail,
 } from "./calendar";
 import type { InquiryListItem, InquiryDetail } from "./inquiries";
@@ -179,48 +180,44 @@ function buildDayDetail(
 ): SelectedDayDetail {
   const dateLabel = `${WEEKDAY[dt.getUTCDay()]}, ${MONTHS[dt.getUTCMonth()].slice(0, 3)} ${dt.getUTCDate()}`;
 
-  if (dayBookings.length === 0) {
-    return { iso, dateLabel, fullyBooked, summary: "No bookings", booking: null, contract: null, balance: null, alsoOut: [] };
-  }
+  // Contracted bookings (contract on file) first, otherwise stable order.
+  const ordered = [...dayBookings].sort((a, b) => Number(b.status === "contracted") - Number(a.status === "contracted"));
 
-  // Primary booking: prefer a contracted one (contract on file), else the first.
-  const primary = dayBookings.find((b) => b.status === "contracted") ?? dayBookings[0];
-  const pItem = primary.booking_items?.[0];
-  const contractSigned = ["contracted", "confirmed", "completed"].includes(primary.status);
-  const balanceDue = primary.subtotal - (primary.deposit ?? 0);
+  const bookings: SelectedBooking[] = ordered.map((b) => {
+    const contractSigned = ["contracted", "confirmed", "completed"].includes(b.status);
+    const balanceDue = b.subtotal - (b.deposit ?? 0);
+    return {
+      id: b.id,
+      customer: b.customer_name ?? "Customer",
+      bookingNo: `Booking #${b.id.slice(0, 4).toUpperCase()}`,
+      lineItems: (b.booking_items ?? []).map((li) => ({
+        name: li.items?.name ?? "Item",
+        qty: li.quantity,
+        price: `${money(li.unit_price)} / day`,
+        category: toCategory(li.items?.category ?? null),
+      })),
+      location: "Plymouth, MA",
+      deliver: b.delivery_window ?? "—",
+      pickup: "5:00 PM",
+      contract: contractSigned
+        ? { label: "Contract signed", detail: `${b.customer_name ?? "Customer"} · e-signed` }
+        : { label: "Contract pending", detail: "Awaiting signature" },
+      balance:
+        balanceDue > 0
+          ? { label: "Balance due on delivery", detail: `${money(b.deposit ?? 0)} paid · ${money(balanceDue)} balance` }
+          : { label: "Paid in full", detail: money(b.subtotal) },
+    };
+  });
 
   return {
     iso,
     dateLabel,
     fullyBooked,
-    summary: `${dayBookings.length} booking${dayBookings.length === 1 ? "" : "s"} out${fullyBooked ? " · all inventory reserved" : ""}`,
-    booking: {
-      customer: primary.customer_name ?? "Customer",
-      id: primary.id,
-      bookingNo: `Booking #${primary.id.slice(0, 4).toUpperCase()}`,
-      item: pItem?.items?.name ?? "—",
-      price: pItem ? `${money(pItem.unit_price)} / day` : "—",
-      location: "Plymouth, MA",
-      deliver: primary.delivery_window ?? "—",
-      pickup: "5:00 PM",
-    },
-    contract: contractSigned
-      ? { label: "Contract signed", detail: `${primary.customer_name ?? "Customer"} · e-signed` }
-      : { label: "Contract pending", detail: "Awaiting signature" },
-    balance:
-      balanceDue > 0
-        ? {
-            label: "Balance due on delivery",
-            detail: `${money(primary.deposit ?? 0)} paid · ${money(balanceDue)} balance`,
-          }
-        : { label: "Paid in full", detail: money(primary.subtotal) },
-    alsoOut: dayBookings
-      .filter((b) => b.id !== primary.id)
-      .map((b) => ({
-        item: shortLabel(b.booking_items?.[0]?.items?.name ?? "Booking", b.booking_items?.[0]?.quantity ?? 1),
-        time: b.delivery_window ?? "—",
-        bookingId: b.id,
-      })),
+    summary:
+      dayBookings.length === 0
+        ? "No bookings"
+        : `${dayBookings.length} booking${dayBookings.length === 1 ? "" : "s"} out${fullyBooked ? " · all inventory reserved" : ""}`,
+    bookings,
   };
 }
 

@@ -7,15 +7,23 @@ export interface CalEvent {
   bookingId: string;
 }
 
+export interface SelectedLineItem {
+  name: string;
+  qty: number;
+  price: string;
+  category: ItemCategory;
+}
+
 export interface SelectedBooking {
   id: string;
   customer: string;
   bookingNo: string;
-  item: string;
-  price: string;
+  lineItems: SelectedLineItem[];
   location: string;
   deliver: string;
   pickup: string;
+  contract: { label: string; detail: string };
+  balance: { label: string; detail: string };
 }
 
 export interface SelectedDayDetail {
@@ -23,10 +31,7 @@ export interface SelectedDayDetail {
   dateLabel: string;
   fullyBooked: boolean;
   summary: string;
-  booking: SelectedBooking | null;
-  contract: { label: string; detail: string } | null;
-  balance: { label: string; detail: string } | null;
-  alsoOut: { item: string; time: string; bookingId: string }[];
+  bookings: SelectedBooking[];
 }
 
 /** One grid cell — a real day (padding/adjacent-month days carry `inMonth: false`). */
