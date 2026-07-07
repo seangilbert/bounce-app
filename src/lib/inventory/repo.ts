@@ -160,6 +160,7 @@ export interface ItemPatch {
   basePrice?: number;
   priceUnit?: PriceUnit;
   powerRequired?: boolean;
+  images?: string[];
   active?: boolean;
 }
 
@@ -174,6 +175,7 @@ export async function updateItem(operatorId: string, id: string, patch: ItemPatc
   if (patch.basePrice !== undefined) row.base_price = patch.basePrice;
   if (patch.priceUnit !== undefined) row.price_unit = patch.priceUnit;
   if (patch.powerRequired !== undefined) row.power_required = patch.powerRequired;
+  if (patch.images !== undefined) row.images = patch.images;
   if (patch.active !== undefined) row.active = patch.active;
 
   const { data, error } = await supabase

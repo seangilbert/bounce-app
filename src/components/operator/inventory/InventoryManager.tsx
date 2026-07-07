@@ -12,6 +12,8 @@ import {
   CircleNotch,
   Trash,
   Lightning,
+  ImageSquare,
+  Star,
 } from "@phosphor-icons/react/dist/ssr";
 import type { Item } from "@/lib/inventory/types";
 import { createItemAction, updateItemAction, deleteItemAction } from "@/app/(operator)/inventory/actions";
@@ -36,6 +38,7 @@ interface DraftForm {
   priceUnit: "per_day" | "per_hour" | "flat";
   description: string;
   powerRequired: boolean;
+  images: string[]; // public URLs; images[0] is the primary
   active: boolean;
 }
 
@@ -47,6 +50,7 @@ const emptyDraft: DraftForm = {
   priceUnit: "per_day",
   description: "",
   powerRequired: false,
+  images: [],
   active: true,
 };
 
@@ -59,8 +63,35 @@ function itemToDraft(i: Item): DraftForm {
     priceUnit: i.priceUnit,
     description: i.description ?? "",
     powerRequired: i.powerRequired,
+    images: i.images ?? [],
     active: i.active,
   };
+}
+
+/** Downscale + re-encode a picked image so uploads stay small (~a few hundred KB). */
+async function resizeImage(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
+  const dataUrl: string = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result as string);
+    r.onerror = () => rej(new Error("Could not read file."));
+    r.readAsDataURL(file);
+  });
+  const img: HTMLImageElement = await new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error("Could not load image."));
+    im.src = dataUrl;
+  });
+  const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+  return new Promise((res, rej) =>
+    canvas.toBlob((b) => (b ? res(b) : rej(new Error("Could not encode image."))), "image/jpeg", quality),
+  );
 }
 
 export function InventoryManager({ items }: { items: Item[] }) {
@@ -120,8 +151,15 @@ export function InventoryManager({ items }: { items: Item[] }) {
                   onClick={() => setEditing(item)}
                   className="flex items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 text-left transition-colors hover:border-sand"
                 >
-                  <span className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl ${m.tint}`}>
-                    <m.Icon size={24} weight="fill" className={m.ink} />
+                  <span
+                    className={`flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl ${item.images?.[0] ? "" : m.tint}`}
+                  >
+                    {item.images?.[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.images[0]} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <m.Icon size={24} weight="fill" className={m.ink} />
+                    )}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -173,12 +211,41 @@ function ItemDrawer({
   const [draft, setDraft] = useState<DraftForm>(item ? itemToDraft(item) : emptyDraft);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const set = <K extends keyof DraftForm>(k: K, v: DraftForm[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const priceCents = Math.round(parseFloat(draft.price || "0") * 100);
   const qty = parseInt(draft.quantity || "0", 10);
   const valid = draft.name.trim() && priceCents >= 0 && Number.isFinite(priceCents) && qty >= 0;
+
+  async function addPhotos(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const uploaded: string[] = [];
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith("image/")) continue;
+        const blob = await resizeImage(file);
+        const fd = new FormData();
+        fd.append("file", new File([blob], "photo.jpg", { type: "image/jpeg" }));
+        const res = await fetch("/api/inventory/photo", { method: "POST", body: fd });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Upload failed.");
+        uploaded.push(json.url as string);
+      }
+      if (uploaded.length) setDraft((d) => ({ ...d, images: [...d.images, ...uploaded] }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const removePhoto = (url: string) => setDraft((d) => ({ ...d, images: d.images.filter((u) => u !== url) }));
+  const makePrimary = (url: string) =>
+    setDraft((d) => ({ ...d, images: [url, ...d.images.filter((u) => u !== url)] }));
 
   async function save() {
     setSubmitting(true);
@@ -191,6 +258,7 @@ function ItemDrawer({
       basePrice: priceCents,
       priceUnit: draft.priceUnit,
       powerRequired: draft.powerRequired,
+      images: draft.images,
       active: draft.active,
     };
     const res = item ? await updateItemAction(item.id, payload) : await createItemAction(payload);
@@ -303,6 +371,68 @@ function ItemDrawer({
               placeholder="A colorful 15×15 castle, big enough for a dozen kids."
               className="input resize-none"
             />
+          </Field>
+
+          <Field label="Photos">
+            <div className="flex flex-wrap gap-2">
+              {draft.images.map((url, i) => (
+                <div
+                  key={url}
+                  className="group relative h-20 w-20 overflow-hidden rounded-xl border border-sand-line bg-white"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  {i === 0 ? (
+                    <span className="absolute left-1 top-1 rounded bg-brand px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide text-white">
+                      PRIMARY
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => makePrimary(url)}
+                      title="Make primary"
+                      className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-ink/70 py-0.5 text-[9px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <Star size={9} weight="fill" /> Primary
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(url)}
+                    aria-label="Remove photo"
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink/70 text-white transition-colors hover:bg-coral"
+                  >
+                    <X size={11} weight="bold" />
+                  </button>
+                </div>
+              ))}
+              <label
+                className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-sand text-ink-mute transition-colors hover:border-brand hover:text-brand ${uploading ? "pointer-events-none opacity-60" : ""}`}
+              >
+                {uploading ? (
+                  <CircleNotch size={18} weight="bold" className="animate-spin" />
+                ) : (
+                  <>
+                    <ImageSquare size={18} />
+                    <span className="text-[10px] font-bold">Add</span>
+                  </>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    addPhotos(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            <p className="mt-1 text-[12px] font-medium text-ink-mute">
+              The first photo is the primary shown on your storefront.
+            </p>
           </Field>
 
           <div className="space-y-2.5">

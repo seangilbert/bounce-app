@@ -36,6 +36,7 @@ interface ApiItem {
   category: string | null;
   basePrice: number;
   priceUnit: string;
+  images?: string[];
   availability?: { owned: number; reserved: number; available: number };
 }
 interface ApiResponse {
@@ -910,8 +911,13 @@ function ItemCard({
 
   return (
     <div className="flex flex-col overflow-hidden rounded-2xl border border-sand-line bg-white">
-      <div className={`flex h-40 items-center justify-center ${meta.tint}`}>
-        <meta.Icon size={56} weight="fill" className={meta.ink} />
+      <div className={`flex h-40 items-center justify-center ${item.images?.[0] ? "" : meta.tint}`}>
+        {item.images?.[0] ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.images[0]} alt={item.name} loading="lazy" className="h-full w-full object-cover" />
+        ) : (
+          <meta.Icon size={56} weight="fill" className={meta.ink} />
+        )}
       </div>
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-start justify-between gap-2">
