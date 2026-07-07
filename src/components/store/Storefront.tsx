@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   Confetti,
   CastleTurret,
@@ -16,11 +17,15 @@ import {
   ShieldCheck,
   Truck,
   Sparkle,
+  Heart,
   PaperPlaneTilt,
 } from "@phosphor-icons/react/dist/ssr";
+import type { Icon } from "@phosphor-icons/react";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
 import { priceBreakdown } from "@/lib/inventory/pricing";
 import { brandVars } from "@/lib/branding/palette";
+import { StoreSidebar } from "./StoreSidebar";
+import { StoreBottomNav } from "./StoreBottomNav";
 
 type Category = "bounce" | "tent" | "tables" | "other";
 
@@ -118,12 +123,16 @@ function rangeLabel(start: string, end: string): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-export function Storefront({
+export function StoreShell({
   operatorId,
+  slug,
   brandColor,
+  operatorName,
 }: {
   operatorId?: string;
+  slug: string;
   brandColor?: string | null;
+  operatorName?: string;
 }) {
   const opParam = operatorId ? `&operator=${operatorId}` : "";
   const [date, setDate] = useState(nextSaturday);
@@ -221,169 +230,185 @@ export function Storefront({
   const cartCount = cartLines.reduce((s, l) => s + l.qty, 0);
   const subtotal = cartLines.reduce((s, l) => s + lineTotalOf(l.item, l.qty, days), 0);
 
+  const base = `/s/${slug}`;
+  const pathname = usePathname();
+  const view = pathname.startsWith(`${base}/inventory`)
+    ? "inventory"
+    : pathname.startsWith(`${base}/saved`)
+      ? "saved"
+      : pathname.startsWith(`${base}/inspiration`)
+        ? "inspiration"
+        : "chat";
+
+  const opName = operatorName ?? data?.operator?.name ?? "Bounce USA";
+  const range = rangeLabel(date, endDate);
+
+  // Catalog header (title + date range) — shared by the Chat and Inventory views.
+  const catalogHeader = (
+    <div className="flex flex-shrink-0 flex-wrap items-end justify-between gap-3 px-5 pb-4 pt-6 lg:px-8 lg:pt-7">
+      <div>
+        <h2 className="font-display text-2xl font-bold text-ink">Browse the catalog</h2>
+        <p className="mt-0.5 text-sm font-medium text-ink-mute">
+          Available {range}
+          {days > 1 ? ` · ${days}-day rental` : ""}
+        </p>
+      </div>
+      <DateRange date={date} endDate={endDate} changeStart={changeStart} setEndDate={setEndDate} />
+    </div>
+  );
+
+  const inventoryScroller = (
+    <div className="flex-1 overflow-y-auto px-5 pb-8 lg:min-h-0 lg:px-8">
+      <InventoryGrid items={items} loading={loading} cart={cart} setQty={setQty} />
+    </div>
+  );
+
+  const cartBar =
+    cartCount > 0 ? (
+      <CartBar subtotal={subtotal} cartCount={cartCount} range={range} onReview={() => setCheckoutOpen(true)} />
+    ) : null;
+
   return (
-    <div className="min-h-dvh bg-cream pb-28" style={brandVars(brandColor)}>
-      {/* Header */}
-      <header className="border-b border-sand bg-cream/90 px-5 py-4 backdrop-blur lg:px-10">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand text-white">
-              <Confetti size={20} weight="fill" />
+    <div
+      className={`flex min-h-dvh w-full bg-cream ${cartCount > 0 ? "pb-36" : "pb-20"} lg:h-dvh lg:overflow-hidden lg:pb-0`}
+      style={brandVars(brandColor)}
+    >
+      <StoreSidebar base={base} operatorName={opName} phone="(508) 555-1234" />
+
+      <div className="flex min-w-0 flex-1 flex-col lg:h-dvh lg:min-h-0">
+        {/* Mobile-only top bar — the rail carries the brand on desktop. */}
+        <header className="flex flex-shrink-0 items-center justify-between border-b border-sand bg-cream/90 px-5 py-3.5 backdrop-blur lg:hidden">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-white">
+              <Confetti size={18} weight="fill" />
             </span>
-            <div>
-              <div className="font-display text-lg font-extrabold tracking-tight text-ink">
-                {data?.operator?.name ?? "Bounce USA"}
-              </div>
-              <div className="text-xs font-semibold text-ink-mute">Party &amp; event rentals</div>
-            </div>
+            <span className="font-display text-base font-extrabold tracking-tight text-ink">
+              {opName}
+            </span>
           </div>
           <a
             href="tel:+15085551234"
-            className="rounded-full border border-sand bg-white px-4 py-2 text-sm font-bold text-ink-soft"
+            className="rounded-full border border-sand bg-white px-3.5 py-1.5 text-sm font-bold text-ink-soft"
           >
             (508) 555-1234
           </a>
-        </div>
-      </header>
+        </header>
 
-      {/* Hero + AI Instant Quote */}
-      <section className="px-5 pt-10 lg:px-10">
-        <div className="mx-auto max-w-6xl">
-          <h1 className="max-w-2xl font-display text-4xl font-bold leading-[1.05] tracking-tight text-ink lg:text-5xl">
-            Bouncy fun, delivered to your party.
-          </h1>
-          <p className="mt-3 max-w-xl text-base font-medium text-ink-soft">
-            Tell us about your event for an instant quote — or browse below. Delivery, setup &amp;
-            pickup always included.
-          </p>
-
-          <div className="mt-6 max-w-2xl rounded-[24px] border border-brand-ring bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2">
-              <Sparkle size={18} weight="fill" className="text-brand" />
-              <span className="text-sm font-extrabold text-ink">Instant quote</span>
-              <span className="text-xs font-semibold text-ink-mute">· answers in seconds, 24/7</span>
-            </div>
-
-            <div className="mt-4 flex max-h-[22rem] flex-col gap-3 overflow-y-auto">
-              <ChatBubble role="assistant">
-                Hi! Tell me about your event — what are you thinking, and when? I&apos;ll pull
-                together a quote.
-              </ChatBubble>
-              {chat.map((m, i) => (
-                <ChatBubble key={i} role={m.role}>
-                  {m.content}
-                </ChatBubble>
-              ))}
-              {chatQuote ? (
-                <ChatQuoteCard quote={chatQuote} date={chatDate} onBook={bookChatQuote} />
-              ) : null}
-              {chatLoading ? (
-                <ChatBubble role="assistant">
-                  <TypingDots />
-                </ChatBubble>
-              ) : null}
-              {chatError ? (
-                <div className="rounded-xl bg-coral-tint px-4 py-2.5 text-sm font-semibold text-coral-deep">
-                  {chatError}
+        <main className="flex flex-1 flex-col lg:min-h-0 lg:overflow-hidden">
+          {view === "chat" ? (
+            /* Chat = AI agent (left) + full inventory (right). Desktop locks each
+               column to its own scroll; mobile stacks agent-on-top, page scrolls. */
+            <div className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
+              {/* LEFT — AI agent. White surface so the cream chat bubbles read. */}
+              <section className="flex flex-col border-b border-sand bg-white lg:w-1/3 lg:min-h-0 lg:border-b-0 lg:border-r">
+                <div className="flex-shrink-0 px-5 pt-6 lg:px-7 lg:pt-7">
+                  <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-ink lg:text-[28px]">
+                    Bouncy fun, delivered to your party.
+                  </h1>
+                  <p className="mt-2 text-sm font-medium text-ink-soft">
+                    Tell me about your event for an instant quote — or browse the full lineup.
+                    Delivery, setup &amp; pickup always included.
+                  </p>
+                  <div className="mt-4 flex items-center gap-2">
+                    <Sparkle size={16} weight="fill" className="text-brand" />
+                    <span className="text-sm font-extrabold text-ink">Instant quote</span>
+                    <span className="text-xs font-semibold text-ink-mute">· answers in seconds, 24/7</span>
+                  </div>
                 </div>
-              ) : null}
-            </div>
 
-            <div className="mt-3 flex items-center gap-2 rounded-xl border border-sand bg-cream px-2 py-1.5">
-              <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    sendChat();
-                  }
-                }}
-                placeholder="e.g. A bounce house for my 5-year-old's birthday"
-                className="min-w-0 flex-1 bg-transparent px-2 text-sm font-medium text-ink outline-none placeholder:text-ink-faint"
-              />
-              <button
-                onClick={sendChat}
-                disabled={!chatInput.trim() || chatLoading}
-                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-colors hover:bg-brand-deep disabled:bg-sand disabled:text-ink-mute"
-                aria-label="Send"
-              >
-                {chatLoading ? (
-                  <CircleNotch size={16} weight="bold" className="animate-spin" />
-                ) : (
-                  <PaperPlaneTilt size={16} weight="fill" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
+                {/* Transcript — capped + scrolls on mobile, fills the column on desktop. */}
+                <div className="mt-4 flex max-h-[24rem] flex-1 flex-col gap-3 overflow-y-auto px-5 lg:max-h-none lg:min-h-0 lg:px-7">
+                  <ChatBubble role="assistant">
+                    Hi! Tell me about your event — what are you thinking, and when? I&apos;ll pull
+                    together a quote.
+                  </ChatBubble>
+                  {chat.map((m, i) => (
+                    <ChatBubble key={i} role={m.role}>
+                      {m.content}
+                    </ChatBubble>
+                  ))}
+                  {chatQuote ? (
+                    <ChatQuoteCard quote={chatQuote} date={chatDate} onBook={bookChatQuote} />
+                  ) : null}
+                  {chatLoading ? (
+                    <ChatBubble role="assistant">
+                      <TypingDots />
+                    </ChatBubble>
+                  ) : null}
+                  {chatError ? (
+                    <div className="rounded-xl bg-coral-tint px-4 py-2.5 text-sm font-semibold text-coral-deep">
+                      {chatError}
+                    </div>
+                  ) : null}
+                </div>
 
-      {/* Catalog */}
-      <section className="px-5 pt-10 lg:px-10">
-        <div className="mx-auto max-w-6xl">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="font-display text-2xl font-bold text-ink">Browse the catalog</h2>
-              <p className="mt-0.5 text-sm font-medium text-ink-mute">
-                Available {rangeLabel(date, endDate)}
-                {days > 1 ? ` · ${days}-day rental` : ""}
-              </p>
+                {/* Input — pinned to the bottom of the column. */}
+                <div className="flex-shrink-0 px-5 py-4 lg:px-7">
+                  <div className="flex items-center gap-2 rounded-xl border border-sand bg-cream px-2 py-1.5">
+                    <input
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          sendChat();
+                        }
+                      }}
+                      placeholder="e.g. A bounce house for my 5-year-old's birthday"
+                      className="min-w-0 flex-1 bg-transparent px-2 text-sm font-medium text-ink outline-none placeholder:text-ink-faint"
+                    />
+                    <button
+                      onClick={sendChat}
+                      disabled={!chatInput.trim() || chatLoading}
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-colors hover:bg-brand-deep disabled:bg-sand disabled:text-ink-mute"
+                      aria-label="Send"
+                    >
+                      {chatLoading ? (
+                        <CircleNotch size={16} weight="bold" className="animate-spin" />
+                      ) : (
+                        <PaperPlaneTilt size={16} weight="fill" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              {/* RIGHT — full inventory. Header pinned, grid scrolls on desktop. */}
+              <section className="flex flex-1 flex-col bg-cream lg:min-h-0 lg:w-2/3">
+                {catalogHeader}
+                {inventoryScroller}
+              </section>
             </div>
-            <div className="flex items-center gap-2 rounded-xl border border-sand bg-white px-3 py-2">
-              <CalendarBlank size={18} weight="fill" className="text-brand" />
-              <input
-                type="date"
-                aria-label="Start date"
-                value={date}
-                min={new Date().toISOString().slice(0, 10)}
-                onChange={(e) => changeStart(e.target.value)}
-                className="bg-transparent text-sm font-bold text-ink outline-none"
-              />
-              <span className="text-ink-faint">→</span>
-              <input
-                type="date"
-                aria-label="End date"
-                value={endDate}
-                min={date}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-transparent text-sm font-bold text-ink outline-none"
-              />
-            </div>
-          </div>
-          {loading ? (
-            <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="h-72 animate-pulse rounded-2xl bg-sand/50" />
-              ))}
-            </div>
+          ) : view === "inventory" ? (
+            /* Inventory-only — the full catalog, edge to edge. */
+            <section className="flex flex-1 flex-col bg-cream lg:min-h-0">
+              {catalogHeader}
+              {inventoryScroller}
+            </section>
+          ) : view === "saved" ? (
+            <EmptyState
+              icon={Heart}
+              title="Nothing saved yet"
+              body="Save rentals you love and they'll show up here, ready to add to your next event."
+            />
           ) : (
-            <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {items.map((item) => (
-                <ItemCard key={item.id} item={item} qty={cart[item.id] ?? 0} onQty={(q) => setQty(item.id, q)} />
-              ))}
-            </div>
+            <EmptyState
+              icon={Sparkle}
+              title="Inspiration is on the way"
+              body="Party themes, crowd-favorite combos, and setup ideas — curated for your events. Check back soon."
+            />
           )}
-        </div>
-      </section>
+        </main>
 
-      {/* Cart bar */}
-      {cartCount > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-sand bg-white/95 px-5 py-3.5 backdrop-blur lg:px-10">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-            <div className="text-sm font-semibold text-ink-soft">
-              <span className="font-display text-lg font-extrabold text-ink">{money(subtotal)}</span>{" "}
-              · {cartCount} {cartCount === 1 ? "item" : "items"} · {rangeLabel(date, endDate)}
-            </div>
-            <button
-              onClick={() => setCheckoutOpen(true)}
-              className="flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep"
-            >
-              Review &amp; book <ArrowRight size={16} weight="bold" />
-            </button>
-          </div>
-        </div>
-      ) : null}
+        {/* Desktop cart bar — in-flow footer beneath the content column. */}
+        {cartBar ? <div className="hidden flex-shrink-0 lg:block">{cartBar}</div> : null}
+      </div>
+
+      {/* Mobile bottom stack — cart bar (when present) sits above the tab bar. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 lg:hidden">
+        {cartBar}
+        <StoreBottomNav base={base} />
+      </div>
 
       {checkoutOpen ? (
         <CheckoutDrawer
@@ -669,6 +694,110 @@ function Field({
         className="w-full rounded-xl border border-sand bg-white px-3.5 py-2.5 text-sm font-medium text-ink outline-none placeholder:text-ink-faint focus:border-brand"
       />
     </label>
+  );
+}
+
+function DateRange({
+  date,
+  endDate,
+  changeStart,
+  setEndDate,
+}: {
+  date: string;
+  endDate: string;
+  changeStart: (v: string) => void;
+  setEndDate: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-sand bg-white px-3 py-2">
+      <CalendarBlank size={18} weight="fill" className="text-brand" />
+      <input
+        type="date"
+        aria-label="Start date"
+        value={date}
+        min={new Date().toISOString().slice(0, 10)}
+        onChange={(e) => changeStart(e.target.value)}
+        className="bg-transparent text-sm font-bold text-ink outline-none"
+      />
+      <span className="text-ink-faint">→</span>
+      <input
+        type="date"
+        aria-label="End date"
+        value={endDate}
+        min={date}
+        onChange={(e) => setEndDate(e.target.value)}
+        className="bg-transparent text-sm font-bold text-ink outline-none"
+      />
+    </div>
+  );
+}
+
+function InventoryGrid({
+  items,
+  loading,
+  cart,
+  setQty,
+}: {
+  items: ApiItem[];
+  loading: boolean;
+  cart: Record<string, number>;
+  setQty: (id: string, q: number) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-72 animate-pulse rounded-2xl bg-sand/50" />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      {items.map((item) => (
+        <ItemCard key={item.id} item={item} qty={cart[item.id] ?? 0} onQty={(q) => setQty(item.id, q)} />
+      ))}
+    </div>
+  );
+}
+
+/** Centered placeholder for views without content yet (Saved, Inspiration). */
+function EmptyState({ icon: Icon, title, body }: { icon: Icon; title: string; body: string }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-6 py-20 text-center">
+      <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-tint text-brand">
+        <Icon size={30} weight="fill" />
+      </span>
+      <h2 className="font-display text-2xl font-bold text-ink">{title}</h2>
+      <p className="mt-2 max-w-sm text-sm font-medium text-ink-soft">{body}</p>
+    </div>
+  );
+}
+
+function CartBar({
+  subtotal,
+  cartCount,
+  range,
+  onReview,
+}: {
+  subtotal: number;
+  cartCount: number;
+  range: string;
+  onReview: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-t border-sand bg-white/95 px-5 py-3.5 backdrop-blur lg:px-8">
+      <div className="text-sm font-semibold text-ink-soft">
+        <span className="font-display text-lg font-extrabold text-ink">{money(subtotal)}</span> ·{" "}
+        {cartCount} {cartCount === 1 ? "item" : "items"} · {range}
+      </div>
+      <button
+        onClick={onReview}
+        className="flex flex-shrink-0 items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep"
+      >
+        Review &amp; book <ArrowRight size={16} weight="bold" />
+      </button>
+    </div>
   );
 }
 
