@@ -531,15 +531,16 @@ function CheckoutDrawer({
 
           <div className="rounded-2xl border border-sand-line bg-white p-4">
             {lines.map((l) => (
-              <div key={l.item.id} className="flex items-center justify-between py-1.5 text-sm">
-                <span className="font-semibold text-ink">
+              <div key={l.item.id} className="flex items-center gap-2.5 py-1.5 text-sm">
+                <QuoteThumb item={l.item} />
+                <span className="min-w-0 flex-1 font-semibold text-ink">
                   {l.qty > 1 ? `${l.qty}× ` : ""}
                   {l.item.name}
                   {days > 1 && l.item.priceUnit !== "flat" ? (
                     <span className="font-medium text-ink-mute"> · {days} days</span>
                   ) : null}
                 </span>
-                <span className="font-bold text-ink">{money(lineTotalOf(l.item, l.qty, days))}</span>
+                <span className="flex-shrink-0 font-bold text-ink">{money(lineTotalOf(l.item, l.qty, days))}</span>
               </div>
             ))}
             <div className="mt-2 space-y-1 border-t border-sand-line pt-2.5 text-sm">
