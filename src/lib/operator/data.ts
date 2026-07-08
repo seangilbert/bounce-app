@@ -163,7 +163,10 @@ export async function getCalendarData(
     });
   }
 
-  // Default selection: a day-of-the-month with bookings, else the 1st.
+  // Default selection: today when it's in the displayed month (the predictable
+  // anchor on open); otherwise a day-of-the-month with bookings, else the 1st.
+  const todayIso = operatorToday(tz);
+  const todayInMonth = days.find((d) => d.inMonth && d.iso === todayIso);
   const withBookings = days.find((d) => d.inMonth && d.events.length > 0);
   const firstOfMonth = days.find((d) => d.inMonth);
 
@@ -171,9 +174,9 @@ export async function getCalendarData(
     year,
     month,
     monthLabel: `${MONTHS[month - 1]} ${year}`,
-    todayIso: operatorToday(tz),
+    todayIso,
     days,
-    defaultSelectedIso: (withBookings ?? firstOfMonth)?.iso ?? null,
+    defaultSelectedIso: (todayInMonth ?? withBookings ?? firstOfMonth)?.iso ?? null,
     category,
   };
 }
