@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   SlidersHorizontal,
@@ -17,7 +17,7 @@ import {
   PaperPlaneTilt,
   CircleNotch,
 } from "@phosphor-icons/react/dist/ssr";
-import type { InquiryListItem, InquiryStatus, InquiryDetail } from "@/lib/operator/inquiries";
+import type { InquiryListItem, InquiryStatus, InquiryDetail, ThreadMsg } from "@/lib/operator/inquiries";
 import { replyInquiryAction, dismissInquiryAction } from "@/app/(operator)/inquiries/actions";
 
 interface InquiriesProps {
@@ -61,12 +61,18 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
   const [selectedId, setSelectedId] = useState(initial?.id ?? "");
   const [mobileDetail, setMobileDetail] = useState(false);
   const router = useRouter();
-  const replyRef = useRef<HTMLTextAreaElement>(null);
+  const [reply, setReply] = useState("");
   const [busy, setBusy] = useState<null | "send" | "dismiss">(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
 
   const selected = list.find((i) => i.id === selectedId) ?? list[0];
   const detail = selected ? details[selected.id] : undefined;
+
+  // On switching inquiries (or after a refresh), seed the composer with the AI
+  // draft if this inquiry still has an unsent one, else leave it empty.
+  useEffect(() => {
+    setReply(details[selectedId]?.aiDraft?.replyDraft ?? "");
+  }, [selectedId, details]);
 
   const open = (id: string) => {
     setSelectedId(id);
@@ -74,11 +80,12 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
   };
 
   async function sendReply() {
-    if (!selected) return;
+    if (!selected || !reply.trim()) return;
     setBusy("send");
     setActionErr(null);
-    const res = await replyInquiryAction(selected.id, replyRef.current?.value ?? "");
+    const res = await replyInquiryAction(selected.id, reply);
     if (res.ok) {
+      setReply("");
       router.refresh();
       setBusy(null);
     } else {
@@ -186,29 +193,30 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
             </div>
           ) : null}
 
+          {/* Conversation thread */}
           <div>
             <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
               Conversation
             </div>
-            <div className="mt-3 max-w-[85%]">
-              <div className="rounded-2xl rounded-tl-md border border-sand-line bg-white px-5 py-4 text-[15px] leading-relaxed text-ink">
-                {detail.message.text}
-              </div>
-              <div className="mt-1.5 text-xs font-medium text-ink-mute">{detail.message.meta}</div>
+            <div className="mt-3 flex flex-col gap-3">
+              {detail.thread.map((m) => (
+                <ThreadBubble key={m.id} msg={m} />
+              ))}
             </div>
           </div>
 
+          {/* AI suggestion (needs_review only) — its text pre-fills the composer. */}
           {detail.aiDraft ? (
             <div>
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-sm font-bold text-brand">
-                  <Sparkle size={16} weight="fill" /> AI drafted a reply
+                  <Sparkle size={16} weight="fill" /> AI suggested a reply
                 </span>
                 <span className="rounded-full bg-amber-tint px-2.5 py-1 text-[11px] font-extrabold text-amber-deep">
-                  NOT SENT YET
+                  IN YOUR COMPOSER
                 </span>
               </div>
-              <div className="ml-auto mt-2.5 max-w-[85%] rounded-2xl rounded-tr-md border border-brand-ring bg-brand-tint/50 p-4">
+              <div className="mt-2.5 rounded-2xl border border-brand-ring bg-brand-tint/50 p-4">
                 <div className="rounded-xl border border-sand-line bg-white p-4">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-bold text-ink">{detail.aiDraft.match.name}</span>
@@ -235,73 +243,88 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
                     </div>
                   </div>
                 </div>
-                <p className="mt-3 text-[15px] leading-relaxed text-ink">{detail.aiDraft.message}</p>
               </div>
             </div>
-          ) : (
-            <div className="flex items-center gap-3 rounded-2xl border border-teal-line bg-teal-tint px-4 py-4">
-              <CheckCircle size={22} weight="fill" className="flex-shrink-0 text-teal" />
-              <div>
-                <div className="text-[15px] font-bold text-ink">Auto-answered</div>
-                <p className="mt-0.5 text-sm font-medium text-ink-soft">{detail.handledNote}</p>
-              </div>
-            </div>
-          )}
+          ) : null}
         </div>
 
-        {/* Reply composer */}
-        {detail.aiDraft ? (
-          <div className="border-t border-sand px-5 py-4 lg:px-8 lg:py-5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-                Your reply
-              </span>
+        {/* Reply composer — always available (persistent conversation). */}
+        <div className="border-t border-sand px-5 py-4 lg:px-8 lg:py-5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+              Your reply
+            </span>
+            {detail.aiDraft ? (
               <span className="text-xs font-medium text-ink-mute">AI-drafted · edit anything</span>
-            </div>
-            <div className="mt-2 rounded-2xl border-2 border-brand bg-white p-4">
-              <textarea
-                key={selectedId}
-                ref={replyRef}
-                defaultValue={detail.aiDraft.replyDraft}
-                rows={2}
-                className="w-full resize-none bg-transparent text-[15px] leading-relaxed text-ink outline-none"
-              />
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-sand-line pt-3">
-                <div className="flex flex-wrap gap-2">
-                  <ComposerChip icon={CurrencyDollar}>Change quote</ComposerChip>
-                  <ComposerChip icon={CalendarBlank}>Offer date</ComposerChip>
-                  <ComposerChip icon={Paperclip}>Attach photo</ComposerChip>
-                </div>
-                <div className="flex gap-2.5">
-                  <button
-                    onClick={dismiss}
-                    disabled={busy !== null}
-                    className="flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2.5 text-sm font-bold text-ink-soft transition-colors hover:bg-sand disabled:opacity-50"
-                  >
-                    {busy === "dismiss" ? <CircleNotch size={15} weight="bold" className="animate-spin" /> : null}
-                    Dismiss
-                  </button>
-                  <button
-                    onClick={sendReply}
-                    disabled={busy !== null}
-                    className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
-                  >
-                    {busy === "send" ? (
-                      <CircleNotch size={16} weight="bold" className="animate-spin" />
-                    ) : (
-                      <PaperPlaneTilt size={16} weight="fill" />
-                    )}
-                    Send reply
-                  </button>
-                </div>
-              </div>
-              {actionErr ? (
-                <p className="mt-2 text-[13px] font-semibold text-coral-deep">{actionErr}</p>
-              ) : null}
-            </div>
+            ) : null}
           </div>
-        ) : null}
+          <div className="mt-2 rounded-2xl border-2 border-brand bg-white p-4">
+            <textarea
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              rows={2}
+              placeholder="Write a message to the customer…"
+              className="w-full resize-none bg-transparent text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-faint"
+            />
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-sand-line pt-3">
+              <div className="flex flex-wrap gap-2">
+                <ComposerChip icon={CurrencyDollar}>Change quote</ComposerChip>
+                <ComposerChip icon={CalendarBlank}>Offer date</ComposerChip>
+                <ComposerChip icon={Paperclip}>Attach photo</ComposerChip>
+              </div>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={dismiss}
+                  disabled={busy !== null}
+                  className="flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2.5 text-sm font-bold text-ink-soft transition-colors hover:bg-sand disabled:opacity-50"
+                >
+                  {busy === "dismiss" ? <CircleNotch size={15} weight="bold" className="animate-spin" /> : null}
+                  Dismiss
+                </button>
+                <button
+                  onClick={sendReply}
+                  disabled={busy !== null || !reply.trim()}
+                  className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
+                >
+                  {busy === "send" ? (
+                    <CircleNotch size={16} weight="bold" className="animate-spin" />
+                  ) : (
+                    <PaperPlaneTilt size={16} weight="fill" />
+                  )}
+                  Send
+                </button>
+              </div>
+            </div>
+            {actionErr ? (
+              <p className="mt-2 text-[13px] font-semibold text-coral-deep">{actionErr}</p>
+            ) : null}
+          </div>
+        </div>
       </section>
+    </div>
+  );
+}
+
+function ThreadBubble({ msg }: { msg: ThreadMsg }) {
+  const isCustomer = msg.sender === "customer";
+  const isAi = msg.sender === "ai";
+  return (
+    <div className={`max-w-[85%] ${isCustomer ? "self-start" : "ml-auto"}`}>
+      <div
+        className={`whitespace-pre-wrap px-5 py-3.5 text-[15px] leading-relaxed ${
+          isCustomer
+            ? "rounded-2xl rounded-tl-md border border-sand-line bg-white text-ink"
+            : isAi
+              ? "rounded-2xl rounded-tr-md border border-brand-ring bg-brand-tint/50 text-ink"
+              : "rounded-2xl rounded-tr-md bg-brand text-white"
+        }`}
+      >
+        {msg.body}
+      </div>
+      <div className={`mt-1 text-xs font-medium text-ink-mute ${isCustomer ? "" : "text-right"}`}>
+        {isAi ? "AI auto-answer · " : isCustomer ? "" : "You · "}
+        {msg.time}
+      </div>
     </div>
   );
 }

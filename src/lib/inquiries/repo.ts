@@ -36,6 +36,16 @@ export interface CreateInquiryInput {
   quote: InquiryQuote;
 }
 
+export type InquirySender = "customer" | "operator" | "ai";
+
+/** One message in an inquiry's conversation thread (see `inquiry_messages`). */
+export interface ThreadMessage {
+  id: string;
+  sender: InquirySender;
+  body: string;
+  createdAt: string;
+}
+
 /** A row from the `inquiries` table (snake_case, as stored). */
 export interface InquiryRow {
   id: string;
@@ -85,7 +95,58 @@ export async function createInquiry(input: CreateInquiryInput): Promise<{ id: st
     .select("id")
     .single();
   if (error) throw new Error(`createInquiry failed: ${error.message}`);
-  return { id: data.id as string };
+  const id = data.id as string;
+
+  // Seed the conversation thread: the customer's inbound message + (for an
+  // auto-answered inquiry) the AI's reply. A needs_review draft stays a
+  // suggestion, not a thread message, until the operator sends it.
+  const seed: { inquiry_id: string; sender: InquirySender; body: string }[] = [];
+  if (input.inboundMessage?.trim()) seed.push({ inquiry_id: id, sender: "customer", body: input.inboundMessage });
+  if (input.auto && input.aiSummary?.trim()) seed.push({ inquiry_id: id, sender: "ai", body: input.aiSummary });
+  if (seed.length) await supabase.from("inquiry_messages").insert(seed);
+
+  return { id };
+}
+
+/** Append a message to an inquiry's thread. */
+export async function appendInquiryMessage(
+  inquiryId: string,
+  sender: InquirySender,
+  body: string,
+): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("inquiry_messages")
+    .insert({ inquiry_id: inquiryId, sender, body });
+  if (error) throw new Error(`appendInquiryMessage failed: ${error.message}`);
+}
+
+/** Thread messages for a set of inquiries, oldest first, grouped by inquiry id. */
+export async function listMessagesByInquiry(
+  inquiryIds: string[],
+): Promise<Map<string, ThreadMessage[]>> {
+  const map = new Map<string, ThreadMessage[]>();
+  if (inquiryIds.length === 0) return map;
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("inquiry_messages")
+    .select("id, inquiry_id, sender, body, created_at")
+    .in("inquiry_id", inquiryIds)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`listMessagesByInquiry failed: ${error.message}`);
+  const rows = (data ?? []) as { id: string; inquiry_id: string; sender: InquirySender; body: string; created_at: string }[];
+  // Tiebreaker for same-timestamp messages (backfill seeded customer + AI at the
+  // inquiry's created_at): always show customer → ai → operator.
+  const rank: Record<InquirySender, number> = { customer: 0, ai: 1, operator: 2 };
+  rows.sort((a, b) =>
+    a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : rank[a.sender] - rank[b.sender],
+  );
+  for (const r of rows) {
+    const arr = map.get(r.inquiry_id) ?? [];
+    arr.push({ id: r.id, sender: r.sender, body: r.body, createdAt: r.created_at });
+    map.set(r.inquiry_id, arr);
+  }
+  return map;
 }
 
 /** Count of inquiries awaiting operator review (for the nav badge). */
@@ -116,13 +177,17 @@ export async function replyToInquiry(
     .select("customer_email, customer_name, inbound_message")
     .maybeSingle();
   if (error) throw new Error(`replyToInquiry failed: ${error.message}`);
-  return data
-    ? {
-        customerEmail: data.customer_email,
-        customerName: data.customer_name,
-        inboundMessage: data.inbound_message,
-      }
-    : null;
+  if (!data) return null; // not found / not this operator's — don't append a message
+
+  // Append to the thread (operator_reply above keeps the "last reply" for the
+  // inbox preview; the thread holds the full history).
+  await appendInquiryMessage(id, "operator", reply);
+
+  return {
+    customerEmail: data.customer_email,
+    customerName: data.customer_name,
+    inboundMessage: data.inbound_message,
+  };
 }
 
 /** Dismiss an inquiry so it drops out of the inbox (operator-scoped). */

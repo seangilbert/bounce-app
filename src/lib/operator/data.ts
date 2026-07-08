@@ -10,7 +10,7 @@ import type {
   SelectedDayDetail,
 } from "./calendar";
 import type { InquiryListItem, InquiryDetail } from "./inquiries";
-import { listInquiries, type InquiryRow } from "@/lib/inquiries/repo";
+import { listInquiries, listMessagesByInquiry, type InquiryRow, type ThreadMessage } from "@/lib/inquiries/repo";
 import { expireStaleCheckouts } from "@/lib/bookings/expire";
 import type { Stop } from "./mock";
 
@@ -276,26 +276,29 @@ function rowToListItem(r: InquiryRow): InquiryListItem {
   };
 }
 
-function rowToDetail(r: InquiryRow): InquiryDetail {
-  const message = { text: r.inbound_message, meta: `${relTime(r.created_at)} · via your ${r.channel}` };
+function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): InquiryDetail {
+  const source: ThreadMessage[] = msgs.length
+    ? msgs
+    : [{ id: `${r.id}-inbound`, sender: "customer", body: r.inbound_message, createdAt: r.created_at }];
+  const thread = source.map((m) => ({
+    id: m.id,
+    sender: m.sender,
+    body: m.body,
+    time: relTime(m.createdAt),
+  }));
+  const channelMeta = `${relTime(r.created_at)} · via your ${r.channel}`;
+
+  // The AI draft is a *suggestion* only while it's an unsent needs_review draft.
+  if (r.status !== "needs_review") {
+    return { channelMeta, thread };
+  }
+
   const q = r.quote;
-
-  if (r.status === "replied") {
-    return { message, handledNote: r.operator_reply ?? r.ai_summary ?? "Replied." };
-  }
-
-  if (r.status === "auto") {
-    const note = q?.lineItems.length
-      ? `${q.lineItems.map((l) => `${l.quantity > 1 ? `${l.quantity}× ` : ""}${l.name}`).join(", ")} · ${money(q.subtotal)} · auto-sent`
-      : r.ai_summary ?? "Auto-answered.";
-    return { message, handledNote: r.ai_summary ?? note };
-  }
-
-  // needs_review → show the AI's drafted reply for the operator to send/edit.
   const top = q?.lineItems[0];
   const draft = r.ai_summary ?? "I've flagged this for you — add a reply below.";
   return {
-    message,
+    channelMeta,
+    thread,
     whyBanner: friendlyWhy(r.escalation_reasons),
     aiDraft: {
       match: top
@@ -322,9 +325,10 @@ export async function getInquiries(operatorId: string): Promise<{
   details: Record<string, InquiryDetail>;
 }> {
   const rows = (await listInquiries(operatorId)).filter((r) => r.status !== "dismissed");
+  const msgMap = await listMessagesByInquiry(rows.map((r) => r.id));
   const list = rows.map(rowToListItem);
   const details: Record<string, InquiryDetail> = {};
-  for (const r of rows) details[r.id] = rowToDetail(r);
+  for (const r of rows) details[r.id] = rowToDetail(r, msgMap.get(r.id) ?? []);
   const needsYou = list.filter((l) => l.status === "needs_review").length;
   return { list, filters: { all: list.length, needsYou, auto: list.length - needsYou }, details };
 }

@@ -17,12 +17,19 @@ export interface AiDraft {
   replyDraft: string;
 }
 
+export interface ThreadMsg {
+  id: string;
+  sender: "customer" | "operator" | "ai";
+  body: string;
+  time: string;
+}
+
 export interface InquiryDetail {
   whyBanner?: string;
-  /** The customer's inbound message. */
-  message: { text: string; meta: string };
-  /** Present when the assistant escalated and drafted a reply for review. */
+  /** Where the inquiry came in, e.g. "via your website". */
+  channelMeta: string;
+  /** Full conversation, oldest first (customer + operator + AI auto-answers). */
+  thread: ThreadMsg[];
+  /** AI-suggested reply for a needs_review inquiry — pre-fills the composer. */
   aiDraft?: AiDraft;
-  /** Present for already auto-handled inquiries. */
-  handledNote?: string;
 }
