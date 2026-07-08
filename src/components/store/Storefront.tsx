@@ -482,6 +482,7 @@ function CheckoutDrawer({
           items: lines.map((l) => ({ itemId: l.item.id, quantity: l.qty })),
           customerName: form.name,
           customerEmail: form.email,
+          customerPhone: form.phone || undefined,
           deliveryAddress: form.address,
           deliveryZip: form.zip || undefined,
           operatorId,

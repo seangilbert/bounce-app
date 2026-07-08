@@ -17,6 +17,7 @@ interface BookingRow {
   end_date: string;
   customer_name: string | null;
   customer_email: string | null;
+  customer_phone: string | null;
   delivery_window: string | null;
   delivery_address: string | null;
   delivery_zip: string | null;
@@ -48,6 +49,7 @@ function rowToBooking(row: BookingRow, items: BookingLineItem[]): Booking {
     endDate: row.end_date,
     customerName: row.customer_name,
     customerEmail: row.customer_email,
+    customerPhone: row.customer_phone,
     deliveryWindow: row.delivery_window,
     deliveryAddress: row.delivery_address,
     deliveryZip: row.delivery_zip,
@@ -146,6 +148,7 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
       end_date: input.endDate,
       customer_name: input.customerName ?? null,
       customer_email: input.customerEmail ?? null,
+      customer_phone: input.customerPhone ?? null,
       delivery_window: input.deliveryWindow ?? null,
       delivery_address: input.deliveryAddress ?? null,
       delivery_zip: input.deliveryZip ?? null,

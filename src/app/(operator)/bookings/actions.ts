@@ -22,6 +22,7 @@ function revalidate(id: string) {
   revalidatePath(`/bookings/${id}`);
   revalidatePath("/calendar");
   revalidatePath("/dashboard");
+  revalidatePath("/deliveries");
 }
 
 export async function markDeliveredAction(id: string): Promise<ActionResult> {

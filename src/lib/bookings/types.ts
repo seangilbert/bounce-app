@@ -22,6 +22,7 @@ export interface NewBooking {
   items: BookingItemInput[];
   customerName?: string | null;
   customerEmail?: string | null;
+  customerPhone?: string | null;
   deliveryWindow?: string | null;
   deliveryAddress?: string | null;
   deliveryZip?: string | null;
@@ -47,6 +48,7 @@ export interface Booking {
   endDate: string;
   customerName: string | null;
   customerEmail: string | null;
+  customerPhone: string | null;
   deliveryWindow: string | null;
   deliveryAddress: string | null;
   deliveryZip: string | null;
