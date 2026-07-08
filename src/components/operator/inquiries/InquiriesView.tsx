@@ -24,11 +24,13 @@ import type {
   BookingOutcome,
 } from "@/lib/operator/inquiries";
 import { replyInquiryAction, dismissInquiryAction } from "@/app/(operator)/inquiries/actions";
+import { BookingBuilder } from "@/components/operator/bookings/BookingBuilder";
 
 interface InquiriesProps {
   list: InquiryListItem[];
   details: Record<string, InquiryDetail>;
   filters: { all: number; needsYou: number; auto: number };
+  operatorId: string;
 }
 
 const STATUS: Record<
@@ -61,11 +63,12 @@ const STATUS: Record<
   },
 };
 
-export function InquiriesView({ list, details, filters }: InquiriesProps) {
+export function InquiriesView({ list, details, filters, operatorId }: InquiriesProps) {
   const initial = list.find((i) => i.status === "needs_review") ?? list[0];
   const [selectedId, setSelectedId] = useState(initial?.id ?? "");
   const [mobileDetail, setMobileDetail] = useState(false);
   const [filter, setFilter] = useState<"all" | "needsYou" | "auto">("all");
+  const [builderOpen, setBuilderOpen] = useState(false);
   const router = useRouter();
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState<null | "send" | "dismiss">(null);
@@ -189,14 +192,25 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
               </div>
             </div>
           </div>
-          {detail.email ? (
-            <a
-              href={`mailto:${detail.email}`}
-              className="flex flex-shrink-0 items-center gap-2 rounded-full border border-sand bg-white px-4 py-2 text-sm font-bold text-brand transition-colors hover:bg-brand-tint"
+          <div className="flex flex-shrink-0 items-center gap-2.5">
+            <button
+              onClick={() => setBuilderOpen(true)}
+              className="flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-deep"
             >
-              <EnvelopeSimple size={16} weight="fill" /> Email
-            </a>
-          ) : null}
+              <CurrencyDollar size={16} weight="fill" />
+              <span className="hidden sm:inline">Create quote</span>
+              <span className="sm:hidden">Quote</span>
+            </button>
+            {detail.email ? (
+              <a
+                href={`mailto:${detail.email}`}
+                className="flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2 text-sm font-bold text-brand transition-colors hover:bg-brand-tint"
+              >
+                <EnvelopeSimple size={16} weight="fill" />
+                <span className="hidden sm:inline">Email</span>
+              </a>
+            ) : null}
+          </div>
         </div>
 
         {/* Body */}
@@ -334,6 +348,21 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
           </div>
         </div>
       </section>
+
+      {builderOpen ? (
+        <BookingBuilder
+          operatorId={operatorId}
+          initial={{
+            inquiryId: selected.id,
+            customerName: detail.prefill.customerName ?? undefined,
+            customerEmail: detail.prefill.customerEmail ?? undefined,
+            startDate: detail.prefill.startDate,
+            endDate: detail.prefill.endDate,
+            items: detail.prefill.items,
+          }}
+          onClose={() => setBuilderOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -10,5 +10,5 @@ export default async function InquiriesPage() {
     return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
   }
   const { list, details, filters } = await getInquiries(operator.id);
-  return <InquiriesView list={list} details={details} filters={filters} />;
+  return <InquiriesView list={list} details={details} filters={filters} operatorId={operator.id} />;
 }

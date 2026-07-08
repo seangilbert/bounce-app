@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   CaretLeft,
   CaretRight,
-  Plus,
   LockSimple,
   CastleTurret,
   SealCheck,
@@ -13,6 +12,7 @@ import {
   ArrowSquareOut,
   X,
 } from "@phosphor-icons/react/dist/ssr";
+import { NewBookingButton } from "@/components/operator/bookings/NewBookingButton";
 import {
   weekdays,
   calFilters,
@@ -32,7 +32,7 @@ const CAT_BG: Record<ItemCategory, string> = {
 
 const MONTH_CAP = 2; // pills shown per day in month view before "+N more"
 
-export function CalendarView({ data }: { data: CalendarData }) {
+export function CalendarView({ data, operatorId }: { data: CalendarData; operatorId: string }) {
   const [view, setView] = useState<"month" | "week">("month");
   const [selectedIso, setSelectedIso] = useState<string | null>(data.defaultSelectedIso);
 
@@ -100,15 +100,11 @@ export function CalendarView({ data }: { data: CalendarData }) {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              title="Coming soon"
-              className="flex cursor-not-allowed items-center gap-2 rounded-full bg-brand/60 px-5 py-2.5 text-sm font-bold text-white shadow-sm"
-            >
-              <Plus size={16} weight="bold" />
-              <span className="hidden sm:inline">New booking</span>
-              <span className="sm:hidden">New</span>
-            </button>
+            <NewBookingButton
+              operatorId={operatorId}
+              initialDate={active?.iso}
+              className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep"
+            />
           </div>
         </div>
 

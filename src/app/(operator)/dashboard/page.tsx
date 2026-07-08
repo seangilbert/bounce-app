@@ -17,6 +17,7 @@ import type { Operator } from "@/lib/inventory/types";
 import { getDashboard, type DashboardData } from "@/lib/operator/data";
 import { getWeatherAdvisory, type WeatherAdvisory } from "@/lib/operator/weather";
 import { ConnectBanner } from "@/components/operator/ConnectBanner";
+import { NewBookingButton } from "@/components/operator/bookings/NewBookingButton";
 // Reply-time + weekly deltas remain lightweight config (no historical series yet).
 import { aiSummary, weekStats } from "@/lib/operator/mock";
 import type { Stop } from "@/lib/operator/mock";
@@ -61,16 +62,7 @@ function DashboardBody({
               className="w-full min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
             />
           </div>
-          <button
-            type="button"
-            disabled
-            title="Operator-created bookings — coming soon"
-            className="flex flex-shrink-0 cursor-not-allowed items-center gap-2 rounded-full bg-brand/50 px-5 py-3 text-sm font-bold text-white shadow-sm"
-          >
-            <Plus size={16} weight="bold" />
-            <span className="hidden sm:inline">New booking</span>
-            <span className="sm:hidden">New</span>
-          </button>
+          <NewBookingButton operatorId={operator.id} />
         </div>
       </div>
 

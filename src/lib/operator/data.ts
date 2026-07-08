@@ -289,10 +289,17 @@ function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, 
   }));
   const channelMeta = `${relTime(r.created_at)} · via your ${r.channel}`;
   const email = r.customer_email;
+  const prefill = {
+    items: (r.quote?.lineItems ?? []).map((l) => ({ itemId: l.itemId, quantity: l.quantity })),
+    startDate: r.start_date,
+    endDate: r.end_date,
+    customerName: r.customer_name,
+    customerEmail: r.customer_email,
+  };
 
   // The AI draft is a *suggestion* only while it's an unsent needs_review draft.
   if (r.status !== "needs_review") {
-    return { channelMeta, email, thread };
+    return { channelMeta, email, prefill, thread };
   }
 
   const q = r.quote;
@@ -301,6 +308,7 @@ function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, 
   return {
     channelMeta,
     email,
+    prefill,
     thread,
     whyBanner: friendlyWhy(r.escalation_reasons),
     aiDraft: {

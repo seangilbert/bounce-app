@@ -79,6 +79,37 @@ export async function notifyBookingConfirmed(booking: Booking, operator: Operato
   });
 }
 
+/** A custom quote from the operator with a link for the customer to review + pay. */
+export async function notifyQuoteLink(booking: Booking, operator: Operator, payUrl: string, depositAmount: number) {
+  if (!booking.customerEmail) return;
+  const items = booking.items.map((li) => ({
+    label: `${li.quantity > 1 ? `${li.quantity}× ` : ""}${li.name}`,
+    value: money(li.lineTotal),
+  }));
+  const hasExtras = booking.deliveryFee > 0 || booking.taxAmount > 0;
+  const totals = [
+    ...(hasExtras ? [{ label: "Subtotal", value: money(booking.subtotal) }] : []),
+    ...(booking.deliveryFee > 0 ? [{ label: "Delivery", value: money(booking.deliveryFee) }] : []),
+    ...(booking.taxAmount > 0 ? [{ label: "Sales tax", value: money(booking.taxAmount) }] : []),
+    { label: "Total", value: money(booking.total), bold: true },
+    ...(depositAmount > 0 ? [{ label: "Deposit to reserve", value: money(depositAmount) }] : []),
+  ];
+  const body =
+    p(`Hi${booking.customerName ? ` ${esc(booking.customerName.split(/\s+/)[0]!)}` : ""} — here's your custom quote from ${esc(operator.name)}.`) +
+    `<div style="font-weight:700;font-size:14px;color:#3B7DF0;margin:14px 0 4px;">${esc(fmtRange(booking.startDate, booking.endDate))}</div>` +
+    lineTable(items) +
+    `<hr style="border:none;border-top:1px solid #F1E8DE;margin:8px 0;">` +
+    lineTable(totals) +
+    `<a href="${esc(payUrl)}" style="display:inline-block;margin-top:14px;background:#3B7DF0;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:999px;">Review &amp; reserve</a>` +
+    p(`<span style="color:#9A9186;font-size:13px;">Delivery, setup &amp; pickup included. This link holds nothing until you pay.</span>`);
+  await sendEmail({
+    to: booking.customerEmail,
+    subject: `Your quote from ${operator.name}`,
+    html: layout(operator.name, "Your custom quote", body),
+    replyTo: operator.contactEmail ?? undefined,
+  });
+}
+
 /** Alert to the operator that a booking was just paid. */
 export async function notifyOperatorNewBooking(booking: Booking, operator: Operator, amountPaid: number) {
   if (!operator.contactEmail) return;
