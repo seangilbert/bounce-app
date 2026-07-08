@@ -61,7 +61,12 @@ function DashboardBody({
               className="w-full min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
             />
           </div>
-          <button className="flex flex-shrink-0 items-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep">
+          <button
+            type="button"
+            disabled
+            title="Operator-created bookings — coming soon"
+            className="flex flex-shrink-0 cursor-not-allowed items-center gap-2 rounded-full bg-brand/50 px-5 py-3 text-sm font-bold text-white shadow-sm"
+          >
             <Plus size={16} weight="bold" />
             <span className="hidden sm:inline">New booking</span>
             <span className="sm:hidden">New</span>
@@ -164,11 +169,14 @@ function TodaysRoute({ stops }: { stops: Stop[] }) {
     <section className="rounded-[24px] border border-sand-line bg-white p-5 lg:rounded-[28px] lg:p-6">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-lg font-bold text-ink lg:text-xl">Today&apos;s route</h2>
-        <button className="flex items-center gap-1.5 text-sm font-bold text-brand">
-          <span className="hidden sm:inline">Open route map</span>
-          <span className="sm:hidden">Map</span>
+        <Link
+          href="/deliveries"
+          className="flex items-center gap-1.5 text-sm font-bold text-brand transition-colors hover:text-brand-deep"
+        >
+          <span className="hidden sm:inline">Open route</span>
+          <span className="sm:hidden">Route</span>
           <ArrowUpRight size={15} weight="bold" />
-        </button>
+        </Link>
       </div>
       {stops.length === 0 ? (
         <p className="py-6 text-sm font-medium text-ink-mute">No deliveries scheduled today.</p>
@@ -273,14 +281,6 @@ function WeatherCard({ weather }: { weather: WeatherAdvisory | null }) {
         <span className="text-base font-extrabold text-[#5C4B22]">{weather.headline}</span>
       </div>
       <p className="mt-2 text-[13.5px] font-medium leading-snug text-[#8A7A55]">{weather.detail}</p>
-      <div className="mt-4 flex gap-2.5">
-        <button className="flex-1 rounded-xl bg-amber px-4 py-3 text-sm font-extrabold text-white transition-colors hover:bg-amber-deep">
-          Draft heads-up
-        </button>
-        <button className="rounded-xl border border-amber-line bg-white px-4 py-3 text-sm font-bold text-ink-soft">
-          Dismiss
-        </button>
-      </div>
     </div>
   );
 }

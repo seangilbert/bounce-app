@@ -39,6 +39,8 @@ export interface InquiryDetail {
   whyBanner?: string;
   /** Whether this inquiry converted to a booking. */
   outcome: BookingOutcome;
+  /** Customer email, for the reply/contact action (null if not captured). */
+  email: string | null;
   /** Where the inquiry came in, e.g. "via your website". */
   channelMeta: string;
   /** Full conversation, oldest first (customer + operator + AI auto-answers). */

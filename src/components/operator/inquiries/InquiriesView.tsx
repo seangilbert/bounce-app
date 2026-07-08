@@ -4,17 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  SlidersHorizontal,
   Sparkle,
   Flag,
   Warning,
   CheckCircle,
-  Phone,
-  ChatText,
+  EnvelopeSimple,
   CaretLeft,
   CurrencyDollar,
-  CalendarBlank,
-  Paperclip,
   PaperPlaneTilt,
   CircleNotch,
   ArrowSquareOut,
@@ -69,6 +65,7 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
   const initial = list.find((i) => i.status === "needs_review") ?? list[0];
   const [selectedId, setSelectedId] = useState(initial?.id ?? "");
   const [mobileDetail, setMobileDetail] = useState(false);
+  const [filter, setFilter] = useState<"all" | "needsYou" | "auto">("all");
   const router = useRouter();
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState<null | "send" | "dismiss">(null);
@@ -76,6 +73,9 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
 
   const selected = list.find((i) => i.id === selectedId) ?? list[0];
   const detail = selected ? details[selected.id] : undefined;
+  const shown = list.filter((i) =>
+    filter === "all" ? true : filter === "needsYou" ? i.status === "needs_review" : i.status !== "needs_review",
+  );
 
   // On switching inquiries (or after a refresh), seed the composer with the AI
   // draft if this inquiry still has an unsent one, else leave it empty.
@@ -132,27 +132,34 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
         className={`${mobileDetail ? "hidden" : "flex"} w-full flex-col lg:flex lg:h-dvh lg:w-[400px] lg:flex-shrink-0 lg:border-r lg:border-sand`}
       >
         <div className="border-b border-sand px-6 pb-4 pt-6">
-          <div className="flex items-center justify-between">
-            <h1 className="font-display text-2xl font-bold text-ink">Inquiries</h1>
-            <button className="text-ink-soft" aria-label="Filters">
-              <SlidersHorizontal size={20} />
-            </button>
-          </div>
+          <h1 className="font-display text-2xl font-bold text-ink">Inquiries</h1>
           <div className="mt-4 flex gap-2">
-            <FilterPill active>All {filters.all}</FilterPill>
-            <FilterPill tone="blue">Needs you {filters.needsYou}</FilterPill>
-            <FilterPill tone="green">Auto {filters.auto}</FilterPill>
+            <FilterPill active={filter === "all"} onClick={() => setFilter("all")}>
+              All {filters.all}
+            </FilterPill>
+            <FilterPill active={filter === "needsYou"} tone="blue" onClick={() => setFilter("needsYou")}>
+              Needs you {filters.needsYou}
+            </FilterPill>
+            <FilterPill active={filter === "auto"} tone="green" onClick={() => setFilter("auto")}>
+              Auto {filters.auto}
+            </FilterPill>
           </div>
         </div>
         <div className="flex flex-col gap-3 p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-          {list.map((item) => (
-            <InquiryCard
-              key={item.id}
-              item={item}
-              active={item.id === selectedId}
-              onClick={() => open(item.id)}
-            />
-          ))}
+          {shown.length === 0 ? (
+            <p className="px-2 py-8 text-center text-sm font-medium text-ink-mute">
+              No {filter === "needsYou" ? "inquiries need you" : filter === "auto" ? "auto-handled inquiries" : "inquiries"} right now.
+            </p>
+          ) : (
+            shown.map((item) => (
+              <InquiryCard
+                key={item.id}
+                item={item}
+                active={item.id === selectedId}
+                onClick={() => open(item.id)}
+              />
+            ))
+          )}
         </div>
       </section>
 
@@ -182,10 +189,14 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
               </div>
             </div>
           </div>
-          <div className="flex flex-shrink-0 gap-2.5">
-            <HeaderAction icon={Phone}>Call</HeaderAction>
-            <HeaderAction icon={ChatText}>Text</HeaderAction>
-          </div>
+          {detail.email ? (
+            <a
+              href={`mailto:${detail.email}`}
+              className="flex flex-shrink-0 items-center gap-2 rounded-full border border-sand bg-white px-4 py-2 text-sm font-bold text-brand transition-colors hover:bg-brand-tint"
+            >
+              <EnvelopeSimple size={16} weight="fill" /> Email
+            </a>
+          ) : null}
         </div>
 
         {/* Body */}
@@ -277,12 +288,7 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
               placeholder="Write a message to the customer…"
               className="w-full resize-none bg-transparent text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-faint"
             />
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-sand-line pt-3">
-              <div className="flex flex-wrap gap-2">
-                <ComposerChip icon={CurrencyDollar}>Change quote</ComposerChip>
-                <ComposerChip icon={CalendarBlank}>Offer date</ComposerChip>
-                <ComposerChip icon={Paperclip}>Attach photo</ComposerChip>
-              </div>
+            <div className="mt-3 flex items-center justify-end gap-2.5 border-t border-sand-line pt-3">
               <div className="flex gap-2.5">
                 <button
                   onClick={dismiss}
@@ -344,30 +350,31 @@ function FilterPill({
   children,
   active,
   tone,
+  onClick,
 }: {
   children: React.ReactNode;
   active?: boolean;
   tone?: "blue" | "green";
+  onClick?: () => void;
 }) {
-  if (active) {
-    return (
-      <span className="rounded-full bg-ink px-3.5 py-2 text-[13px] font-bold text-white">
-        {children}
-      </span>
-    );
-  }
-  const cls =
-    tone === "blue"
-      ? "bg-brand-tint text-brand-deep"
+  const cls = active
+    ? "bg-ink text-white"
+    : tone === "blue"
+      ? "bg-brand-tint text-brand-deep hover:bg-brand-tint/70"
       : tone === "green"
-        ? "bg-teal-tint text-teal-deep"
-        : "text-ink-soft";
+        ? "bg-teal-tint text-teal-deep hover:bg-teal-tint/70"
+        : "text-ink-soft hover:bg-sand/60";
   return (
-    <span className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-bold ${cls}`}>
-      {tone === "blue" ? <span className="h-1.5 w-1.5 rounded-full bg-brand" /> : null}
-      {tone === "green" ? <CheckCircle size={13} weight="fill" /> : null}
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-bold transition-colors ${cls}`}
+    >
+      {!active && tone === "blue" ? <span className="h-1.5 w-1.5 rounded-full bg-brand" /> : null}
+      {!active && tone === "green" ? <CheckCircle size={13} weight="fill" /> : null}
       {children}
-    </span>
+    </button>
   );
 }
 
@@ -496,32 +503,3 @@ function OutcomeBanner({ outcome }: { outcome: BookingOutcome }) {
   );
 }
 
-function HeaderAction({
-  icon: Icon,
-  children,
-}: {
-  icon: typeof Phone;
-  children: React.ReactNode;
-}) {
-  return (
-    <button className="flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2 text-sm font-bold text-brand transition-colors hover:bg-brand-tint">
-      <Icon size={16} weight="fill" />
-      {children}
-    </button>
-  );
-}
-
-function ComposerChip({
-  icon: Icon,
-  children,
-}: {
-  icon: typeof CurrencyDollar;
-  children: React.ReactNode;
-}) {
-  return (
-    <button className="flex items-center gap-1.5 rounded-full bg-sand/60 px-3 py-2 text-[13px] font-bold text-ink-soft transition-colors hover:bg-sand">
-      <Icon size={15} />
-      {children}
-    </button>
-  );
-}

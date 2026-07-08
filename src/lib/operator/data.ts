@@ -288,10 +288,11 @@ function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, 
     time: relTime(m.createdAt),
   }));
   const channelMeta = `${relTime(r.created_at)} · via your ${r.channel}`;
+  const email = r.customer_email;
 
   // The AI draft is a *suggestion* only while it's an unsent needs_review draft.
   if (r.status !== "needs_review") {
-    return { channelMeta, thread };
+    return { channelMeta, email, thread };
   }
 
   const q = r.quote;
@@ -299,6 +300,7 @@ function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, 
   const draft = r.ai_summary ?? "I've flagged this for you — add a reply below.";
   return {
     channelMeta,
+    email,
     thread,
     whyBanner: friendlyWhy(r.escalation_reasons),
     aiDraft: {
