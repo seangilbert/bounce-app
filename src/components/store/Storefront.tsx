@@ -368,7 +368,9 @@ export function StoreShell({
                       {m.content}
                     </ChatBubble>
                   ))}
-                  {chatQuote ? (
+                  {/* Auto-approved quotes are self-bookable; escalated ones are
+                      not (operator sends a custom price), so hide the book card. */}
+                  {chatQuote && chatStatus !== "review" ? (
                     <ChatQuoteCard quote={chatQuote} date={chatDate} onBook={bookChatQuote} byId={byId} />
                   ) : null}
                   {/* Escalated to the operator — capture an email so they can reply back. */}

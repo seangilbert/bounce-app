@@ -293,6 +293,14 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
     reasons.push(`rental starts within ${operator.minLeadHours} hours`);
   const auto = reasons.length === 0;
 
+  // On escalation the auto-computed quote isn't self-bookable (the operator wants
+  // to review / send a custom price), so the customer-facing message must NOT
+  // read like a ready-to-book quote. The model's original reply is still kept as
+  // the operator's suggested draft (aiSummary) below.
+  const customerReply = auto
+    ? out.reply
+    : `Thanks! This one's a bit beyond an instant quote — ${operator.name} will put together a custom price for you. Just leave your email below and they'll send it over, usually within a few hours.`;
+
   // Persist to the operator inbox once per conversation (first quote only).
   let inquiryId = inquiry.inquiryId ?? null;
   if (!inquiryId) {
@@ -336,7 +344,7 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
   }
 
   return {
-    reply: out.reply,
+    reply: customerReply,
     status: auto ? "quoted" : "review",
     eventDate: startDate,
     quote: { lineItems: lines, subtotal, deliveryFee: bd.deliveryFee, tax: bd.tax, total: bd.total, suggestedDeposit, currency: "usd" },
