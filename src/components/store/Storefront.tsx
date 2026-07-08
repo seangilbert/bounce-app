@@ -26,6 +26,7 @@ import { priceBreakdown } from "@/lib/inventory/pricing";
 import { brandVars } from "@/lib/branding/palette";
 import { StoreSidebar } from "./StoreSidebar";
 import { StoreBottomNav } from "./StoreBottomNav";
+import { LightboxProvider, useLightbox } from "./Lightbox";
 
 type Category = "bounce" | "tent" | "tables" | "other";
 
@@ -270,6 +271,7 @@ export function StoreShell({
     ) : null;
 
   return (
+    <LightboxProvider>
     <div
       className={`flex min-h-dvh w-full bg-cream ${cartCount > 0 ? "pb-36" : "pb-20"} lg:h-dvh lg:overflow-hidden lg:pb-0`}
       style={brandVars(brandColor)}
@@ -426,6 +428,7 @@ export function StoreShell({
         />
       ) : null}
     </div>
+    </LightboxProvider>
   );
 }
 
@@ -831,19 +834,30 @@ function TypingDots() {
 }
 
 function QuoteThumb({ item }: { item?: ApiItem }) {
-  const img = item?.images?.[0];
+  const { open } = useLightbox();
+  const images = item?.images ?? [];
+  const img = images[0];
   const meta = CAT_META[toCategory(item?.category ?? null)];
+  const base = `flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg ${img ? "" : meta.tint}`;
+  const inner = img ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={img} alt="" className="h-full w-full object-cover" />
+  ) : (
+    <meta.Icon size={20} weight="fill" className={meta.ink} />
+  );
+  if (images.length === 0) return <span className={base}>{inner}</span>;
   return (
-    <span
-      className={`flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg ${img ? "" : meta.tint}`}
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        open(images, 0);
+      }}
+      aria-label={`View photos of ${item?.name ?? "item"}`}
+      className={`${base} cursor-zoom-in transition-transform hover:scale-105`}
     >
-      {img ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={img} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <meta.Icon size={20} weight="fill" className={meta.ink} />
-      )}
-    </span>
+      {inner}
+    </button>
   );
 }
 
@@ -925,20 +939,32 @@ function ItemCard({
   qty: number;
   onQty: (q: number) => void;
 }) {
+  const { open } = useLightbox();
   const cat = toCategory(item.category);
   const meta = CAT_META[cat];
   const available = item.availability?.available ?? 0;
   const soldOut = item.availability != null && available <= 0;
+  const images = item.images ?? [];
 
   return (
     <div className="flex flex-col overflow-hidden rounded-2xl border border-sand-line bg-white">
-      <div className={`flex h-40 items-center justify-center ${item.images?.[0] ? "" : meta.tint}`}>
-        {item.images?.[0] ? (
+      <div
+        className={`relative flex h-40 items-center justify-center ${images[0] ? "cursor-zoom-in" : meta.tint}`}
+        role={images.length ? "button" : undefined}
+        aria-label={images.length ? `View photos of ${item.name}` : undefined}
+        onClick={images.length ? () => open(images, 0) : undefined}
+      >
+        {images[0] ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.images[0]} alt={item.name} loading="lazy" className="h-full w-full object-cover" />
+          <img src={images[0]} alt={item.name} loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <meta.Icon size={56} weight="fill" className={meta.ink} />
         )}
+        {images.length > 1 ? (
+          <span className="absolute bottom-2 right-2 rounded-full bg-ink/70 px-2 py-0.5 text-[11px] font-bold text-white">
+            +{images.length - 1}
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-start justify-between gap-2">
