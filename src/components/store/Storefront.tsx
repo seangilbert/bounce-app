@@ -514,7 +514,11 @@ function CheckoutDrawer({
   const [payType, setPayType] = useState<"deposit" | "full">("deposit");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const valid = form.name.trim() && /.+@.+\..+/.test(form.email) && form.address.trim();
+  const valid =
+    form.name.trim() &&
+    /.+@.+\..+/.test(form.email) &&
+    form.phone.replace(/\D/g, "").length >= 10 &&
+    form.address.trim();
 
   const bd = priceBreakdown(subtotal, deliveryFeeCents, taxPercent);
   const deposit = depositAmount(bd.total, depositPercent);
@@ -537,7 +541,7 @@ function CheckoutDrawer({
           items: lines.map((l) => ({ itemId: l.item.id, quantity: l.qty })),
           customerName: form.name,
           customerEmail: form.email,
-          customerPhone: form.phone || undefined,
+          customerPhone: form.phone,
           inquiryId: inquiryId ?? undefined,
           deliveryAddress: form.address,
           deliveryZip: form.zip || undefined,
@@ -661,7 +665,7 @@ function CheckoutDrawer({
           <div className="space-y-3">
             <Field label="Full name" value={form.name} onChange={field("name")} placeholder="Jane Smith" />
             <Field label="Email" value={form.email} onChange={field("email")} placeholder="jane@email.com" type="email" />
-            <Field label="Phone (optional)" value={form.phone} onChange={field("phone")} placeholder="(508) 555-0000" />
+            <Field label="Phone" value={form.phone} onChange={field("phone")} placeholder="(508) 555-0000" type="tel" />
             <Field label="Delivery address" value={form.address} onChange={field("address")} placeholder="14 Oak St, Plymouth" />
             <Field label="ZIP" value={form.zip} onChange={field("zip")} placeholder="02360" />
           </div>

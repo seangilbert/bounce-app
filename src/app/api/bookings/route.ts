@@ -4,6 +4,7 @@ import { getDefaultOperator, getOperatorById } from "@/lib/inventory/repo";
 import { checkAvailability } from "@/lib/inventory/availability";
 import { createBooking } from "@/lib/bookings/repo";
 import { linkInquiryToBooking } from "@/lib/inquiries/repo";
+import { toE164US } from "@/lib/phone";
 import { expireStaleCheckouts } from "@/lib/bookings/expire";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -98,6 +99,11 @@ export async function POST(req: Request) {
       );
     }
 
+    // Store the phone in E.164 when we can (SMS-ready), else keep what was typed.
+    const phone = input.customerPhone
+      ? toE164US(input.customerPhone) ?? input.customerPhone
+      : undefined;
+
     const booking = await createBooking({
       operatorId: operator.id,
       startDate,
@@ -105,7 +111,7 @@ export async function POST(req: Request) {
       items: input.items,
       customerName: input.customerName,
       customerEmail: input.customerEmail,
-      customerPhone: input.customerPhone,
+      customerPhone: phone,
       deliveryWindow: input.deliveryWindow,
       deliveryAddress: input.deliveryAddress,
       deliveryZip: input.deliveryZip,
@@ -113,10 +119,15 @@ export async function POST(req: Request) {
     });
 
     // Tie the originating inquiry (if this came from the chat quote) to the
-    // booking, so the inbox can show the outcome. Best-effort.
+    // booking, and backfill the contact collected at checkout so the operator
+    // can reach the customer from the inbox. Best-effort.
     if (input.inquiryId) {
       try {
-        await linkInquiryToBooking(operator.id, input.inquiryId, booking.id);
+        await linkInquiryToBooking(operator.id, input.inquiryId, booking.id, {
+          email: input.customerEmail,
+          phone,
+          name: input.customerName,
+        });
       } catch (err) {
         console.error("[bookings] linkInquiryToBooking failed:", err);
       }

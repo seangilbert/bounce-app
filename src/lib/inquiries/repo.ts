@@ -226,11 +226,20 @@ export async function linkInquiryToBooking(
   operatorId: string,
   inquiryId: string,
   bookingId: string,
+  contact?: { email?: string | null; phone?: string | null; name?: string | null },
 ): Promise<void> {
   const supabase = createAdminClient();
+  // Also backfill the customer's contact onto the inquiry so the operator can
+  // always reach them from the inbox (email / text / call) — an AI auto-quote
+  // inquiry is created with no contact; it's collected at checkout. Only fills
+  // fields we have a value for; never nulls an existing one.
+  const patch: Record<string, unknown> = { booking_id: bookingId };
+  if (contact?.email) patch.customer_email = contact.email;
+  if (contact?.phone) patch.customer_phone = contact.phone;
+  if (contact?.name) patch.customer_name = contact.name;
   const { error } = await supabase
     .from("inquiries")
-    .update({ booking_id: bookingId })
+    .update(patch)
     .eq("id", inquiryId)
     .eq("operator_id", operatorId);
   if (error) throw new Error(`linkInquiryToBooking failed: ${error.message}`);

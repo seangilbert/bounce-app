@@ -15,6 +15,7 @@ import { getPaymentProvider } from "@/lib/payments";
 import { linkInquiryToBooking } from "@/lib/inquiries/repo";
 import { notifyQuoteLink } from "@/lib/email";
 import { depositAmount } from "@/lib/deposit";
+import { toE164US } from "@/lib/phone";
 import type { Booking } from "@/lib/bookings/types";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -56,6 +57,8 @@ export async function createOperatorBookingAction(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid booking." };
   const d = parsed.data;
 
+  const phone = d.customerPhone ? toE164US(d.customerPhone) ?? d.customerPhone : null;
+
   try {
     const booking = await createBooking({
       operatorId: op.id,
@@ -64,14 +67,18 @@ export async function createOperatorBookingAction(
       items: d.items,
       customerName: d.customerName,
       customerEmail: d.customerEmail,
-      customerPhone: d.customerPhone ?? null,
+      customerPhone: phone,
       deliveryAddress: d.deliveryAddress ?? null,
       deliveryZip: d.deliveryZip ?? null,
     });
 
     if (d.inquiryId) {
       try {
-        await linkInquiryToBooking(op.id, d.inquiryId, booking.id);
+        await linkInquiryToBooking(op.id, d.inquiryId, booking.id, {
+          email: d.customerEmail,
+          phone,
+          name: d.customerName,
+        });
       } catch (err) {
         console.error("[bookings] linkInquiryToBooking failed:", err);
       }
