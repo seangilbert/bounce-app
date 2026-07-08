@@ -36,6 +36,8 @@ export interface BookingPrefill {
   endDate?: string;
   items?: { itemId: string; quantity: number }[];
   inquiryId?: string;
+  /** Cover note (e.g. the AI's drafted message) — sent atop the quote email. */
+  message?: string;
 }
 
 const money = (c: number) => `$${(c / 100).toLocaleString("en-US")}`;
@@ -80,6 +82,7 @@ export function BookingBuilder({
     address: "",
     zip: "",
   });
+  const [message, setMessage] = useState(initial?.message ?? "");
   const [paymentType, setPaymentType] = useState<"deposit" | "full">("deposit");
   const [depositCash, setDepositCash] = useState("");
   const [busy, setBusy] = useState<null | "link" | "manual">(null);
@@ -142,6 +145,7 @@ export function BookingBuilder({
       startDate: date,
       endDate,
       items: cartLines.map((l) => ({ itemId: l.item.id, quantity: l.qty })),
+      message: message.trim() || undefined,
       inquiryId: initial?.inquiryId,
       depositCents: mode === "manual" && depositCash ? Math.round(parseFloat(depositCash) * 100) : undefined,
     });
@@ -352,6 +356,16 @@ export function BookingBuilder({
                   </div>
                 </div>
               ) : null}
+
+              <Field label="Note to the customer (optional)">
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  rows={3}
+                  placeholder="A short message sent above the quote in the payment-link email."
+                  className="input resize-none"
+                />
+              </Field>
 
               {error ? (
                 <div className="rounded-xl bg-coral-tint px-4 py-3 text-sm font-semibold text-coral-deep">{error}</div>

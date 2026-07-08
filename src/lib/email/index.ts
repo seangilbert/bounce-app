@@ -80,7 +80,13 @@ export async function notifyBookingConfirmed(booking: Booking, operator: Operato
 }
 
 /** A custom quote from the operator with a link for the customer to review + pay. */
-export async function notifyQuoteLink(booking: Booking, operator: Operator, payUrl: string, depositAmount: number) {
+export async function notifyQuoteLink(
+  booking: Booking,
+  operator: Operator,
+  payUrl: string,
+  depositAmount: number,
+  message?: string,
+) {
   if (!booking.customerEmail) return;
   const items = booking.items.map((li) => ({
     label: `${li.quantity > 1 ? `${li.quantity}× ` : ""}${li.name}`,
@@ -94,8 +100,11 @@ export async function notifyQuoteLink(booking: Booking, operator: Operator, payU
     { label: "Total", value: money(booking.total), bold: true },
     ...(depositAmount > 0 ? [{ label: "Deposit to reserve", value: money(depositAmount) }] : []),
   ];
+  const intro = message?.trim()
+    ? p(esc(message.trim()).replace(/\n/g, "<br>"))
+    : p(`Hi${booking.customerName ? ` ${esc(booking.customerName.split(/\s+/)[0]!)}` : ""} — here's your custom quote from ${esc(operator.name)}.`);
   const body =
-    p(`Hi${booking.customerName ? ` ${esc(booking.customerName.split(/\s+/)[0]!)}` : ""} — here's your custom quote from ${esc(operator.name)}.`) +
+    intro +
     `<div style="font-weight:700;font-size:14px;color:#3B7DF0;margin:14px 0 4px;">${esc(fmtRange(booking.startDate, booking.endDate))}</div>` +
     lineTable(items) +
     `<hr style="border:none;border-top:1px solid #F1E8DE;margin:8px 0;">` +

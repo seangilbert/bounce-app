@@ -80,11 +80,11 @@ export function InquiriesView({ list, details, filters, operatorId }: InquiriesP
     filter === "all" ? true : filter === "needsYou" ? i.status === "needs_review" : i.status !== "needs_review",
   );
 
-  // On switching inquiries (or after a refresh), seed the composer with the AI
-  // draft if this inquiry still has an unsent one, else leave it empty.
+  // The composer is for follow-up conversation now (the AI draft feeds the quote
+  // builder instead), so clear it when switching inquiries.
   useEffect(() => {
-    setReply(details[selectedId]?.aiDraft?.replyDraft ?? "");
-  }, [selectedId, details]);
+    setReply("");
+  }, [selectedId]);
 
   const open = (id: string) => {
     setSelectedId(id);
@@ -241,17 +241,12 @@ export function InquiriesView({ list, details, filters, operatorId }: InquiriesP
             </div>
           </div>
 
-          {/* AI suggestion (needs_review only) — its text pre-fills the composer. */}
+          {/* AI-drafted quote (needs_review) — the real response: review + send it. */}
           {detail.aiDraft ? (
             <div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-sm font-bold text-brand">
-                  <Sparkle size={16} weight="fill" /> AI suggested a reply
-                </span>
-                <span className="rounded-full bg-amber-tint px-2.5 py-1 text-[11px] font-extrabold text-amber-deep">
-                  IN YOUR COMPOSER
-                </span>
-              </div>
+              <span className="flex items-center gap-1.5 text-sm font-bold text-brand">
+                <Sparkle size={16} weight="fill" /> AI drafted a quote
+              </span>
               <div className="mt-2.5 rounded-2xl border border-brand-ring bg-brand-tint/50 p-4">
                 <div className="rounded-xl border border-sand-line bg-white p-4">
                   <div className="flex items-center justify-between gap-3">
@@ -279,6 +274,15 @@ export function InquiriesView({ list, details, filters, operatorId }: InquiriesP
                     </div>
                   </div>
                 </div>
+                <button
+                  onClick={() => setBuilderOpen(true)}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep"
+                >
+                  <CurrencyDollar size={16} weight="fill" /> Review &amp; send quote
+                </button>
+                <p className="mt-1.5 text-center text-[12px] font-medium text-ink-mute">
+                  Opens pre-filled — adjust items or send as-is with a pay link.
+                </p>
               </div>
             </div>
           ) : null}
@@ -359,6 +363,7 @@ export function InquiriesView({ list, details, filters, operatorId }: InquiriesP
             startDate: detail.prefill.startDate,
             endDate: detail.prefill.endDate,
             items: detail.prefill.items,
+            message: detail.aiDraft?.replyDraft,
           }}
           onClose={() => setBuilderOpen(false)}
         />

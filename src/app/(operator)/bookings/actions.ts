@@ -34,6 +34,7 @@ const NewBookingInput = z
     items: z
       .array(z.object({ itemId: z.string().uuid(), quantity: z.number().int().positive() }))
       .min(1, "Add at least one item."),
+    message: z.string().trim().max(2000).optional(),
     inquiryId: z.string().uuid().optional(),
     depositCents: z.number().int().min(0).optional(),
   })
@@ -92,7 +93,7 @@ export async function createOperatorBookingAction(
     const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://bounce-app.vercel.app";
     const payUrl = `${base}/pay/${booking.id}?type=${d.paymentType}`;
     try {
-      await notifyQuoteLink(booking, op, payUrl, depositAmount(booking.total, op.depositPercent));
+      await notifyQuoteLink(booking, op, payUrl, depositAmount(booking.total, op.depositPercent), d.message);
     } catch (err) {
       console.error("[bookings] quote email failed:", err);
     }
