@@ -2,7 +2,7 @@
 
 Path from the current working demo to a production-ready, **multi-tenant** SaaS that can take real customers and pay real operators.
 
-_Last updated: 2026-07-05._
+_Last updated: 2026-07-08._
 
 ## Where we are
 
@@ -65,9 +65,11 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 - [ ] **Automated tests** — none exist; prioritize the availability engine, quote/escalation logic, webhook handlers. Add CI (typecheck/build/test gates) + a staging environment.
 - [ ] **Accessibility pass** + mobile QA.
 
-## Tier 3 — Nice-to-have
+## Tier 3 — Growth & go-to-market
 
-- [ ] Customer accounts / repeat booking, reviews & ratings, analytics dashboard, SMS notifications, promo codes, multi-item packages.
+- [ ] **Marketing site / front of site (operator acquisition)** — the public top-of-funnel that sells Bounce to prospective **operators** (our SaaS customers), separate from the per-operator rental storefronts. Today the apex serves the app/login; there's no landing page pitching the product itself. Needs: a **marketing homepage** (hero + the AI-quote value prop — ideally a live/interactive taste of the storefront chat), a features section (AI quoting, calendar, inquiries inbox, Connect payouts, driver route), a **pricing page** wired to the existing plan selection → signup (Free / Solo $29 / Growing $59), social proof/testimonials, and supporting pages (about, contact, FAQ, plus the Tier-0 legal pages). Considerations: (1) **domain/route split** — marketing at the apex (`bounce-app.com`), operator storefronts at `/s/[slug]` (or subdomains), the operator app behind login; decide the split + redirects; (2) **SEO + perf** — static/ISR, page metadata, OG images, sitemap/robots; (3) **funnel** — every CTA lands on signup → the existing onboarding wizard; (4) **content** — start hardcoded, add a lightweight CMS later for a blog/SEO. _This is a **launch/GTM need**, not a nice-to-have — there's no operator-acquisition surface without it._
+- [ ] **Customer accounts & self-service** — an optional login for the **end customer** (the person renting), distinct from operator accounts. Lets a repeat customer see their booking history + upcoming rentals, **re-book a past order** in a tap, save contact/delivery details (prefill checkout), track a booking's status (quoted → paid → contracted → delivered), and pull up receipts + the signed agreement. Foundation for reviews/ratings and loyalty. Considerations: (1) **auth model** — passwordless email/SMS magic-link is lightest (no password storage; reuses Resend/Twilio); (2) **schema** — a platform-level `customers` table keyed by email/phone that **claims** existing bookings/inquiries (which already store email + phone) on first verified login; (3) **multi-tenant nuance** — a customer may rent from several operators, so the account is platform-level but each view is operator-scoped and shows only their own orders; (4) keep checkout **guest-first** — an account is a convenience, never a barrier to booking. Pairs with repeat-booking, reviews & ratings, and loyalty/promo below.
+- [ ] **Other growth** — reviews & ratings, analytics dashboard, transactional SMS notifications (booking/reminder texts — distinct from the two-way inquiry SMS), promo/discount codes, multi-item packages/bundles.
 
 ---
 
