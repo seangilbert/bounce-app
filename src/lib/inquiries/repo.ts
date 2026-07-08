@@ -149,6 +149,21 @@ export async function listMessagesByInquiry(
   return map;
 }
 
+/** Tie an inquiry to the booking it produced (best-effort; operator-scoped). */
+export async function linkInquiryToBooking(
+  operatorId: string,
+  inquiryId: string,
+  bookingId: string,
+): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("inquiries")
+    .update({ booking_id: bookingId })
+    .eq("id", inquiryId)
+    .eq("operator_id", operatorId);
+  if (error) throw new Error(`linkInquiryToBooking failed: ${error.message}`);
+}
+
 /** Count of inquiries awaiting operator review (for the nav badge). */
 export async function countNeedsReview(operatorId: string): Promise<number> {
   const supabase = createAdminClient();

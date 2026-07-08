@@ -173,6 +173,42 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
   return created;
 }
 
+export interface OutcomeBookingRow {
+  id: string;
+  customer_email: string | null;
+  start_date: string;
+  end_date: string;
+  status: string;
+  total: number | null;
+}
+
+/**
+ * Minimal booking rows for resolving inquiry → booking outcomes: the explicitly
+ * linked bookings (by id) plus any bookings from the same customers (by email),
+ * for the heuristic date-overlap match. Two scoped queries in parallel.
+ */
+export async function bookingsForOutcomes(
+  operatorId: string,
+  bookingIds: string[],
+  emails: string[],
+): Promise<OutcomeBookingRow[]> {
+  const supabase = createAdminClient();
+  const cols = "id, customer_email, start_date, end_date, status, total";
+  const [byId, byEmail] = await Promise.all([
+    bookingIds.length
+      ? supabase.from(BOOKINGS).select(cols).eq("operator_id", operatorId).in("id", bookingIds)
+      : Promise.resolve({ data: [] as OutcomeBookingRow[] }),
+    emails.length
+      ? supabase.from(BOOKINGS).select(cols).eq("operator_id", operatorId).in("customer_email", emails)
+      : Promise.resolve({ data: [] as OutcomeBookingRow[] }),
+  ]);
+  const merged = new Map<string, OutcomeBookingRow>();
+  for (const r of [...((byId.data ?? []) as OutcomeBookingRow[]), ...((byEmail.data ?? []) as OutcomeBookingRow[])]) {
+    merged.set(r.id, r);
+  }
+  return [...merged.values()];
+}
+
 /** Transition a booking's status. Returns the updated booking. */
 export async function setBookingStatus(
   id: string,

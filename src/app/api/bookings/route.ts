@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDefaultOperator, getOperatorById } from "@/lib/inventory/repo";
 import { checkAvailability } from "@/lib/inventory/availability";
 import { createBooking } from "@/lib/bookings/repo";
+import { linkInquiryToBooking } from "@/lib/inquiries/repo";
 import { expireStaleCheckouts } from "@/lib/bookings/expire";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -30,6 +31,7 @@ const BookingSchema = z
     customerName: z.string().optional(),
     customerEmail: z.string().email().optional(),
     customerPhone: z.string().max(40).optional(),
+    inquiryId: z.string().uuid().optional(),
     deliveryWindow: z.string().optional(),
     deliveryAddress: z.string().optional(),
     deliveryZip: z.string().optional(),
@@ -109,6 +111,17 @@ export async function POST(req: Request) {
       deliveryZip: input.deliveryZip,
       notes: input.notes,
     });
+
+    // Tie the originating inquiry (if this came from the chat quote) to the
+    // booking, so the inbox can show the outcome. Best-effort.
+    if (input.inquiryId) {
+      try {
+        await linkInquiryToBooking(operator.id, input.inquiryId, booking.id);
+      } catch (err) {
+        console.error("[bookings] linkInquiryToBooking failed:", err);
+      }
+    }
+
     return NextResponse.json({ booking }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error.";

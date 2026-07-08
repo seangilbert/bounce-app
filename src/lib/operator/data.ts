@@ -9,7 +9,8 @@ import type {
   SelectedBooking,
   SelectedDayDetail,
 } from "./calendar";
-import type { InquiryListItem, InquiryDetail } from "./inquiries";
+import type { InquiryListItem, InquiryDetail, BookingOutcome } from "./inquiries";
+import { bookingsForOutcomes, type OutcomeBookingRow } from "@/lib/bookings/repo";
 import { listInquiries, listMessagesByInquiry, type InquiryRow, type ThreadMessage } from "@/lib/inquiries/repo";
 import { expireStaleCheckouts } from "@/lib/bookings/expire";
 import type { Stop } from "./mock";
@@ -255,7 +256,7 @@ function friendlyWhy(reasons: string[]): string {
   return `I didn't auto-send because ${reasons.join("; ")}.`;
 }
 
-function rowToListItem(r: InquiryRow): InquiryListItem {
+function rowToListItem(r: InquiryRow): Omit<InquiryListItem, "outcome"> {
   const name = r.customer_name ?? "Website visitor";
   const top = r.quote?.lineItems[0];
   const preview =
@@ -276,7 +277,7 @@ function rowToListItem(r: InquiryRow): InquiryListItem {
   };
 }
 
-function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): InquiryDetail {
+function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, "outcome"> {
   const source: ThreadMessage[] = msgs.length
     ? msgs
     : [{ id: `${r.id}-inbound`, sender: "customer", body: r.inbound_message, createdAt: r.created_at }];
@@ -315,6 +316,75 @@ function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): InquiryDetail {
   };
 }
 
+const BOOKED_STATUSES = new Set(["paid", "contracted", "confirmed", "delivered", "completed"]);
+const OUTCOME_RANK: Record<BookingOutcome["status"], number> = { booked: 3, pending: 2, canceled: 1, none: 0 };
+
+function outcomeStatusOf(s: string): BookingOutcome["status"] {
+  if (BOOKED_STATUSES.has(s)) return "booked";
+  if (s === "pending_payment") return "pending";
+  if (s === "canceled") return "canceled";
+  return "none"; // quoted / anything uncommitted
+}
+
+function bookingToOutcome(b: OutcomeBookingRow): BookingOutcome {
+  const status = outcomeStatusOf(b.status);
+  if (status === "none") return { status: "none" };
+  return {
+    status,
+    bookingId: b.id,
+    amount: b.total != null ? money(b.total) : undefined,
+    dateLabel: fmtEventDate(b.start_date),
+  };
+}
+
+/**
+ * Did each inquiry become a booking? Explicit link (`inquiry.booking_id`, set
+ * when the chat quote is booked) first; otherwise a heuristic match by customer
+ * email + overlapping dates. Batched into two booking queries, not N+1.
+ */
+async function resolveOutcomes(
+  operatorId: string,
+  rows: InquiryRow[],
+): Promise<Map<string, BookingOutcome>> {
+  const map = new Map<string, BookingOutcome>();
+  const bookingIds = rows.map((r) => r.booking_id).filter((x): x is string => !!x);
+  const emails = [
+    ...new Set(rows.filter((r) => !r.booking_id && r.customer_email).map((r) => r.customer_email!.toLowerCase())),
+  ];
+  if (bookingIds.length === 0 && emails.length === 0) return map;
+
+  const bookings = await bookingsForOutcomes(operatorId, bookingIds, emails);
+  const byId = new Map(bookings.map((b) => [b.id, b]));
+
+  for (const r of rows) {
+    if (r.booking_id && byId.has(r.booking_id)) {
+      map.set(r.id, bookingToOutcome(byId.get(r.booking_id)!));
+      continue;
+    }
+    if (r.customer_email) {
+      const email = r.customer_email.toLowerCase();
+      const candidates = bookings
+        .filter(
+          (b) =>
+            (b.customer_email ?? "").toLowerCase() === email &&
+            outcomeStatusOf(b.status) !== "none" &&
+            b.start_date <= r.end_date &&
+            b.end_date >= r.start_date,
+        )
+        .sort((a, b) => {
+          const d = OUTCOME_RANK[outcomeStatusOf(b.status)] - OUTCOME_RANK[outcomeStatusOf(a.status)];
+          return d !== 0 ? d : b.start_date.localeCompare(a.start_date);
+        });
+      if (candidates.length) {
+        map.set(r.id, bookingToOutcome(candidates[0]!));
+        continue;
+      }
+    }
+    map.set(r.id, { status: "none" });
+  }
+  return map;
+}
+
 /**
  * Inbox from the persisted `inquiries` table — real AI drafts, quotes, and
  * escalation reasons, written by the Quote Assistant on every inquiry.
@@ -325,10 +395,16 @@ export async function getInquiries(operatorId: string): Promise<{
   details: Record<string, InquiryDetail>;
 }> {
   const rows = (await listInquiries(operatorId)).filter((r) => r.status !== "dismissed");
-  const msgMap = await listMessagesByInquiry(rows.map((r) => r.id));
-  const list = rows.map(rowToListItem);
+  const [msgMap, outcomes] = await Promise.all([
+    listMessagesByInquiry(rows.map((r) => r.id)),
+    resolveOutcomes(operatorId, rows),
+  ]);
+  const noOutcome: BookingOutcome = { status: "none" };
+  const list = rows.map((r) => ({ ...rowToListItem(r), outcome: outcomes.get(r.id) ?? noOutcome }));
   const details: Record<string, InquiryDetail> = {};
-  for (const r of rows) details[r.id] = rowToDetail(r, msgMap.get(r.id) ?? []);
+  for (const r of rows) {
+    details[r.id] = { ...rowToDetail(r, msgMap.get(r.id) ?? []), outcome: outcomes.get(r.id) ?? noOutcome };
+  }
   const needsYou = list.filter((l) => l.status === "needs_review").length;
   return { list, filters: { all: list.length, needsYou, auto: list.length - needsYou }, details };
 }

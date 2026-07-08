@@ -1,5 +1,15 @@
 export type InquiryStatus = "needs_review" | "escalated" | "auto" | "replied";
 
+/** Did this inquiry turn into a booking? Shown in the inbox so operators (esp.
+ *  on auto-answered inquiries) can see the outcome and decide whether to follow up. */
+export type BookingOutcomeStatus = "booked" | "pending" | "canceled" | "none";
+export interface BookingOutcome {
+  status: BookingOutcomeStatus;
+  bookingId?: string;
+  amount?: string;
+  dateLabel?: string;
+}
+
 export interface InquiryListItem {
   id: string;
   name: string;
@@ -9,6 +19,7 @@ export interface InquiryListItem {
   preview: string;
   customerType: string;
   location: string;
+  outcome: BookingOutcome;
 }
 
 export interface AiDraft {
@@ -26,6 +37,8 @@ export interface ThreadMsg {
 
 export interface InquiryDetail {
   whyBanner?: string;
+  /** Whether this inquiry converted to a booking. */
+  outcome: BookingOutcome;
   /** Where the inquiry came in, e.g. "via your website". */
   channelMeta: string;
   /** Full conversation, oldest first (customer + operator + AI auto-answers). */

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   SlidersHorizontal,
   Sparkle,
@@ -16,8 +17,16 @@ import {
   Paperclip,
   PaperPlaneTilt,
   CircleNotch,
+  ArrowSquareOut,
+  Prohibit,
 } from "@phosphor-icons/react/dist/ssr";
-import type { InquiryListItem, InquiryStatus, InquiryDetail, ThreadMsg } from "@/lib/operator/inquiries";
+import type {
+  InquiryListItem,
+  InquiryStatus,
+  InquiryDetail,
+  ThreadMsg,
+  BookingOutcome,
+} from "@/lib/operator/inquiries";
 import { replyInquiryAction, dismissInquiryAction } from "@/app/(operator)/inquiries/actions";
 
 interface InquiriesProps {
@@ -181,6 +190,8 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
 
         {/* Body */}
         <div className="flex flex-col gap-6 px-5 py-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-8">
+          <OutcomeBanner outcome={detail.outcome} />
+
           {detail.whyBanner ? (
             <div className="flex gap-3 rounded-2xl bg-brand-tint px-4 py-4">
               <Sparkle size={18} weight="fill" className="mt-0.5 flex-shrink-0 text-brand" />
@@ -389,16 +400,99 @@ function InquiryCard({
             <span className="truncate text-[15px] font-extrabold text-ink">{item.name}</span>
             <span className="flex-shrink-0 text-xs font-medium text-ink-mute">{item.time}</span>
           </div>
-          <span
-            className={`mt-1 inline-flex items-center gap-1 text-[10px] font-extrabold tracking-[0.03em] ${s.text}`}
-          >
-            <StatusIcon size={10} weight="fill" />
-            {s.label}
-          </span>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span
+              className={`inline-flex items-center gap-1 text-[10px] font-extrabold tracking-[0.03em] ${s.text}`}
+            >
+              <StatusIcon size={10} weight="fill" />
+              {s.label}
+            </span>
+            <OutcomeBadge outcome={item.outcome} />
+          </div>
         </div>
       </div>
       <p className="mt-2.5 text-[13px] font-medium leading-snug text-ink-soft">{item.preview}</p>
     </button>
+  );
+}
+
+/** Compact conversion badge for the inbox list (shown only when there's an outcome). */
+function OutcomeBadge({ outcome }: { outcome: BookingOutcome }) {
+  if (outcome.status === "booked") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-teal-tint px-2 py-0.5 text-[10px] font-extrabold text-teal-deep">
+        <CheckCircle size={10} weight="fill" /> BOOKED{outcome.amount ? ` · ${outcome.amount}` : ""}
+      </span>
+    );
+  }
+  if (outcome.status === "pending") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-tint px-2 py-0.5 text-[10px] font-extrabold text-amber-deep">
+        CHECKOUT STARTED
+      </span>
+    );
+  }
+  if (outcome.status === "canceled") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-coral-tint px-2 py-0.5 text-[10px] font-extrabold text-coral-deep">
+        <Prohibit size={10} weight="bold" /> CANCELED
+      </span>
+    );
+  }
+  return null;
+}
+
+/** Prominent conversion banner at the top of an inquiry's detail. */
+function OutcomeBanner({ outcome }: { outcome: BookingOutcome }) {
+  const base = "flex items-center justify-between gap-3 rounded-2xl border px-4 py-3";
+  const link = outcome.bookingId ? (
+    <Link
+      href={`/bookings/${outcome.bookingId}`}
+      className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-sand bg-white px-3.5 py-1.5 text-[13px] font-bold text-ink-soft transition-colors hover:bg-sand/60"
+    >
+      <ArrowSquareOut size={14} weight="bold" /> Booking
+    </Link>
+  ) : null;
+
+  if (outcome.status === "booked") {
+    return (
+      <div className={`${base} border-teal-line bg-teal-tint`}>
+        <span className="flex items-center gap-2 text-[15px] font-bold text-teal-deep">
+          <CheckCircle size={20} weight="fill" /> Booked
+          {outcome.amount ? ` · ${outcome.amount}` : ""}
+          {outcome.dateLabel ? ` · ${outcome.dateLabel}` : ""}
+        </span>
+        {link}
+      </div>
+    );
+  }
+  if (outcome.status === "pending") {
+    return (
+      <div className={`${base} border-amber-line bg-amber-tint`}>
+        <span className="flex items-center gap-2 text-[15px] font-bold text-amber-deep">
+          <CurrencyDollar size={20} weight="fill" /> Checkout started — not paid
+          {outcome.amount ? ` · ${outcome.amount}` : ""}
+        </span>
+        {link}
+      </div>
+    );
+  }
+  if (outcome.status === "canceled") {
+    return (
+      <div className={`${base} border-coral-line bg-coral-tint`}>
+        <span className="flex items-center gap-2 text-[15px] font-bold text-coral-deep">
+          <Prohibit size={20} weight="bold" /> Booking canceled
+        </span>
+        {link}
+      </div>
+    );
+  }
+  return (
+    <div className={`${base} border-sand-line bg-white`}>
+      <span className="flex items-center gap-2 text-[15px] font-bold text-ink-soft">
+        <Warning size={20} weight="fill" className="text-ink-faint" /> No booking yet
+      </span>
+    </div>
   );
 }
 

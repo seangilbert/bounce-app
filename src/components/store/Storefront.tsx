@@ -143,6 +143,7 @@ export function StoreShell({
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutInquiryId, setCheckoutInquiryId] = useState<string | null>(null);
 
   const days = durationDays(date, endDate);
 
@@ -200,6 +201,7 @@ export function StoreShell({
       setEndDate(chatDate);
     }
     setCart(Object.fromEntries(chatQuote.lineItems.map((l) => [l.itemId, l.quantity])));
+    setCheckoutInquiryId(chatInquiryId); // tie the resulting booking to this inquiry
     setCheckoutOpen(true);
   }
 
@@ -267,7 +269,15 @@ export function StoreShell({
 
   const cartBar =
     cartCount > 0 ? (
-      <CartBar subtotal={subtotal} cartCount={cartCount} range={range} onReview={() => setCheckoutOpen(true)} />
+      <CartBar
+        subtotal={subtotal}
+        cartCount={cartCount}
+        range={range}
+        onReview={() => {
+          setCheckoutInquiryId(null); // catalog booking — not from an inquiry
+          setCheckoutOpen(true);
+        }}
+      />
     ) : null;
 
   return (
@@ -421,6 +431,7 @@ export function StoreShell({
           lines={cartLines}
           subtotal={subtotal}
           operatorId={operatorId}
+          inquiryId={checkoutInquiryId}
           depositPercent={data?.operator?.depositPercent ?? DEPOSIT_PERCENT}
           taxPercent={data?.operator?.taxPercent ?? 0}
           deliveryFeeCents={data?.operator?.deliveryFeeCents ?? 0}
@@ -439,6 +450,7 @@ function CheckoutDrawer({
   lines,
   subtotal,
   operatorId,
+  inquiryId,
   depositPercent,
   taxPercent,
   deliveryFeeCents,
@@ -450,6 +462,7 @@ function CheckoutDrawer({
   lines: { item: ApiItem; qty: number }[];
   subtotal: number;
   operatorId?: string;
+  inquiryId?: string | null;
   depositPercent: number;
   taxPercent: number;
   deliveryFeeCents: number;
@@ -483,6 +496,7 @@ function CheckoutDrawer({
           customerName: form.name,
           customerEmail: form.email,
           customerPhone: form.phone || undefined,
+          inquiryId: inquiryId ?? undefined,
           deliveryAddress: form.address,
           deliveryZip: form.zip || undefined,
           operatorId,
