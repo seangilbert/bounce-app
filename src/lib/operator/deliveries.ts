@@ -90,7 +90,7 @@ function toStop(r: Row, kind: StopKind): RouteStop {
  * (bookings ending `dateIso`), each ordered by delivery window. A single-day
  * rental appears in both. "Done" derives from the booking status.
  */
-export async function getDeliveryRoute(operatorId: string, dateIso: string): Promise<DeliveryRoute> {
+export async function getDeliveryRoute(operatorId: string, dateIso: string, tz?: string): Promise<DeliveryRoute> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("bookings")
@@ -112,7 +112,7 @@ export async function getDeliveryRoute(operatorId: string, dateIso: string): Pro
   return {
     dateIso,
     dateLabel: `${WEEKDAY[dt.getUTCDay()]}, ${MONTHS[dt.getUTCMonth()]} ${dt.getUTCDate()}`,
-    todayIso: operatorToday(),
+    todayIso: operatorToday(tz),
     dropOffs,
     pickUps,
   };

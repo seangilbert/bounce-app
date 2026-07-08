@@ -17,8 +17,8 @@ export default async function DeliveriesPage({
     return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
   }
 
-  const dateIso = searchParams.d && ISO.test(searchParams.d) ? searchParams.d : operatorToday();
+  const dateIso = searchParams.d && ISO.test(searchParams.d) ? searchParams.d : operatorToday(operator.timezone);
 
-  const route = await getDeliveryRoute(operator.id, dateIso);
+  const route = await getDeliveryRoute(operator.id, dateIso, operator.timezone);
   return <DeliveriesView route={route} />;
 }

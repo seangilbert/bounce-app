@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { getSessionOperator } from "@/lib/operator/session";
 import { geocodeLocation } from "@/lib/operator/geocode";
+import { isValidTimeZone } from "@/lib/operator/time";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -13,6 +14,7 @@ const ProfileInput = z.object({
   ownerName: z.string().trim().max(120).optional().nullable(),
   phone: z.string().trim().max(40).optional().nullable(),
   location: z.string().trim().max(120).optional().nullable(),
+  timezone: z.string().trim().refine(isValidTimeZone, "Invalid timezone.").optional(),
 });
 
 export async function updateProfileAction(input: unknown): Promise<ActionResult> {
@@ -26,6 +28,7 @@ export async function updateProfileAction(input: unknown): Promise<ActionResult>
     owner_name: p.data.ownerName?.trim() || null,
     phone: p.data.phone?.trim() || null,
   };
+  if (p.data.timezone) patch.timezone = p.data.timezone;
 
   const newLoc = p.data.location?.trim() || null;
   if (newLoc && newLoc !== op.location) {
@@ -42,6 +45,8 @@ export async function updateProfileAction(input: unknown): Promise<ActionResult>
   if (error) return { ok: false, error: "Could not save your profile." };
   revalidatePath("/settings");
   revalidatePath("/dashboard");
+  revalidatePath("/calendar");
+  revalidatePath("/deliveries");
   return { ok: true };
 }
 

@@ -14,6 +14,7 @@ interface OperatorRow {
   latitude: number | null;
   longitude: number | null;
   contact_email: string | null;
+  timezone: string | null;
   brand_color: string | null;
   logo_url: string | null;
   stripe_customer_id: string | null;
@@ -59,6 +60,7 @@ function rowToOperator(r: OperatorRow): Operator {
     latitude: r.latitude,
     longitude: r.longitude,
     contactEmail: r.contact_email,
+    timezone: r.timezone ?? "America/New_York",
     brandColor: r.brand_color,
     logoUrl: r.logo_url,
     stripeCustomerId: r.stripe_customer_id,

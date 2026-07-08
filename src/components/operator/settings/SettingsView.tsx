@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { TIMEZONES } from "@/lib/operator/time";
 import {
   CheckCircle,
   CircleNotch,
@@ -21,6 +22,7 @@ interface OperatorSettings {
   ownerName: string | null;
   phone: string | null;
   location: string | null;
+  timezone: string;
   contactEmail: string | null;
   slug: string | null;
   plan: string;
@@ -140,6 +142,7 @@ function ProfileSection({ operator }: { operator: OperatorSettings }) {
     ownerName: operator.ownerName ?? "",
     phone: operator.phone ?? "",
     location: operator.location ?? "",
+    timezone: operator.timezone,
   });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }));
@@ -158,6 +161,19 @@ function ProfileSection({ operator }: { operator: OperatorSettings }) {
         </Field>
         <Field label="Service area" hint="City, State — sets your local weather and storefront area.">
           <input value={f.location} onChange={set("location")} placeholder="Plymouth, MA" className="input" />
+        </Field>
+        <Field label="Timezone" hint="Sets 'today' for your calendar, route, and dashboard.">
+          <select
+            value={f.timezone}
+            onChange={(e) => setF((s) => ({ ...s, timezone: e.target.value }))}
+            className="input"
+          >
+            {TIMEZONES.map((tz) => (
+              <option key={tz.value} value={tz.value}>
+                {tz.label}
+              </option>
+            ))}
+          </select>
         </Field>
         {operator.contactEmail ? (
           <Field label="Login email">

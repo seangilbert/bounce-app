@@ -75,6 +75,7 @@ export async function getCalendarData(
   year: number,
   month: number,
   category: CatFilter = "all",
+  tz?: string,
 ): Promise<CalendarData> {
   const supabase = createAdminClient();
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -169,7 +170,7 @@ export async function getCalendarData(
     year,
     month,
     monthLabel: `${MONTHS[month - 1]} ${year}`,
-    todayIso: operatorToday(),
+    todayIso: operatorToday(tz),
     days,
     defaultSelectedIso: (withBookings ?? firstOfMonth)?.iso ?? null,
     category,
@@ -351,11 +352,11 @@ function ymd(d: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
-export async function getDashboard(operatorId: string): Promise<DashboardData> {
+export async function getDashboard(operatorId: string, tz?: string): Promise<DashboardData> {
   const supabase = createAdminClient();
   // Anchor on the operator's local "today" (server runs in UTC — see time.ts),
   // then do week math in UTC on that date so ymd() lines up.
-  const today = operatorToday();
+  const today = operatorToday(tz);
   const todayDate = new Date(`${today}T00:00:00Z`);
   const dow = todayDate.getUTCDay();
   const weekStart = new Date(todayDate); weekStart.setUTCDate(todayDate.getUTCDate() - dow);

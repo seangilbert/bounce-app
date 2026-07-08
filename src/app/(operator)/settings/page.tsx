@@ -15,6 +15,7 @@ export default async function SettingsPage() {
         ownerName: op.ownerName,
         phone: op.phone,
         location: op.location,
+        timezone: op.timezone,
         contactEmail: op.contactEmail,
         slug: op.slug,
         plan: op.plan,

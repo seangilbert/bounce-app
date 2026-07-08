@@ -16,12 +16,12 @@ export default async function CalendarPage({
     return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
   }
 
-  const [ty, tm] = operatorToday().split("-").map(Number);
+  const [ty, tm] = operatorToday(operator.timezone).split("-").map(Number);
   const year = Number(searchParams.y) || ty!;
   const monthRaw = Number(searchParams.m) || tm!;
   const month = Math.min(12, Math.max(1, monthRaw));
   const category = isCatFilter(searchParams.cat) ? searchParams.cat : "all";
 
-  const data = await getCalendarData(operator.id, year, month, category);
+  const data = await getCalendarData(operator.id, year, month, category, operator.timezone);
   return <CalendarView data={data} />;
 }

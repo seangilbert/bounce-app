@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const op = await getSessionOperator();
   if (!op) return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
-  const data = await getDashboard(op.id);
+  const data = await getDashboard(op.id, op.timezone);
   const weather = await getWeatherAdvisory(op, data.todayStops);
   return <DashboardBody data={data} operator={op} weather={weather} />;
 }

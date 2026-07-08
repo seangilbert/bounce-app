@@ -10,6 +10,7 @@ export interface Operator {
   latitude: number | null;
   longitude: number | null;
   contactEmail: string | null;
+  timezone: string;
   brandColor: string | null;
   logoUrl: string | null;
   stripeCustomerId: string | null;
