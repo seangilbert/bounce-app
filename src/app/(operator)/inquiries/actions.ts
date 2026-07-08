@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionOperator } from "@/lib/operator/session";
 import { replyToInquiry, dismissInquiry } from "@/lib/inquiries/repo";
 import { notifyInquiryReply } from "@/lib/email";
+import { sendSms } from "@/lib/sms";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -14,7 +15,11 @@ export async function replyInquiryAction(id: string, reply: string): Promise<Act
   if (!text) return { ok: false, error: "Write a reply first." };
   try {
     const inq = await replyToInquiry(op.id, id, text);
-    if (inq?.customerEmail) {
+    // Deliver on the channel the customer used: SMS when it's a text thread with
+    // a phone on file, otherwise email.
+    if (inq?.channel === "sms" && inq.customerPhone) {
+      await sendSms(inq.customerPhone, text);
+    } else if (inq?.customerEmail) {
       try {
         await notifyInquiryReply({
           to: inq.customerEmail,

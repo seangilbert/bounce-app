@@ -188,8 +188,12 @@ export async function setEsignStatusByDocumentId(
  * delivery) — the caller should skip. Relies on the primary-key conflict, so
  * the claim is race-free even across concurrent deliveries.
  */
+/** Sources that dedupe deliveries via the shared webhook_events table. Payment
+ *  providers plus non-payment webhooks (e.g. Twilio inbound SMS). */
+export type WebhookProvider = PaymentProviderName | "twilio";
+
 export async function claimWebhookEvent(
-  provider: PaymentProviderName,
+  provider: WebhookProvider,
   eventId: string,
 ): Promise<boolean> {
   const supabase = createAdminClient();
@@ -209,7 +213,7 @@ export async function claimWebhookEvent(
  * not silently skipped as a duplicate.
  */
 export async function releaseWebhookEvent(
-  provider: PaymentProviderName,
+  provider: WebhookProvider,
   eventId: string,
 ): Promise<void> {
   const supabase = createAdminClient();

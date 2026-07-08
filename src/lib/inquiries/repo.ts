@@ -23,6 +23,7 @@ export interface CreateInquiryInput {
   bookingId: string | null;
   customerName: string | null;
   customerEmail: string | null;
+  customerPhone?: string | null;
   channel?: string;
   inboundMessage: string;
   startDate: string;
@@ -54,6 +55,7 @@ export interface InquiryRow {
   booking_id: string | null;
   customer_name: string | null;
   customer_email: string | null;
+  customer_phone: string | null;
   channel: string;
   inbound_message: string;
   start_date: string;
@@ -80,6 +82,7 @@ export async function createInquiry(input: CreateInquiryInput): Promise<{ id: st
       booking_id: input.bookingId,
       customer_name: input.customerName,
       customer_email: input.customerEmail,
+      customer_phone: input.customerPhone ?? null,
       channel: input.channel ?? "website",
       inbound_message: input.inboundMessage,
       start_date: input.startDate,
@@ -119,6 +122,34 @@ export async function appendInquiryMessage(
     .from("inquiry_messages")
     .insert({ inquiry_id: inquiryId, sender, body });
   if (error) throw new Error(`appendInquiryMessage failed: ${error.message}`);
+}
+
+/**
+ * Route an inbound SMS to an inquiry: the most recent non-dismissed inquiry for
+ * this customer phone. (Shared-number model — the phone is the routing key.)
+ */
+export async function findLatestInquiryByPhone(phone: string): Promise<InquiryRow | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .select("*")
+    .eq("customer_phone", phone)
+    .neq("status", "dismissed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`findLatestInquiryByPhone failed: ${error.message}`);
+  return (data as InquiryRow) ?? null;
+}
+
+/** Update an inquiry's status (e.g. reopen to needs_review on SMS escalation). */
+export async function setInquiryStatus(
+  inquiryId: string,
+  status: InquiryRow["status"],
+): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("inquiries").update({ status }).eq("id", inquiryId);
+  if (error) throw new Error(`setInquiryStatus failed: ${error.message}`);
 }
 
 /** Thread messages for a set of inquiries, oldest first, grouped by inquiry id. */
@@ -204,14 +235,20 @@ export async function replyToInquiry(
   operatorId: string,
   id: string,
   reply: string,
-): Promise<{ customerEmail: string | null; customerName: string | null; inboundMessage: string } | null> {
+): Promise<{
+  customerEmail: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  channel: string;
+  inboundMessage: string;
+} | null> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("inquiries")
     .update({ status: "replied", operator_reply: reply, replied_at: new Date().toISOString() })
     .eq("id", id)
     .eq("operator_id", operatorId)
-    .select("customer_email, customer_name, inbound_message")
+    .select("customer_email, customer_name, customer_phone, channel, inbound_message")
     .maybeSingle();
   if (error) throw new Error(`replyToInquiry failed: ${error.message}`);
   if (!data) return null; // not found / not this operator's — don't append a message
@@ -223,6 +260,8 @@ export async function replyToInquiry(
   return {
     customerEmail: data.customer_email,
     customerName: data.customer_name,
+    customerPhone: data.customer_phone,
+    channel: data.channel,
     inboundMessage: data.inbound_message,
   };
 }
