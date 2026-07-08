@@ -120,6 +120,25 @@ export async function getOperatorById(id: string): Promise<Operator | null> {
   return data ? rowToOperator(data as OperatorRow) : null;
 }
 
+/**
+ * The operator a user belongs to, in ONE query (join through membership) instead
+ * of a membership lookup followed by an operator fetch — the session resolver
+ * runs on every operator page navigation, so the round-trip saved matters.
+ */
+export async function getOperatorForUser(userId: string): Promise<Operator | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("operator_members")
+    .select("operators(*)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getOperatorForUser failed: ${error.message}`);
+  const op = (data as { operators: OperatorRow | null } | null)?.operators ?? null;
+  return op ? rowToOperator(op) : null;
+}
+
 /** Load an operator by their public storefront slug. */
 export async function getOperatorBySlug(slug: string): Promise<Operator | null> {
   const supabase = createAdminClient();

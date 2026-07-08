@@ -1,44 +1,37 @@
 import { cache } from "react";
-import type { User } from "@supabase/supabase-js";
+import { headers } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
-import { createAdminClient } from "@/utils/supabase/admin";
-import { getOperatorById } from "@/lib/inventory/repo";
+import { getOperatorForUser } from "@/lib/inventory/repo";
+import { VERIFIED_USER_HEADER } from "@/utils/supabase/middleware";
 import type { Operator } from "@/lib/inventory/types";
 
 /**
- * The authenticated user for this request, or null.
- * `cache()` memoizes it per render, so the layout + page share ONE
- * `auth.getUser()` round-trip instead of each paying for it.
+ * The authenticated user id for this request, or null.
+ *
+ * Fast path: the middleware already verified the token with the auth server on
+ * every operator request and forwarded the id via a trusted header — trust it,
+ * so a page navigation doesn't pay a second `auth.getUser()` round-trip. If the
+ * header is absent (e.g. an operator-scoped API route the middleware didn't
+ * gate), verify for real. `cache()`d so the layout + page share one resolution.
  */
-export const getSessionUser = cache(async (): Promise<User | null> => {
+export const getSessionUser = cache(async (): Promise<{ id: string } | null> => {
+  const verifiedId = headers().get(VERIFIED_USER_HEADER);
+  if (verifiedId) return { id: verifiedId };
+
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return user;
+  return user ? { id: user.id } : null;
 });
 
 /**
  * The operator the signed-in user belongs to — how the operator app resolves
- * "the current operator" now that we're multi-tenant. Returns null if there's
- * no session or the user isn't linked to an operator. Membership lookup uses the
- * service-role client (RLS-independent); the caller must already be gated by
- * auth middleware. `cache()`d so the layout + page don't re-resolve it.
+ * "the current operator" now that we're multi-tenant. One join query (through
+ * membership) rather than two round-trips. `cache()`d for the layout + page.
  */
 export const getSessionOperator = cache(async (): Promise<Operator | null> => {
   const user = await getSessionUser();
   if (!user) return null;
-
-  const admin = createAdminClient();
-  const { data: member, error } = await admin
-    .from("operator_members")
-    .select("operator_id")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(`getSessionOperator failed: ${error.message}`);
-  if (!member) return null;
-
-  return getOperatorById(member.operator_id as string);
+  return getOperatorForUser(user.id);
 });
