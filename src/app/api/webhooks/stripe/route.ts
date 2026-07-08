@@ -10,6 +10,8 @@ import { autoSendEnabled, sendAgreementForOrder } from "@/lib/esign/agreements";
 import { confirmBookingPaid, getBooking, setBookingDeposit } from "@/lib/bookings/repo";
 import { getOperatorById } from "@/lib/inventory/repo";
 import { notifyBookingConfirmed, notifyOperatorNewBooking } from "@/lib/email";
+import { isBillingEvent, handleBillingEvent } from "@/lib/billing/webhook";
+import type Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,15 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Operator subscription (SaaS billing) events — a separate concern from the
+    // customer rental payments below, but they arrive on the same platform
+    // account, so they share this endpoint (verify + idempotency).
+    const stripeEvent = event.raw as Stripe.Event;
+    if (isBillingEvent(stripeEvent.type)) {
+      await handleBillingEvent(stripeEvent);
+      return NextResponse.json({ received: true });
+    }
+
     switch (event.type) {
       case "checkout.completed":
         if (event.sessionId) {

@@ -238,6 +238,17 @@ export async function listItems(
   return (data as ItemRow[]).map(rowToItem);
 }
 
+/** How many catalog items the operator has (for plan-limit enforcement). */
+export async function countItems(operatorId: string): Promise<number> {
+  const supabase = createAdminClient();
+  const { count, error } = await supabase
+    .from(ITEMS)
+    .select("id", { count: "exact", head: true })
+    .eq("operator_id", operatorId);
+  if (error) throw new Error(`countItems failed: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function getItem(id: string): Promise<Item | null> {
   const supabase = createAdminClient();
   const { data, error } = await supabase.from(ITEMS).select().eq("id", id).maybeSingle();

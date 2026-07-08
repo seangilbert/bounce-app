@@ -3,8 +3,9 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { getSessionOperator } from "@/lib/operator/session";
-import { createItem, updateItem, deleteItem } from "@/lib/inventory/repo";
+import { createItem, updateItem, deleteItem, countItems } from "@/lib/inventory/repo";
 import { getItemImages, removeItemPhotos } from "@/lib/inventory/photos";
+import { planCapabilities, effectivePlanId } from "@/lib/plans";
 
 const ItemInput = z.object({
   name: z.string().trim().min(1, "Name is required.").max(120),
@@ -25,6 +26,18 @@ export async function createItemAction(input: unknown): Promise<ActionResult> {
   if (!op) return { ok: false, error: "Not signed in." };
   const p = ItemInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid item." };
+  // Plan limit: cap on *create* (existing items are grandfathered on downgrade).
+  const cap = planCapabilities(op).maxItems;
+  if (Number.isFinite(cap) && (await countItems(op.id)) >= cap) {
+    const plan = effectivePlanId(op);
+    return {
+      ok: false,
+      error:
+        plan === "free"
+          ? `The Free plan is limited to ${cap} catalog items. Upgrade to add more.`
+          : `Your plan is limited to ${cap} catalog items.`,
+    };
+  }
   try {
     await createItem({
       operatorId: op.id,
