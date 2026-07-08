@@ -41,6 +41,10 @@ export interface InquiryDetail {
   outcome: BookingOutcome;
   /** Customer email, for the reply/contact action (null if not captured). */
   email: string | null;
+  /** Customer phone, for texting (null if not captured). */
+  phone: string | null;
+  /** How the customer is currently reached ("sms" once a text thread starts). */
+  channel: string;
   /** Seed for the operator's "Create quote" builder (items/dates/customer). */
   prefill: {
     items: { itemId: string; quantity: number }[];

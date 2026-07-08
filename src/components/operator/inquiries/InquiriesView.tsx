@@ -9,6 +9,7 @@ import {
   Warning,
   CheckCircle,
   EnvelopeSimple,
+  ChatText,
   CaretLeft,
   CurrencyDollar,
   PaperPlaneTilt,
@@ -23,7 +24,11 @@ import type {
   ThreadMsg,
   BookingOutcome,
 } from "@/lib/operator/inquiries";
-import { replyInquiryAction, dismissInquiryAction } from "@/app/(operator)/inquiries/actions";
+import {
+  replyInquiryAction,
+  dismissInquiryAction,
+  sendInquirySmsAction,
+} from "@/app/(operator)/inquiries/actions";
 import { BookingBuilder } from "@/components/operator/bookings/BookingBuilder";
 
 interface InquiriesProps {
@@ -31,6 +36,7 @@ interface InquiriesProps {
   details: Record<string, InquiryDetail>;
   filters: { all: number; needsYou: number; auto: number };
   operatorId: string;
+  smsEnabled: boolean;
 }
 
 const STATUS: Record<
@@ -63,12 +69,14 @@ const STATUS: Record<
   },
 };
 
-export function InquiriesView({ list, details, filters, operatorId }: InquiriesProps) {
+export function InquiriesView({ list, details, filters, operatorId, smsEnabled }: InquiriesProps) {
   const initial = list.find((i) => i.status === "needs_review") ?? list[0];
   const [selectedId, setSelectedId] = useState(initial?.id ?? "");
   const [mobileDetail, setMobileDetail] = useState(false);
   const [filter, setFilter] = useState<"all" | "needsYou" | "auto">("all");
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [deliverBy, setDeliverBy] = useState<"email" | "sms">("email");
+  const [smsPhone, setSmsPhone] = useState("");
   const router = useRouter();
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState<null | "send" | "dismiss">(null);
@@ -81,10 +89,14 @@ export function InquiriesView({ list, details, filters, operatorId }: InquiriesP
   );
 
   // The composer is for follow-up conversation now (the AI draft feeds the quote
-  // builder instead), so clear it when switching inquiries.
+  // builder instead), so clear it when switching inquiries. Default the delivery
+  // channel to text when this is already an SMS thread (or a phone's on file).
   useEffect(() => {
     setReply("");
-  }, [selectedId]);
+    const d = details[selectedId];
+    setSmsPhone(d?.phone ?? "");
+    setDeliverBy(smsEnabled && (d?.channel === "sms" || d?.phone) ? "sms" : "email");
+  }, [selectedId, details, smsEnabled]);
 
   const open = (id: string) => {
     setSelectedId(id);
@@ -95,7 +107,10 @@ export function InquiriesView({ list, details, filters, operatorId }: InquiriesP
     if (!selected || !reply.trim()) return;
     setBusy("send");
     setActionErr(null);
-    const res = await replyInquiryAction(selected.id, reply);
+    const res =
+      deliverBy === "sms"
+        ? await sendInquirySmsAction(selected.id, smsPhone, reply)
+        : await replyInquiryAction(selected.id, reply);
     if (res.ok) {
       setReply("");
       router.refresh();
@@ -294,25 +309,54 @@ export function InquiriesView({ list, details, filters, operatorId }: InquiriesP
             <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
               Your reply
             </span>
-            {detail.email ? (
-              <span className="flex items-center gap-1 truncate text-xs font-medium text-ink-mute">
-                <EnvelopeSimple size={12} weight="fill" /> Emails {detail.email}
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-xs font-bold text-coral-deep">
-                <Warning size={12} weight="fill" /> No email — can&apos;t deliver
-              </span>
-            )}
+            {smsEnabled ? (
+              <div className="flex rounded-full bg-sand/70 p-0.5">
+                {(["email", "sms"] as const).map((ch) => (
+                  <button
+                    key={ch}
+                    onClick={() => setDeliverBy(ch)}
+                    className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                      deliverBy === ch ? "bg-white text-ink shadow-sm" : "text-ink-soft"
+                    }`}
+                  >
+                    {ch === "email" ? <EnvelopeSimple size={12} weight="fill" /> : <ChatText size={12} weight="fill" />}
+                    {ch === "email" ? "Email" : "Text"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
-          {!detail.email ? (
+
+          {/* Where this reply goes on the chosen channel. */}
+          {deliverBy === "sms" ? (
+            <div className="mt-2 flex items-center gap-2 rounded-xl border border-sand bg-white px-3 py-2">
+              <ChatText size={14} weight="fill" className="flex-shrink-0 text-brand" />
+              <input
+                type="tel"
+                value={smsPhone}
+                onChange={(e) => setSmsPhone(e.target.value)}
+                placeholder="+15085551234"
+                className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-ink outline-none placeholder:text-ink-faint"
+              />
+              <span className="flex-shrink-0 text-[11px] font-medium text-ink-mute">
+                {detail.channel === "sms" ? "Texts the customer" : "Starts a text thread"}
+              </span>
+            </div>
+          ) : detail.email ? (
+            <div className="mt-2 flex items-center gap-1 text-xs font-medium text-ink-mute">
+              <EnvelopeSimple size={12} weight="fill" /> Emails {detail.email}
+            </div>
+          ) : (
             <div className="mt-2 flex items-start gap-2 rounded-xl bg-coral-tint/60 px-3.5 py-2.5 text-[13px] font-medium text-coral-deep">
               <Warning size={16} weight="fill" className="mt-0.5 flex-shrink-0" />
               <span>
-                This customer didn&apos;t leave contact info, so a reply can&apos;t reach them. New
-                inquiries now ask for an email when they need your review.
+                This customer didn&apos;t leave an email, so an email reply can&apos;t reach them.
+                {smsEnabled
+                  ? " Switch to Text to reach them by phone."
+                  : " New inquiries now ask for an email when they need your review."}
               </span>
             </div>
-          ) : null}
+          )}
           <div className="mt-2 rounded-2xl border-2 border-brand bg-white p-4">
             <textarea
               value={reply}
@@ -333,16 +377,30 @@ export function InquiriesView({ list, details, filters, operatorId }: InquiriesP
                 </button>
                 <button
                   onClick={sendReply}
-                  disabled={busy !== null || !reply.trim() || !detail.email}
-                  title={!detail.email ? "No email on file to deliver to" : undefined}
+                  disabled={
+                    busy !== null ||
+                    !reply.trim() ||
+                    (deliverBy === "sms" ? !smsPhone.trim() : !detail.email)
+                  }
+                  title={
+                    deliverBy === "sms"
+                      ? !smsPhone.trim()
+                        ? "Enter the customer's phone to text them"
+                        : undefined
+                      : !detail.email
+                        ? "No email on file to deliver to"
+                        : undefined
+                  }
                   className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
                 >
                   {busy === "send" ? (
                     <CircleNotch size={16} weight="bold" className="animate-spin" />
+                  ) : deliverBy === "sms" ? (
+                    <ChatText size={16} weight="fill" />
                   ) : (
                     <PaperPlaneTilt size={16} weight="fill" />
                   )}
-                  Send
+                  {deliverBy === "sms" ? "Text" : "Send"}
                 </button>
               </div>
             </div>

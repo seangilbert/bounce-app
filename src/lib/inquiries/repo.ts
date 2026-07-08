@@ -142,6 +142,25 @@ export async function findLatestInquiryByPhone(phone: string): Promise<InquiryRo
   return (data as InquiryRow) ?? null;
 }
 
+/** Bootstrap an SMS thread: record the customer's phone + switch the inquiry to
+ *  the `sms` channel (operator-scoped). Idempotent. */
+export async function setInquiryPhoneChannel(
+  operatorId: string,
+  inquiryId: string,
+  phone: string,
+): Promise<boolean> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .update({ customer_phone: phone, channel: "sms" })
+    .eq("id", inquiryId)
+    .eq("operator_id", operatorId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`setInquiryPhoneChannel failed: ${error.message}`);
+  return !!data;
+}
+
 /** Update an inquiry's status (e.g. reopen to needs_review on SMS escalation). */
 export async function setInquiryStatus(
   inquiryId: string,
