@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
+import { upsertCustomer } from "@/lib/customers/repo";
 
 export interface InquiryQuoteLine {
   itemId: string;
@@ -108,6 +109,16 @@ export async function createInquiry(input: CreateInquiryInput): Promise<{ id: st
   if (input.auto && input.aiSummary?.trim()) seed.push({ inquiry_id: id, sender: "ai", body: input.aiSummary });
   if (seed.length) await supabase.from("inquiry_messages").insert(seed);
 
+  try {
+    await upsertCustomer(input.operatorId, {
+      email: input.customerEmail,
+      phone: input.customerPhone,
+      name: input.customerName,
+    });
+  } catch (e) {
+    console.error("[customers] upsert on inquiry failed:", e);
+  }
+
   return { id };
 }
 
@@ -158,6 +169,13 @@ export async function setInquiryPhoneChannel(
     .select("id")
     .maybeSingle();
   if (error) throw new Error(`setInquiryPhoneChannel failed: ${error.message}`);
+  if (data) {
+    try {
+      await upsertCustomer(operatorId, { phone });
+    } catch (e) {
+      console.error("[customers] upsert on sms bootstrap failed:", e);
+    }
+  }
   return !!data;
 }
 
@@ -218,6 +236,13 @@ export async function setInquiryContact(
     .select("id")
     .maybeSingle();
   if (error) throw new Error(`setInquiryContact failed: ${error.message}`);
+  if (data) {
+    try {
+      await upsertCustomer(operatorId, { email: contact.email, name: contact.name });
+    } catch (e) {
+      console.error("[customers] upsert on contact capture failed:", e);
+    }
+  }
   return !!data;
 }
 

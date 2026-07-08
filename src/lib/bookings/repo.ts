@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
+import { upsertCustomer } from "@/lib/customers/repo";
 import { checkAvailability } from "@/lib/inventory/availability";
 import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing";
 import type { PriceUnit } from "@/lib/inventory/types";
@@ -170,6 +171,18 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
 
   const created = await getBooking(booking.id);
   if (!created) throw new Error("createBooking: booking vanished after insert.");
+
+  // Keep the operator's CRM in sync (best-effort — never fail a booking on this).
+  try {
+    await upsertCustomer(input.operatorId, {
+      email: input.customerEmail,
+      phone: input.customerPhone,
+      name: input.customerName,
+    });
+  } catch (e) {
+    console.error("[customers] upsert on booking failed:", e);
+  }
+
   return created;
 }
 

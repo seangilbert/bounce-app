@@ -4,6 +4,7 @@ import {
   ChatCircleDots,
   Truck,
   Package,
+  AddressBook,
   GearSix,
   DotsThreeOutline,
 } from "@phosphor-icons/react/dist/ssr";
@@ -24,6 +25,7 @@ export const NAV: NavItem[] = [
   { href: "/calendar", label: "Calendar", icon: CalendarDots },
   { href: "/inquiries", label: "Inquiries", icon: ChatCircleDots },
   { href: "/deliveries", label: "Deliveries", icon: Truck },
+  { href: "/customers", label: "Customers", icon: AddressBook },
   { href: "/inventory", label: "Inventory", icon: Package },
   { href: "/settings", label: "Settings", icon: GearSix },
 ];
