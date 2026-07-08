@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getPaymentProvider } from "@/lib/payments";
 import type { CheckoutInput } from "@/lib/payments";
 import { createPendingOrder } from "@/lib/orders/repo";
-import { getBooking, setBookingStatus, setBookingDeposit } from "@/lib/bookings/repo";
+import { getBooking, reserveBooking, setBookingDeposit } from "@/lib/bookings/repo";
 import { getOperatorById } from "@/lib/inventory/repo";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
@@ -175,6 +175,19 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Atomically reserve inventory BEFORE creating the payment session, so two
+    // simultaneous checkouts for the last unit can't both go through. Balance
+    // charges are on an already-reserved booking, so they skip this.
+    if (bookingId && data.paymentType !== "balance") {
+      const reserved = await reserveBooking(bookingId);
+      if (!reserved.ok) {
+        return NextResponse.json(
+          { error: "Sorry — those dates just sold out. Please choose another date." },
+          { status: 409 },
+        );
+      }
+    }
+
     const provider = getPaymentProvider();
     const result = await provider.createCheckout(checkoutInput);
 
@@ -193,12 +206,10 @@ export async function POST(req: Request) {
       bookingId,
     });
 
-    // Move the booking into checkout + record what's being collected up front.
-    // (Still doesn't reserve inventory — that happens when payment is confirmed.)
-    if (bookingId) {
-      // A balance charge is on an already-committed booking — don't reset it.
-      if (data.paymentType !== "balance") await setBookingStatus(bookingId, "pending_payment");
-      if (depositToRecord != null) await setBookingDeposit(bookingId, depositToRecord);
+    // Record what's being collected up front. The booking is already reserved +
+    // in pending_payment (reserveBooking above) for deposit/full payments.
+    if (bookingId && depositToRecord != null) {
+      await setBookingDeposit(bookingId, depositToRecord);
     }
 
     return NextResponse.json(result);

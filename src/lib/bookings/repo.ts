@@ -185,6 +185,24 @@ export async function setBookingStatus(
 }
 
 /**
+ * Atomically reserve inventory for a quoted booking and move it to
+ * `pending_payment` (the reserving state). Locks the booking's items + re-checks
+ * capacity in one transaction (see migration 0020), closing the overbooking
+ * race. Returns `{ ok: false, soldOut: true }` if capacity ran out.
+ */
+export async function reserveBooking(
+  id: string,
+): Promise<{ ok: true } | { ok: false; soldOut: boolean }> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.rpc("reserve_booking", { p_booking_id: id });
+  if (error) {
+    if (/OVERSELL/.test(error.message)) return { ok: false, soldOut: true };
+    throw new Error(`reserveBooking failed: ${error.message}`);
+  }
+  return { ok: true };
+}
+
+/**
  * Record the amount collected up front (minor units). For a deposit this is the
  * partial payment; for pay-in-full it equals the subtotal. The balance shown to
  * the operator is subtotal − deposit.
