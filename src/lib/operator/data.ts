@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
+import { operatorToday } from "./time";
 import type {
   CalDayData,
   CalEvent,
@@ -163,14 +164,12 @@ export async function getCalendarData(
   // Default selection: a day-of-the-month with bookings, else the 1st.
   const withBookings = days.find((d) => d.inMonth && d.events.length > 0);
   const firstOfMonth = days.find((d) => d.inMonth);
-  const now = new Date();
-  const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
   return {
     year,
     month,
     monthLabel: `${MONTHS[month - 1]} ${year}`,
-    todayIso,
+    todayIso: operatorToday(),
     days,
     defaultSelectedIso: (withBookings ?? firstOfMonth)?.iso ?? null,
     category,
@@ -354,10 +353,12 @@ function ymd(d: Date): string {
 
 export async function getDashboard(operatorId: string): Promise<DashboardData> {
   const supabase = createAdminClient();
-  const now = new Date();
-  const today = ymd(now);
-  const dow = now.getUTCDay();
-  const weekStart = new Date(now); weekStart.setUTCDate(now.getUTCDate() - dow);
+  // Anchor on the operator's local "today" (server runs in UTC — see time.ts),
+  // then do week math in UTC on that date so ymd() lines up.
+  const today = operatorToday();
+  const todayDate = new Date(`${today}T00:00:00Z`);
+  const dow = todayDate.getUTCDay();
+  const weekStart = new Date(todayDate); weekStart.setUTCDate(todayDate.getUTCDate() - dow);
   const weekEnd = new Date(weekStart); weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
 
   // Independent — fetch in parallel instead of one round-trip after another.
@@ -422,7 +423,7 @@ export async function getDashboard(operatorId: string): Promise<DashboardData> {
   }
 
   return {
-    dateLabel: `${WEEKDAY_FULL[dow]}, ${MONTHS_SHORT[now.getUTCMonth()]} ${now.getUTCDate()}`,
+    dateLabel: `${WEEKDAY_FULL[dow]}, ${MONTHS_SHORT[todayDate.getUTCMonth()]} ${todayDate.getUTCDate()}`,
     routeSummary: `${todayStops.length} ${todayStops.length === 1 ? "stop" : "stops"} on today's route`,
     revenue: money(revenueCents),
     bookings: committed.length,

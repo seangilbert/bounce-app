@@ -1,6 +1,7 @@
 import { DeliveriesView } from "@/components/operator/deliveries/DeliveriesView";
 import { getSessionOperator } from "@/lib/operator/session";
 import { getDeliveryRoute } from "@/lib/operator/deliveries";
+import { operatorToday } from "@/lib/operator/time";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,7 @@ export default async function DeliveriesPage({
     return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
   }
 
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  const dateIso = searchParams.d && ISO.test(searchParams.d) ? searchParams.d : today;
+  const dateIso = searchParams.d && ISO.test(searchParams.d) ? searchParams.d : operatorToday();
 
   const route = await getDeliveryRoute(operator.id, dateIso);
   return <DeliveriesView route={route} />;

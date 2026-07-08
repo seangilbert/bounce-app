@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
+import { operatorToday } from "./time";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -107,14 +108,11 @@ export async function getDeliveryRoute(operatorId: string, dateIso: string): Pro
   const pickUps = rows.filter((r) => r.end_date === dateIso).map((r) => toStop(r, "PICKUP")).sort(byWindow);
 
   const dt = new Date(`${dateIso}T00:00:00Z`);
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
   return {
     dateIso,
     dateLabel: `${WEEKDAY[dt.getUTCDay()]}, ${MONTHS[dt.getUTCMonth()]} ${dt.getUTCDate()}`,
-    todayIso,
+    todayIso: operatorToday(),
     dropOffs,
     pickUps,
   };
