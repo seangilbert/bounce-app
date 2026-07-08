@@ -161,6 +161,33 @@ export function StoreShell({
   const [chatDate, setChatDate] = useState<string | null>(null);
   const [chatInquiryId, setChatInquiryId] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [chatStatus, setChatStatus] = useState<ConversationResult["status"] | null>(null);
+  // Contact capture when the AI escalates ("review") so the operator can reply back.
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactSaved, setContactSaved] = useState(false);
+  const [contactBusy, setContactBusy] = useState(false);
+  const [contactErr, setContactErr] = useState<string | null>(null);
+
+  async function submitContact() {
+    const email = contactEmail.trim();
+    if (!/.+@.+\..+/.test(email) || !chatInquiryId || !operatorId) return;
+    setContactBusy(true);
+    setContactErr(null);
+    try {
+      const res = await fetch("/api/inquiries/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inquiryId: chatInquiryId, operatorId, email }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Couldn't save that.");
+      setContactSaved(true);
+    } catch (e) {
+      setContactErr(e instanceof Error ? e.message : "Couldn't save that.");
+    } finally {
+      setContactBusy(false);
+    }
+  }
 
   async function sendChat() {
     const text = chatInput.trim();
@@ -187,6 +214,7 @@ export function StoreShell({
       if (json.eventDate) setChatDate(json.eventDate);
       if (json.inquiryId) setChatInquiryId(json.inquiryId);
       setChatQuote(json.quote);
+      setChatStatus(json.status);
     } catch (e) {
       setChatError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -342,6 +370,18 @@ export function StoreShell({
                   ))}
                   {chatQuote ? (
                     <ChatQuoteCard quote={chatQuote} date={chatDate} onBook={bookChatQuote} byId={byId} />
+                  ) : null}
+                  {/* Escalated to the operator — capture an email so they can reply back. */}
+                  {chatStatus === "review" && chatInquiryId && operatorId ? (
+                    <ContactCapture
+                      operatorName={opName}
+                      email={contactEmail}
+                      onEmail={setContactEmail}
+                      onSubmit={submitContact}
+                      saved={contactSaved}
+                      busy={contactBusy}
+                      error={contactErr}
+                    />
                   ) : null}
                   {chatLoading ? (
                     <ChatBubble role="assistant">
@@ -817,6 +857,66 @@ function CartBar({
       >
         Review &amp; book <ArrowRight size={16} weight="bold" />
       </button>
+    </div>
+  );
+}
+
+function ContactCapture({
+  operatorName,
+  email,
+  onEmail,
+  onSubmit,
+  saved,
+  busy,
+  error,
+}: {
+  operatorName: string;
+  email: string;
+  onEmail: (v: string) => void;
+  onSubmit: () => void;
+  saved: boolean;
+  busy: boolean;
+  error: string | null;
+}) {
+  if (saved) {
+    return (
+      <div className="max-w-[92%] self-start rounded-2xl border border-teal-line bg-teal-tint/50 p-3.5">
+        <span className="flex items-center gap-1.5 text-sm font-bold text-teal-deep">
+          <CheckCircle size={16} weight="fill" /> Thanks! {operatorName} will email your quote to {email}.
+        </span>
+      </div>
+    );
+  }
+  const valid = /.+@.+\..+/.test(email.trim());
+  return (
+    <div className="max-w-[92%] self-start rounded-2xl border border-brand-ring bg-white p-3.5">
+      <div className="text-sm font-bold text-ink">{operatorName} will put this together for you</div>
+      <p className="mt-0.5 text-[13px] font-medium text-ink-soft">
+        Leave your email and they&apos;ll send your custom quote — usually within a few hours.
+      </p>
+      <div className="mt-2.5 flex items-center gap-2 rounded-xl border border-sand bg-cream px-2 py-1.5">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => onEmail(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onSubmit();
+            }
+          }}
+          placeholder="you@email.com"
+          className="min-w-0 flex-1 bg-transparent px-2 text-sm font-medium text-ink outline-none placeholder:text-ink-faint"
+        />
+        <button
+          onClick={onSubmit}
+          disabled={busy || !valid}
+          className="flex flex-shrink-0 items-center justify-center rounded-lg bg-brand px-3.5 py-1.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:bg-sand disabled:text-ink-mute"
+        >
+          {busy ? <CircleNotch size={16} weight="bold" className="animate-spin" /> : "Send"}
+        </button>
+      </div>
+      {error ? <p className="mt-1.5 text-[13px] font-semibold text-coral-deep">{error}</p> : null}
     </div>
   );
 }

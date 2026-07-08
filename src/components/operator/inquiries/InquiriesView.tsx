@@ -272,14 +272,29 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
 
         {/* Reply composer — always available (persistent conversation). */}
         <div className="border-t border-sand px-5 py-4 lg:px-8 lg:py-5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
               Your reply
             </span>
-            {detail.aiDraft ? (
-              <span className="text-xs font-medium text-ink-mute">AI-drafted · edit anything</span>
-            ) : null}
+            {detail.email ? (
+              <span className="flex items-center gap-1 truncate text-xs font-medium text-ink-mute">
+                <EnvelopeSimple size={12} weight="fill" /> Emails {detail.email}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-xs font-bold text-coral-deep">
+                <Warning size={12} weight="fill" /> No email — can&apos;t deliver
+              </span>
+            )}
           </div>
+          {!detail.email ? (
+            <div className="mt-2 flex items-start gap-2 rounded-xl bg-coral-tint/60 px-3.5 py-2.5 text-[13px] font-medium text-coral-deep">
+              <Warning size={16} weight="fill" className="mt-0.5 flex-shrink-0" />
+              <span>
+                This customer didn&apos;t leave contact info, so a reply can&apos;t reach them. New
+                inquiries now ask for an email when they need your review.
+              </span>
+            </div>
+          ) : null}
           <div className="mt-2 rounded-2xl border-2 border-brand bg-white p-4">
             <textarea
               value={reply}
@@ -300,7 +315,8 @@ export function InquiriesView({ list, details, filters }: InquiriesProps) {
                 </button>
                 <button
                   onClick={sendReply}
-                  disabled={busy !== null || !reply.trim()}
+                  disabled={busy !== null || !reply.trim() || !detail.email}
+                  title={!detail.email ? "No email on file to deliver to" : undefined}
                   className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
                 >
                   {busy === "send" ? (

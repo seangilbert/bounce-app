@@ -149,6 +149,28 @@ export async function listMessagesByInquiry(
   return map;
 }
 
+/** Attach the customer's contact to an inquiry (from the storefront chat when it
+ *  escalates), so the operator's reply can actually be delivered. Scoped by
+ *  operator + inquiry id; only fills fields, never clears them. */
+export async function setInquiryContact(
+  operatorId: string,
+  inquiryId: string,
+  contact: { email: string; name?: string | null },
+): Promise<boolean> {
+  const supabase = createAdminClient();
+  const patch: Record<string, unknown> = { customer_email: contact.email };
+  if (contact.name?.trim()) patch.customer_name = contact.name.trim();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .update(patch)
+    .eq("id", inquiryId)
+    .eq("operator_id", operatorId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`setInquiryContact failed: ${error.message}`);
+  return !!data;
+}
+
 /** Tie an inquiry to the booking it produced (best-effort; operator-scoped). */
 export async function linkInquiryToBooking(
   operatorId: string,
