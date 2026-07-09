@@ -181,6 +181,14 @@ export async function getCustomer(operatorId: string, id: string): Promise<Custo
   return data ? rowToCustomer(data as CustomerRow) : null;
 }
 
+export interface CustomerPayment {
+  /** deposit | balance | full | payment (from the order's payment_type). */
+  type: string;
+  amountCents: number;
+  /** paid | refunded | pending | failed. */
+  status: string;
+  date: string;
+}
 export interface CustomerBooking {
   id: string;
   startDate: string;
@@ -188,6 +196,10 @@ export interface CustomerBooking {
   status: string;
   total: number;
   items: string;
+  /** Real payment transactions for this booking (from `orders`). */
+  payments: CustomerPayment[];
+  /** Net card collected for this booking (paid orders; refunds excluded). */
+  collectedCents: number;
 }
 export interface CustomerInquiry {
   id: string;
@@ -218,16 +230,45 @@ export async function getCustomerActivity(
       .order("created_at", { ascending: false }),
   ]);
 
-  const bookings: CustomerBooking[] = (bRows ?? []).map((b: Record<string, unknown>) => ({
-    id: b.id as string,
-    startDate: b.start_date as string,
-    endDate: b.end_date as string,
-    status: b.status as string,
-    total: b.total as number,
-    items: ((b.booking_items as { quantity: number; item: { name: string } | null }[]) ?? [])
-      .map((li) => `${li.quantity > 1 ? `${li.quantity}× ` : ""}${li.item?.name ?? "item"}`)
-      .join(", "),
-  }));
+  // Pull the real payment transactions (orders) for these bookings.
+  const bookingIds = (bRows ?? []).map((b: Record<string, unknown>) => b.id as string);
+  const paymentsByBooking = new Map<string, CustomerPayment[]>();
+  if (bookingIds.length) {
+    const { data: orders } = await supabase
+      .from("orders")
+      .select("booking_id, amount_total, status, created_at, metadata")
+      .in("booking_id", bookingIds)
+      .order("created_at", { ascending: true });
+    for (const o of (orders ?? []) as Record<string, unknown>[]) {
+      const bid = o.booking_id as string;
+      const meta = (o.metadata as { payment_type?: string } | null) ?? {};
+      const arr = paymentsByBooking.get(bid) ?? [];
+      arr.push({
+        type: meta.payment_type ?? "payment",
+        amountCents: o.amount_total as number,
+        status: o.status as string,
+        date: o.created_at as string,
+      });
+      paymentsByBooking.set(bid, arr);
+    }
+  }
+
+  const bookings: CustomerBooking[] = (bRows ?? []).map((b: Record<string, unknown>) => {
+    const id = b.id as string;
+    const payments = paymentsByBooking.get(id) ?? [];
+    return {
+      id,
+      startDate: b.start_date as string,
+      endDate: b.end_date as string,
+      status: b.status as string,
+      total: b.total as number,
+      items: ((b.booking_items as { quantity: number; item: { name: string } | null }[]) ?? [])
+        .map((li) => `${li.quantity > 1 ? `${li.quantity}× ` : ""}${li.item?.name ?? "item"}`)
+        .join(", "),
+      payments,
+      collectedCents: payments.filter((p) => p.status === "paid").reduce((s, p) => s + p.amountCents, 0),
+    };
+  });
   const inquiries: CustomerInquiry[] = (iRows ?? []).map((i: Record<string, unknown>) => ({
     id: i.id as string,
     createdAt: i.created_at as string,

@@ -34,6 +34,13 @@ function initials(name: string | null, email: string | null): string {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || src.slice(0, 2).toUpperCase();
 }
 
+const PAY_TONE: Record<string, string> = {
+  paid: "text-teal",
+  refunded: "text-coral-deep",
+  pending: "text-amber-deep",
+  failed: "text-coral-deep",
+};
+
 const STATUS_TONE: Record<string, string> = {
   paid: "text-teal", contracted: "text-teal", confirmed: "text-teal", delivered: "text-teal", completed: "text-ink-mute",
   canceled: "text-coral-deep", quoted: "text-amber-deep", pending_payment: "text-amber-deep", inquiry: "text-ink-mute",
@@ -56,7 +63,8 @@ export function CustomerProfile({
 
   const { bookings, inquiries } = activity;
   const active = bookings.filter((b) => b.status !== "canceled");
-  const totalSpent = bookings.filter((b) => COMMITTED.has(b.status)).reduce((s, b) => s + b.total, 0);
+  const totalBooked = bookings.filter((b) => COMMITTED.has(b.status)).reduce((s, b) => s + b.total, 0);
+  const collected = bookings.reduce((s, b) => s + b.collectedCents, 0);
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = active.filter((b) => b.startDate >= today).length;
 
@@ -90,6 +98,7 @@ export function CustomerProfile({
             <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[13.5px] font-medium text-ink-mute">
               {customer.email ? <span>{customer.email}</span> : null}
               {customer.phone ? <span>{customer.phone}</span> : null}
+              <span className="text-ink-faint">Customer since {fmtDateTime(customer.firstSeen)}</span>
             </div>
           </div>
         </div>
@@ -113,10 +122,10 @@ export function CustomerProfile({
       {/* Stats */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Total spent", value: money(totalSpent) },
+          { label: "Collected", value: money(collected) },
+          { label: "Total booked", value: money(totalBooked) },
           { label: "Bookings", value: String(active.length) },
           { label: "Upcoming", value: String(upcoming) },
-          { label: "Customer since", value: fmtDateTime(customer.firstSeen) },
         ].map((s) => (
           <div key={s.label} className="rounded-2xl border border-sand bg-white px-4 py-3">
             <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">{s.label}</div>
@@ -159,16 +168,36 @@ export function CustomerProfile({
           <p className="mt-2 text-sm font-medium text-ink-mute">No bookings yet.</p>
         ) : (
           <div className="mt-2 overflow-hidden rounded-2xl border border-sand bg-white">
-            {bookings.map((b) => (
-              <Link key={b.id} href={`/bookings/${b.id}`} className="flex items-center gap-3 border-t border-sand-line px-4 py-3 transition-colors first:border-t-0 hover:bg-cream">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-bold text-ink">{b.items || "Booking"}</div>
-                  <div className="text-[12.5px] font-medium text-ink-mute">{fmtRange(b.startDate, b.endDate)}</div>
-                </div>
-                <span className={`flex-shrink-0 text-[12px] font-bold capitalize ${STATUS_TONE[b.status] ?? "text-ink-mute"}`}>{b.status.replace(/_/g, " ")}</span>
-                <span className="w-16 flex-shrink-0 text-right font-display text-sm font-bold text-ink tabular-nums">{money(b.total)}</span>
-              </Link>
-            ))}
+            {bookings.map((b) => {
+              const balanceDue = b.total - b.collectedCents;
+              const showBalance = b.collectedCents > 0 && balanceDue > 0 && b.status !== "canceled";
+              return (
+                <Link key={b.id} href={`/bookings/${b.id}`} className="block border-t border-sand-line px-4 py-3 transition-colors first:border-t-0 hover:bg-cream">
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-bold text-ink">{b.items || "Booking"}</div>
+                      <div className="text-[12.5px] font-medium text-ink-mute">{fmtRange(b.startDate, b.endDate)}</div>
+                    </div>
+                    <span className={`flex-shrink-0 text-[12px] font-bold capitalize ${STATUS_TONE[b.status] ?? "text-ink-mute"}`}>{b.status.replace(/_/g, " ")}</span>
+                    <span className="w-16 flex-shrink-0 text-right font-display text-sm font-bold text-ink tabular-nums">{money(b.total)}</span>
+                  </div>
+                  {b.payments.length > 0 || showBalance ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-dashed border-sand-line pt-2 text-[12px] font-medium">
+                      {b.payments.map((p, i) => (
+                        <span key={i} className="text-ink-mute">
+                          <span className="capitalize text-ink-soft">{p.type}</span>{" "}
+                          {p.status === "refunded" ? "−" : ""}
+                          {money(p.amountCents)} ·{" "}
+                          <span className={PAY_TONE[p.status] ?? "text-ink-mute"}>{p.status}</span>
+                          <span className="text-ink-faint"> · {fmtDateTime(p.date)}</span>
+                        </span>
+                      ))}
+                      {showBalance ? <span className="font-bold text-amber-deep">Balance due {money(balanceDue)}</span> : null}
+                    </div>
+                  ) : null}
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
