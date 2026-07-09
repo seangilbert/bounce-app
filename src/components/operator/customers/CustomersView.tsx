@@ -18,8 +18,14 @@ function fmtDate(iso: string | null): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
-export function CustomersView({ customers }: { customers: CustomerListItem[] }) {
-  const [q, setQ] = useState("");
+export function CustomersView({
+  customers,
+  initialQuery = "",
+}: {
+  customers: CustomerListItem[];
+  initialQuery?: string;
+}) {
+  const [q, setQ] = useState(initialQuery);
   const shown = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return customers;

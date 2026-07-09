@@ -3,7 +3,6 @@ import {
   Sparkle,
   ArrowRight,
   ArrowUpRight,
-  MagnifyingGlass,
   Plus,
   CloudRain,
   Sun,
@@ -18,6 +17,7 @@ import { getDashboard, type DashboardData } from "@/lib/operator/data";
 import { getWeatherAdvisory, type WeatherAdvisory } from "@/lib/operator/weather";
 import { ConnectBanner } from "@/components/operator/ConnectBanner";
 import { NewBookingButton } from "@/components/operator/bookings/NewBookingButton";
+import { CustomerSearchBox } from "@/components/operator/customers/CustomerSearchBox";
 // Reply-time + weekly deltas remain lightweight config (no historical series yet).
 import { aiSummary, weekStats } from "@/lib/operator/mock";
 import type { Stop } from "@/lib/operator/mock";
@@ -55,13 +55,7 @@ function DashboardBody({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex flex-1 items-center gap-2.5 rounded-full border border-sand bg-white px-4 py-2.5 sm:w-[280px] sm:flex-none lg:w-[320px]">
-            <MagnifyingGlass size={18} className="flex-shrink-0 text-ink-faint" />
-            <input
-              placeholder="Search bookings, customers…"
-              className="w-full min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
-            />
-          </div>
+          <CustomerSearchBox />
           <NewBookingButton operatorId={operator.id} />
         </div>
       </div>
