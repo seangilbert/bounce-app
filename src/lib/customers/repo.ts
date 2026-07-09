@@ -117,34 +117,25 @@ export async function upsertCustomer(
 }
 
 interface StatBooking {
-  customer_email: string | null;
-  customer_phone: string | null;
+  customer_id: string | null;
   total: number;
   status: string;
   start_date: string;
 }
 
-/** Aggregate an operator's bookings onto each customer by email/phone. */
-function aggregate(customers: Customer[], bookings: StatBooking[], todayIso: string) {
-  const byEmail = new Map<string, string>();
-  const byPhone = new Map<string, string>();
-  for (const c of customers) {
-    if (c.email) byEmail.set(c.email, c.id);
-    if (c.phone) byPhone.set(c.phone, c.id);
-  }
+/** Aggregate an operator's bookings onto each customer by the customer_id FK. */
+function aggregate(bookings: StatBooking[], todayIso: string) {
   const stats = new Map<string, CustomerStats>();
   const get = (id: string) =>
     stats.get(id) ?? { bookingCount: 0, totalSpentCents: 0, lastActivity: null, upcomingCount: 0 };
   for (const b of bookings) {
-    if (b.status === "canceled") continue;
-    const id = (b.customer_email && byEmail.get(b.customer_email.toLowerCase())) || (b.customer_phone && byPhone.get(b.customer_phone));
-    if (!id) continue;
-    const s = get(id);
+    if (!b.customer_id || b.status === "canceled") continue;
+    const s = get(b.customer_id);
     s.bookingCount += 1;
     if (COMMITTED.has(b.status)) s.totalSpentCents += b.total;
     if (b.start_date >= todayIso) s.upcomingCount += 1;
     if (!s.lastActivity || b.start_date > s.lastActivity) s.lastActivity = b.start_date;
-    stats.set(id, s);
+    stats.set(b.customer_id, s);
   }
   return stats;
 }
@@ -164,10 +155,11 @@ export async function listCustomers(operatorId: string, search?: string): Promis
 
   const { data: bookings } = await supabase
     .from("bookings")
-    .select("customer_email, customer_phone, total, status, start_date")
-    .eq("operator_id", operatorId);
+    .select("customer_id, total, status, start_date")
+    .eq("operator_id", operatorId)
+    .not("customer_id", "is", null);
   const todayIso = new Date().toISOString().slice(0, 10);
-  const stats = aggregate(customers, (bookings as StatBooking[]) ?? [], todayIso);
+  const stats = aggregate((bookings as StatBooking[]) ?? [], todayIso);
 
   return customers
     .map((c) => ({
@@ -211,24 +203,18 @@ export async function getCustomerActivity(
   customer: Customer,
 ): Promise<{ bookings: CustomerBooking[]; inquiries: CustomerInquiry[] }> {
   const supabase = createAdminClient();
-  const ors: string[] = [];
-  if (customer.email) ors.push(`customer_email.ilike.${customer.email}`);
-  if (customer.phone) ors.push(`customer_phone.eq.${customer.phone}`);
-  if (!ors.length) return { bookings: [], inquiries: [] };
-  const filter = ors.join(",");
-
   const [{ data: bRows }, { data: iRows }] = await Promise.all([
     supabase
       .from("bookings")
       .select("id, start_date, end_date, status, total, booking_items(quantity, item:items(name))")
       .eq("operator_id", operatorId)
-      .or(filter)
+      .eq("customer_id", customer.id)
       .order("start_date", { ascending: false }),
     supabase
       .from("inquiries")
       .select("id, created_at, status, channel, inbound_message")
       .eq("operator_id", operatorId)
-      .or(filter)
+      .eq("customer_id", customer.id)
       .order("created_at", { ascending: false }),
   ]);
 

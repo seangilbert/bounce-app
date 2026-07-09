@@ -140,10 +140,24 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
     .single();
   const bd = priceBreakdown(subtotal, op?.delivery_fee_cents ?? 0, Number(op?.tax_percent ?? 0));
 
+  // Resolve/create the CRM customer first so the booking carries customer_id
+  // (best-effort — a CRM hiccup never blocks a booking).
+  let customerId: string | null = null;
+  try {
+    customerId = await upsertCustomer(input.operatorId, {
+      email: input.customerEmail,
+      phone: input.customerPhone,
+      name: input.customerName,
+    });
+  } catch (e) {
+    console.error("[customers] upsert on booking failed:", e);
+  }
+
   const { data: booking, error: bErr } = await supabase
     .from(BOOKINGS)
     .insert({
       operator_id: input.operatorId,
+      customer_id: customerId,
       status: "quoted",
       start_date: input.startDate,
       end_date: input.endDate,
@@ -171,18 +185,6 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
 
   const created = await getBooking(booking.id);
   if (!created) throw new Error("createBooking: booking vanished after insert.");
-
-  // Keep the operator's CRM in sync (best-effort — never fail a booking on this).
-  try {
-    await upsertCustomer(input.operatorId, {
-      email: input.customerEmail,
-      phone: input.customerPhone,
-      name: input.customerName,
-    });
-  } catch (e) {
-    console.error("[customers] upsert on booking failed:", e);
-  }
-
   return created;
 }
 

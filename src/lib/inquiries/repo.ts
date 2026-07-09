@@ -76,11 +76,23 @@ export interface InquiryRow {
 /** Persist a handled inquiry so the operator inbox can show the real AI draft. */
 export async function createInquiry(input: CreateInquiryInput): Promise<{ id: string }> {
   const supabase = createAdminClient();
+  // Resolve/create the CRM customer first so the inquiry carries customer_id.
+  let customerId: string | null = null;
+  try {
+    customerId = await upsertCustomer(input.operatorId, {
+      email: input.customerEmail,
+      phone: input.customerPhone,
+      name: input.customerName,
+    });
+  } catch (e) {
+    console.error("[customers] upsert on inquiry failed:", e);
+  }
   const { data, error } = await supabase
     .from("inquiries")
     .insert({
       operator_id: input.operatorId,
       booking_id: input.bookingId,
+      customer_id: customerId,
       customer_name: input.customerName,
       customer_email: input.customerEmail,
       customer_phone: input.customerPhone ?? null,
@@ -108,16 +120,6 @@ export async function createInquiry(input: CreateInquiryInput): Promise<{ id: st
   if (input.inboundMessage?.trim()) seed.push({ inquiry_id: id, sender: "customer", body: input.inboundMessage });
   if (input.auto && input.aiSummary?.trim()) seed.push({ inquiry_id: id, sender: "ai", body: input.aiSummary });
   if (seed.length) await supabase.from("inquiry_messages").insert(seed);
-
-  try {
-    await upsertCustomer(input.operatorId, {
-      email: input.customerEmail,
-      phone: input.customerPhone,
-      name: input.customerName,
-    });
-  } catch (e) {
-    console.error("[customers] upsert on inquiry failed:", e);
-  }
 
   return { id };
 }
@@ -161,21 +163,22 @@ export async function setInquiryPhoneChannel(
   phone: string,
 ): Promise<boolean> {
   const supabase = createAdminClient();
+  let customerId: string | null = null;
+  try {
+    customerId = await upsertCustomer(operatorId, { phone });
+  } catch (e) {
+    console.error("[customers] upsert on sms bootstrap failed:", e);
+  }
+  const patch: Record<string, unknown> = { customer_phone: phone, channel: "sms" };
+  if (customerId) patch.customer_id = customerId;
   const { data, error } = await supabase
     .from("inquiries")
-    .update({ customer_phone: phone, channel: "sms" })
+    .update(patch)
     .eq("id", inquiryId)
     .eq("operator_id", operatorId)
     .select("id")
     .maybeSingle();
   if (error) throw new Error(`setInquiryPhoneChannel failed: ${error.message}`);
-  if (data) {
-    try {
-      await upsertCustomer(operatorId, { phone });
-    } catch (e) {
-      console.error("[customers] upsert on sms bootstrap failed:", e);
-    }
-  }
   return !!data;
 }
 
@@ -226,8 +229,15 @@ export async function setInquiryContact(
   contact: { email: string; name?: string | null },
 ): Promise<boolean> {
   const supabase = createAdminClient();
+  let customerId: string | null = null;
+  try {
+    customerId = await upsertCustomer(operatorId, { email: contact.email, name: contact.name });
+  } catch (e) {
+    console.error("[customers] upsert on contact capture failed:", e);
+  }
   const patch: Record<string, unknown> = { customer_email: contact.email };
   if (contact.name?.trim()) patch.customer_name = contact.name.trim();
+  if (customerId) patch.customer_id = customerId;
   const { data, error } = await supabase
     .from("inquiries")
     .update(patch)
@@ -236,13 +246,6 @@ export async function setInquiryContact(
     .select("id")
     .maybeSingle();
   if (error) throw new Error(`setInquiryContact failed: ${error.message}`);
-  if (data) {
-    try {
-      await upsertCustomer(operatorId, { email: contact.email, name: contact.name });
-    } catch (e) {
-      console.error("[customers] upsert on contact capture failed:", e);
-    }
-  }
   return !!data;
 }
 
@@ -262,6 +265,14 @@ export async function linkInquiryToBooking(
   if (contact?.email) patch.customer_email = contact.email;
   if (contact?.phone) patch.customer_phone = contact.phone;
   if (contact?.name) patch.customer_name = contact.name;
+  if (contact && (contact.email || contact.phone)) {
+    try {
+      const customerId = await upsertCustomer(operatorId, contact);
+      if (customerId) patch.customer_id = customerId;
+    } catch (e) {
+      console.error("[customers] upsert on inquiry link failed:", e);
+    }
+  }
   const { error } = await supabase
     .from("inquiries")
     .update(patch)
