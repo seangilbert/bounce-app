@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import type { PaymentProviderName } from "@/lib/payments";
-import type { NewOrder, Order, OrderStatus } from "./types";
+import type { NewOrder, Order, OrderProvider, OrderStatus } from "./types";
 
 const ORDERS = "orders";
 const EVENTS = "processed_webhook_events";
@@ -11,7 +11,7 @@ interface OrderRow {
   created_at: string;
   updated_at: string;
   status: OrderStatus;
-  provider: PaymentProviderName;
+  provider: OrderProvider;
   provider_session_id: string;
   provider_payment_id: string | null;
   amount_total: number;
@@ -67,6 +67,36 @@ export async function createPendingOrder(input: NewOrder): Promise<Order> {
   return rowToOrder(data as OrderRow);
 }
 
+/**
+ * Record a cash payment as a paid order so it shows in the payment history and
+ * counts toward "Collected". Idempotent per (booking, paymentType) via a
+ * deterministic session id, so re-marking updates the same row.
+ */
+export async function recordCashPayment(input: {
+  bookingId: string;
+  amountCents: number;
+  paymentType: "deposit" | "balance" | "full";
+  customerEmail?: string | null;
+}): Promise<void> {
+  if (input.amountCents <= 0) return;
+  const supabase = createAdminClient();
+  const { error } = await supabase.from(ORDERS).upsert(
+    {
+      status: "paid",
+      provider: "cash",
+      provider_session_id: `cash:${input.paymentType}:${input.bookingId}`,
+      amount_total: input.amountCents,
+      currency: "usd",
+      customer_email: input.customerEmail ?? null,
+      line_items: [],
+      metadata: { payment_type: input.paymentType, method: "cash", booking_id: input.bookingId },
+      booking_id: input.bookingId,
+    },
+    { onConflict: "provider,provider_session_id" },
+  );
+  if (error) throw new Error(`recordCashPayment failed: ${error.message}`);
+}
+
 /** Look up an order by its provider checkout-session id. */
 export async function getOrderBySessionId(
   provider: PaymentProviderName,
@@ -87,10 +117,13 @@ export async function getOrderBySessionId(
 /** The most recent order for a booking (used for payment status + refunds). */
 export async function getOrderByBookingId(bookingId: string): Promise<Order | null> {
   const supabase = createAdminClient();
+  // The card order (for the detail page + refund). Cash-recorded orders are a
+  // separate concept, surfaced only in the CRM payment history, so exclude them.
   const { data, error } = await supabase
     .from(ORDERS)
     .select()
     .eq("booking_id", bookingId)
+    .neq("provider", "cash")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

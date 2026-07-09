@@ -2,6 +2,9 @@ import type { PaymentProviderName } from "@/lib/payments";
 
 export type OrderStatus = "pending" | "paid" | "failed" | "refunded";
 
+/** Payment sources recorded as orders: the payment providers plus manual cash. */
+export type OrderProvider = PaymentProviderName | "cash";
+
 /** A line on an order. Amounts are minor units (cents), per the payment layer. */
 export interface OrderLineItem {
   name: string;
@@ -15,7 +18,7 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   status: OrderStatus;
-  provider: PaymentProviderName;
+  provider: OrderProvider;
   /** Provider checkout-session id (e.g. Stripe `cs_...`). */
   providerSessionId: string;
   /** Provider payment/intent id — null until the order is paid. */

@@ -188,6 +188,8 @@ export interface CustomerPayment {
   /** paid | refunded | pending | failed. */
   status: string;
   date: string;
+  /** "cash" for manually-recorded payments; undefined for card. */
+  method?: string;
 }
 export interface CustomerBooking {
   id: string;
@@ -241,13 +243,14 @@ export async function getCustomerActivity(
       .order("created_at", { ascending: true });
     for (const o of (orders ?? []) as Record<string, unknown>[]) {
       const bid = o.booking_id as string;
-      const meta = (o.metadata as { payment_type?: string } | null) ?? {};
+      const meta = (o.metadata as { payment_type?: string; method?: string } | null) ?? {};
       const arr = paymentsByBooking.get(bid) ?? [];
       arr.push({
         type: meta.payment_type ?? "payment",
         amountCents: o.amount_total as number,
         status: o.status as string,
         date: o.created_at as string,
+        method: meta.method,
       });
       paymentsByBooking.set(bid, arr);
     }

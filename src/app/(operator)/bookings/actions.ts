@@ -10,8 +10,8 @@ import {
   createBooking,
   reserveBooking,
 } from "@/lib/bookings/repo";
-import { getOrderByBookingId, setOrderStatusByPaymentId } from "@/lib/orders/repo";
-import { getPaymentProvider } from "@/lib/payments";
+import { getOrderByBookingId, setOrderStatusByPaymentId, recordCashPayment } from "@/lib/orders/repo";
+import { getPaymentProvider, type PaymentProviderName } from "@/lib/payments";
 import { linkInquiryToBooking } from "@/lib/inquiries/repo";
 import { notifyQuoteLink } from "@/lib/email";
 import { depositAmount } from "@/lib/deposit";
@@ -88,7 +88,20 @@ export async function createOperatorBookingAction(
       const reserved = await reserveBooking(booking.id);
       if (!reserved.ok) return { ok: false, error: "Not enough inventory for those dates." };
       await setBookingStatus(booking.id, "confirmed");
-      if (d.depositCents && d.depositCents > 0) await setBookingDeposit(booking.id, d.depositCents);
+      if (d.depositCents && d.depositCents > 0) {
+        await setBookingDeposit(booking.id, d.depositCents);
+        // Recorded cash deposit → show it in payment history + "Collected".
+        try {
+          await recordCashPayment({
+            bookingId: booking.id,
+            amountCents: d.depositCents,
+            paymentType: d.depositCents >= booking.total ? "full" : "deposit",
+            customerEmail: d.customerEmail,
+          });
+        } catch (e) {
+          console.error("[orders] recordCashPayment (manual deposit) failed:", e);
+        }
+      }
       revalidatePath("/calendar");
       revalidatePath("/dashboard");
       revalidatePath("/deliveries");
@@ -156,7 +169,20 @@ export async function cancelBookingAction(id: string): Promise<ActionResult> {
 export async function markBalancePaidAction(id: string): Promise<ActionResult> {
   const a = await authorize(id);
   if ("error" in a) return { ok: false, error: a.error };
+  const balance = a.booking.total - (a.booking.deposit ?? 0);
   await setBookingDeposit(id, a.booking.total); // deposit = total → balance 0
+  // Record the cash balance as a paid order so it shows in payment history +
+  // counts toward "Collected" (best-effort — never fail the mark on this).
+  try {
+    await recordCashPayment({
+      bookingId: id,
+      amountCents: balance,
+      paymentType: "balance",
+      customerEmail: a.booking.customerEmail,
+    });
+  } catch (e) {
+    console.error("[orders] recordCashPayment (balance) failed:", e);
+  }
   revalidate(id);
   return { ok: true };
 }
@@ -171,7 +197,8 @@ export async function refundBookingAction(id: string): Promise<ActionResult> {
   }
   try {
     await getPaymentProvider().refund(order.providerPaymentId);
-    await setOrderStatusByPaymentId(order.provider, order.providerPaymentId, "refunded");
+    // getOrderByBookingId excludes cash, so this is a real payment provider.
+    await setOrderStatusByPaymentId(order.provider as PaymentProviderName, order.providerPaymentId, "refunded");
     await setBookingStatus(id, "canceled");
     revalidate(id);
     return { ok: true };

@@ -189,6 +189,7 @@ export function CustomerProfile({
                           {p.status === "refunded" ? "−" : ""}
                           {money(p.amountCents)} ·{" "}
                           <span className={PAY_TONE[p.status] ?? "text-ink-mute"}>{p.status}</span>
+                          {p.method === "cash" ? <span className="text-ink-faint"> · cash</span> : null}
                           <span className="text-ink-faint"> · {fmtDateTime(p.date)}</span>
                         </span>
                       ))}
