@@ -26,13 +26,42 @@ export function CustomersView({
   initialQuery?: string;
 }) {
   const [q, setQ] = useState(initialQuery);
+  const [itemFilter, setItemFilter] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  // Every item any customer has rented — the options for the item filter.
+  const itemOptions = useMemo(
+    () => [...new Set(customers.flatMap((c) => c.itemNames))].sort(),
+    [customers],
+  );
+
+  const filtersActive = q.trim() !== "" || itemFilter !== "" || from !== "" || to !== "";
+  const clearFilters = () => {
+    setQ("");
+    setItemFilter("");
+    setFrom("");
+    setTo("");
+  };
+
   const shown = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return customers;
-    return customers.filter((c) =>
-      [c.name, c.email, c.phone].some((v) => v?.toLowerCase().includes(term)),
-    );
-  }, [q, customers]);
+    return customers.filter((c) => {
+      if (
+        term &&
+        ![c.name, c.email, c.phone].some((v) => v?.toLowerCase().includes(term)) &&
+        !c.itemNames.some((n) => n.toLowerCase().includes(term))
+      )
+        return false;
+      if (itemFilter && !c.itemNames.includes(itemFilter)) return false;
+      if (from || to) {
+        // A customer matches if any booking's date range overlaps [from, to].
+        const overlaps = c.bookingRanges.some((r) => (!to || r.start <= to) && (!from || r.end >= from));
+        if (!overlaps) return false;
+      }
+      return true;
+    });
+  }, [q, itemFilter, from, to, customers]);
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-6 lg:px-8 lg:py-8">
@@ -50,10 +79,60 @@ export function CustomersView({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by name, email, or phone…"
+          placeholder="Search by name, email, phone, or item…"
           className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-ink outline-none placeholder:text-ink-faint"
         />
       </div>
+
+      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <label className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">Item rented</span>
+          <select
+            value={itemFilter}
+            onChange={(e) => setItemFilter(e.target.value)}
+            className="rounded-xl border border-sand bg-white px-3 py-2.5 text-sm font-semibold text-ink outline-none"
+          >
+            <option value="">Any item</option>
+            {itemOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">Event from</span>
+          <input
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => setFrom(e.target.value)}
+            className="rounded-xl border border-sand bg-white px-3 py-2.5 text-sm font-semibold text-ink outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">Event to</span>
+          <input
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+            className="rounded-xl border border-sand bg-white px-3 py-2.5 text-sm font-semibold text-ink outline-none"
+          />
+        </label>
+        {filtersActive ? (
+          <button
+            onClick={clearFilters}
+            className="h-[42px] rounded-xl px-3 text-[13px] font-bold text-ink-mute transition-colors hover:text-coral-deep"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+
+      {filtersActive ? (
+        <p className="mt-2 text-[13px] font-medium text-ink-mute">
+          {shown.length} {shown.length === 1 ? "match" : "matches"}
+        </p>
+      ) : null}
 
       {shown.length === 0 ? (
         <div className="mt-16 flex flex-col items-center gap-3 text-center">

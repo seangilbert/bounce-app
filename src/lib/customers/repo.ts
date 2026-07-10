@@ -20,6 +20,10 @@ export interface CustomerStats {
 
 export interface CustomerListItem extends Customer {
   stats: CustomerStats;
+  /** Distinct item names this customer has rented (non-canceled bookings). */
+  itemNames: string[];
+  /** Event date ranges from this customer's non-canceled bookings. */
+  bookingRanges: { start: string; end: string }[];
 }
 
 interface CustomerRow {
@@ -155,16 +159,40 @@ export async function listCustomers(operatorId: string, search?: string): Promis
 
   const { data: bookings } = await supabase
     .from("bookings")
-    .select("customer_id, total, status, start_date")
+    .select("customer_id, total, status, start_date, end_date, booking_items(items(name))")
     .eq("operator_id", operatorId)
     .not("customer_id", "is", null);
   const todayIso = new Date().toISOString().slice(0, 10);
-  const stats = aggregate((bookings as StatBooking[]) ?? [], todayIso);
+  type ItemRef = { name: string } | { name: string }[] | null;
+  const rows = (bookings ?? []) as unknown as (StatBooking & {
+    end_date: string;
+    booking_items: { items: ItemRef }[] | null;
+  })[];
+  const stats = aggregate(rows, todayIso);
+
+  // Per-customer search facets: item names rented + event date ranges (skip
+  // canceled — those aren't real events the operator would search for).
+  const items = new Map<string, Set<string>>();
+  const ranges = new Map<string, { start: string; end: string }[]>();
+  for (const b of rows) {
+    if (!b.customer_id || b.status === "canceled") continue;
+    const names = items.get(b.customer_id) ?? new Set<string>();
+    for (const li of b.booking_items ?? []) {
+      const it = Array.isArray(li.items) ? li.items[0] : li.items;
+      if (it?.name) names.add(it.name);
+    }
+    items.set(b.customer_id, names);
+    const rs = ranges.get(b.customer_id) ?? [];
+    rs.push({ start: b.start_date, end: b.end_date });
+    ranges.set(b.customer_id, rs);
+  }
 
   return customers
     .map((c) => ({
       ...c,
       stats: stats.get(c.id) ?? { bookingCount: 0, totalSpentCents: 0, lastActivity: null, upcomingCount: 0 },
+      itemNames: [...(items.get(c.id) ?? [])].sort(),
+      bookingRanges: ranges.get(c.id) ?? [],
     }))
     .sort((a, b) => (b.stats.lastActivity ?? b.lastSeen).localeCompare(a.stats.lastActivity ?? a.lastSeen));
 }
