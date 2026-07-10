@@ -137,6 +137,7 @@ export function StoreShell({
   slug,
   brandColor,
   operatorName,
+  logoUrl,
   tagline,
   about,
 }: {
@@ -144,6 +145,7 @@ export function StoreShell({
   slug: string;
   brandColor?: string | null;
   operatorName?: string;
+  logoUrl?: string | null;
   tagline?: string | null;
   about?: string | null;
 }) {
@@ -336,15 +338,20 @@ export function StoreShell({
       className={`flex min-h-dvh w-full bg-cream ${cartCount > 0 ? "pb-36" : "pb-20"} lg:h-dvh lg:overflow-hidden lg:pb-0`}
       style={brandVars(brandColor)}
     >
-      <StoreSidebar base={base} operatorName={opName} phone="(508) 555-1234" />
+      <StoreSidebar base={base} operatorName={opName} logoUrl={logoUrl} phone="(508) 555-1234" />
 
       <div className="flex min-w-0 flex-1 flex-col lg:h-dvh lg:min-h-0">
         {/* Mobile-only top bar — the rail carries the brand on desktop. */}
         <header className="flex flex-shrink-0 items-center justify-between border-b border-sand bg-cream/90 px-5 py-3.5 backdrop-blur lg:hidden">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-white">
-              <Confetti size={18} weight="fill" />
-            </span>
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt={opName} className="h-9 w-9 flex-shrink-0 rounded-xl object-contain" />
+            ) : (
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-white">
+                <Confetti size={18} weight="fill" />
+              </span>
+            )}
             <span className="font-display text-base font-extrabold tracking-tight text-ink">
               {opName}
             </span>

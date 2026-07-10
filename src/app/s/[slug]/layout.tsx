@@ -35,6 +35,7 @@ export default async function StoreLayout({
         slug={params.slug}
         brandColor={op.brandColor}
         operatorName={op.name}
+        logoUrl={op.logoUrl}
         tagline={op.tagline}
         about={op.about}
       />

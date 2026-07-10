@@ -30,10 +30,12 @@ function NavLink({ href, item, active }: { href: string; item: StoreNavItem; act
 export function StoreSidebar({
   base,
   operatorName,
+  logoUrl,
   phone,
 }: {
   base: string;
   operatorName: string;
+  logoUrl?: string | null;
   phone?: string;
 }) {
   const pathname = usePathname();
@@ -42,9 +44,14 @@ export function StoreSidebar({
     <aside className="hidden w-[248px] flex-shrink-0 flex-col overflow-y-auto border-r border-sand bg-cream px-4 py-5 lg:flex lg:h-dvh">
       {/* Brand */}
       <div className="flex items-center gap-3 px-2 pb-7 pt-1">
-        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand text-white">
-          <Confetti size={22} weight="fill" />
-        </span>
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt={operatorName} className="h-11 w-11 flex-shrink-0 rounded-2xl object-contain" />
+        ) : (
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand text-white">
+            <Confetti size={22} weight="fill" />
+          </span>
+        )}
         <div className="min-w-0">
           <div className="truncate font-display text-[17px] font-extrabold leading-tight tracking-tight text-ink">
             {operatorName}

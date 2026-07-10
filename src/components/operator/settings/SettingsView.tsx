@@ -12,6 +12,7 @@ import {
   Trash,
   Plus,
   X,
+  Confetti,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   updateProfileAction,
@@ -54,6 +55,7 @@ interface OperatorSettings {
   notifyBalancePaid: boolean;
   notifyContractSigned: boolean;
   brandColor: string | null;
+  logoUrl: string | null;
   tagline: string | null;
   about: string | null;
   availabilityConfig: unknown;
@@ -374,15 +376,86 @@ function AvailabilitySection({ operator }: { operator: OperatorSettings }) {
 }
 
 function BrandingSection({ operator }: { operator: OperatorSettings }) {
+  const router = useRouter();
   const { busy, saved, error, save } = useSaver();
   const [color, setColor] = useState(operator.brandColor ?? ACCENT_COLORS[0]!.base);
   const [tagline, setTagline] = useState(operator.tagline ?? "");
   const [about, setAbout] = useState(operator.about ?? "");
+  const [logoUrl, setLogoUrl] = useState(operator.logoUrl);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoErr, setLogoErr] = useState<string | null>(null);
   const shades = deriveShades(color);
 
+  async function onLogoPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return setLogoErr("Please choose an image file.");
+    if (file.size > 2_097_152) return setLogoErr("Logo too large (2 MB max).");
+    setLogoBusy(true);
+    setLogoErr(null);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/settings/logo", { method: "POST", body });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Upload failed.");
+      setLogoUrl(json.url);
+      router.refresh();
+    } catch (err) {
+      setLogoErr(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
+  async function removeLogo() {
+    setLogoBusy(true);
+    setLogoErr(null);
+    try {
+      const res = await fetch("/api/settings/logo", { method: "DELETE" });
+      if (!res.ok) throw new Error("Remove failed.");
+      setLogoUrl(null);
+      router.refresh();
+    } catch (err) {
+      setLogoErr(err instanceof Error ? err.message : "Remove failed.");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
   return (
-    <Section title="Branding" desc="Your color and copy on the storefront customers see.">
+    <Section title="Branding" desc="Your color, logo, and copy on the storefront customers see.">
       <div className="space-y-4">
+        <div>
+          <span className="mb-1.5 block text-[13px] font-bold text-ink-soft">Logo</span>
+          <div className="flex items-center gap-4">
+            <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-sand bg-cream">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="Logo" className="h-full w-full object-contain" />
+              ) : (
+                <Confetti size={26} weight="fill" className="text-brand" />
+              )}
+            </span>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer rounded-full bg-ink px-4 py-2 text-[13px] font-bold text-cream transition-opacity hover:opacity-90">
+                  {logoBusy ? "Working…" : logoUrl ? "Replace" : "Upload logo"}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onLogoPick} disabled={logoBusy} className="hidden" />
+                </label>
+                {logoUrl ? (
+                  <button onClick={removeLogo} disabled={logoBusy} className="text-[13px] font-bold text-ink-mute transition-colors hover:text-coral-deep">
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+              <span className="text-[12px] font-medium text-ink-mute">PNG, JPG, or WebP · 2 MB max · square works best.</span>
+              {logoErr ? <span className="text-[12px] font-semibold text-coral-deep">{logoErr}</span> : null}
+            </div>
+          </div>
+        </div>
+
         <div>
           <span className="mb-1.5 block text-[13px] font-bold text-ink-soft">Brand color</span>
           <div className="flex flex-wrap items-center gap-2">

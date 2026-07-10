@@ -36,6 +36,7 @@ export default async function SettingsPage() {
         notifyBalancePaid: op.notifyBalancePaid,
         notifyContractSigned: op.notifyContractSigned,
         brandColor: op.brandColor,
+        logoUrl: op.logoUrl,
         tagline: op.tagline,
         about: op.about,
         availabilityConfig: op.availabilityConfig,
