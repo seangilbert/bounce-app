@@ -15,6 +15,7 @@ import {
   CaretRight,
   ArrowSquareOut,
   CircleNotch,
+  Wrench,
 } from "@phosphor-icons/react/dist/ssr";
 import type { DeliveryRoute, RouteStop } from "@/lib/operator/deliveries";
 import { markDeliveredAction, markCompletedAction } from "@/app/(operator)/bookings/actions";
@@ -159,6 +160,16 @@ function ActionBtn({
 
 function StopCard({ stop, busy, onMark }: { stop: RouteStop; busy: boolean; onMark: () => void }) {
   const isDeliver = stop.kind === "DELIVER";
+  // Loadout checklist ticks — a local aid for this session (not yet persisted).
+  const [loaded, setLoaded] = useState<Set<string>>(new Set());
+  const allLoaded = stop.equipment.length > 0 && stop.equipment.every((e) => loaded.has(e.label));
+  const toggleLoaded = (label: string) =>
+    setLoaded((s) => {
+      const n = new Set(s);
+      if (n.has(label)) n.delete(label);
+      else n.add(label);
+      return n;
+    });
   const mapsUrl = stop.address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${stop.address}${stop.zip ? ` ${stop.zip}` : ""}`)}`
     : null;
@@ -218,6 +229,51 @@ function StopCard({ stop, busy, onMark }: { stop: RouteStop; busy: boolean; onMa
           <ArrowSquareOut size={15} weight="bold" /> Booking
         </Link>
       </div>
+
+      {stop.equipment.length > 0 ? (
+        <div className="mt-3 rounded-xl bg-cream p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-soft">
+              <Wrench size={13} weight="fill" /> {isDeliver ? "Load out" : "Bring back"}
+            </span>
+            {allLoaded ? (
+              <span className="flex items-center gap-1 text-[11px] font-bold text-teal">
+                <CheckCircle size={13} weight="fill" /> All set
+              </span>
+            ) : (
+              <span className="text-[11px] font-bold text-ink-mute">
+                {loaded.size}/{stop.equipment.length}
+              </span>
+            )}
+          </div>
+          <ul className="flex flex-col gap-1">
+            {stop.equipment.map((e) => {
+              const on = loaded.has(e.label);
+              return (
+                <li key={e.label}>
+                  <button
+                    type="button"
+                    onClick={() => toggleLoaded(e.label)}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-1 py-1 text-left transition-colors hover:bg-white"
+                  >
+                    <span
+                      className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border ${
+                        on ? "border-teal bg-teal text-white" : "border-sand bg-white"
+                      }`}
+                    >
+                      {on ? <CheckCircle size={14} weight="fill" /> : null}
+                    </span>
+                    <span className={`flex-1 text-[13.5px] font-semibold ${on ? "text-ink-mute line-through" : "text-ink"}`}>
+                      {e.label}
+                    </span>
+                    {e.qty > 1 ? <span className="text-[12px] font-bold text-ink-mute tabular-nums">×{e.qty}</span> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="mt-3 border-t border-sand-line pt-3">
         {stop.done ? (

@@ -15,6 +15,10 @@ const ItemInput = z.object({
   unitsNeedsCleaning: z.number().int().min(0).max(9999).optional(),
   unitsDamaged: z.number().int().min(0).max(9999).optional(),
   unitsInRepair: z.number().int().min(0).max(9999).optional(),
+  requiredEquipment: z
+    .array(z.object({ label: z.string().trim().max(60), qty: z.number().int().min(1).max(999) }))
+    .max(40)
+    .optional(),
   basePrice: z.number().int().min(0), // minor units (cents)
   priceUnit: z.enum(["per_day", "per_hour", "flat"]),
   powerRequired: z.boolean().optional(),

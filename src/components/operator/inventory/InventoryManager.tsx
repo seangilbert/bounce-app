@@ -15,7 +15,7 @@ import {
   ImageSquare,
   Star,
 } from "@phosphor-icons/react/dist/ssr";
-import { bookableUnits, outOfServiceUnits, type Item } from "@/lib/inventory/types";
+import { bookableUnits, outOfServiceUnits, type EquipmentItem, type Item } from "@/lib/inventory/types";
 import { createItemAction, updateItemAction, deleteItemAction } from "@/app/(operator)/inventory/actions";
 
 type Category = "bounce" | "tent" | "tables" | "other";
@@ -43,6 +43,7 @@ interface DraftForm {
   needsCleaning: string;
   damaged: string;
   inRepair: string;
+  equipment: EquipmentItem[];
 }
 
 const emptyDraft: DraftForm = {
@@ -58,6 +59,7 @@ const emptyDraft: DraftForm = {
   needsCleaning: "0",
   damaged: "0",
   inRepair: "0",
+  equipment: [],
 };
 
 function itemToDraft(i: Item): DraftForm {
@@ -74,6 +76,7 @@ function itemToDraft(i: Item): DraftForm {
     needsCleaning: String(i.unitsNeedsCleaning),
     damaged: String(i.unitsDamaged),
     inRepair: String(i.unitsInRepair),
+    equipment: i.requiredEquipment.map((e) => ({ ...e })),
   };
 }
 
@@ -278,6 +281,9 @@ function ItemDrawer({
       unitsNeedsCleaning: parseInt(draft.needsCleaning || "0", 10),
       unitsDamaged: parseInt(draft.damaged || "0", 10),
       unitsInRepair: parseInt(draft.inRepair || "0", 10),
+      requiredEquipment: draft.equipment
+        .map((e) => ({ label: e.label.trim(), qty: Math.max(1, e.qty || 1) }))
+        .filter((e) => e.label),
       basePrice: priceCents,
       priceUnit: draft.priceUnit,
       powerRequired: draft.powerRequired,
@@ -405,6 +411,55 @@ function ItemDrawer({
             ) : (
               <p className="mt-1 text-[12px] font-medium text-ink-mute">Out-of-service units won&apos;t be offered for booking.</p>
             )}
+          </div>
+
+          {/* Required equipment — the loadout checklist for this item. */}
+          <div>
+            <div className="mb-1.5 text-[13px] font-bold text-ink-soft">Required equipment</div>
+            <p className="mb-2 text-[12px] font-medium text-ink-mute">Gear needed to run it. Shows as a loadout checklist on the deliveries screen.</p>
+            <div className="space-y-2">
+              {draft.equipment.map((e, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={e.label}
+                    onChange={(ev) =>
+                      set("equipment", draft.equipment.map((x, j) => (j === i ? { ...x, label: ev.target.value } : x)))
+                    }
+                    placeholder="Blower, stakes, tarp…"
+                    className="input flex-1"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={e.qty}
+                    onChange={(ev) =>
+                      set(
+                        "equipment",
+                        draft.equipment.map((x, j) => (j === i ? { ...x, qty: parseInt(ev.target.value || "1", 10) || 1 } : x)),
+                      )
+                    }
+                    className="input w-16"
+                    aria-label="Quantity"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => set("equipment", draft.equipment.filter((_, j) => j !== i))}
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-ink-mute transition-colors hover:bg-coral-tint hover:text-coral-deep"
+                    aria-label="Remove"
+                  >
+                    <Trash size={16} weight="bold" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => set("equipment", [...draft.equipment, { label: "", qty: 1 }])}
+              className="mt-2 flex items-center gap-1.5 rounded-full border border-dashed border-sand px-4 py-2 text-[13px] font-bold text-ink-soft transition-colors hover:border-brand hover:text-brand"
+            >
+              <Plus size={14} weight="bold" /> Add equipment
+            </button>
           </div>
 
           <Field label="Description (optional)">

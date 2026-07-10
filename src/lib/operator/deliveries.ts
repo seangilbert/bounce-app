@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { operatorToday } from "./time";
+import { normalizeEquipment, type EquipmentItem } from "@/lib/inventory/types";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -25,6 +26,8 @@ export interface RouteStop {
   address: string | null;
   zip: string | null;
   items: string;
+  /** Aggregated loadout gear for this stop's items. */
+  equipment: EquipmentItem[];
 }
 
 export interface DeliveryRoute {
@@ -46,7 +49,18 @@ interface Row {
   delivery_window: string | null;
   delivery_address: string | null;
   delivery_zip: string | null;
-  booking_items: { quantity: number; items: { name: string } | null }[];
+  booking_items: { quantity: number; items: { name: string; required_equipment: unknown } | null }[];
+}
+
+/** Sum each item's required gear across the booking (× booking quantity). */
+function aggregateEquipment(bookingItems: Row["booking_items"]): EquipmentItem[] {
+  const totals = new Map<string, number>();
+  for (const li of bookingItems ?? []) {
+    for (const e of normalizeEquipment(li.items?.required_equipment)) {
+      totals.set(e.label, (totals.get(e.label) ?? 0) + e.qty * (li.quantity || 1));
+    }
+  }
+  return [...totals.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([label, qty]) => ({ label, qty }));
 }
 
 function itemsLabel(bookingItems: Row["booking_items"]): string {
@@ -82,6 +96,7 @@ function toStop(r: Row, kind: StopKind): RouteStop {
     address: r.delivery_address,
     zip: r.delivery_zip,
     items: itemsLabel(r.booking_items),
+    equipment: aggregateEquipment(r.booking_items),
   };
 }
 
@@ -95,7 +110,7 @@ export async function getDeliveryRoute(operatorId: string, dateIso: string, tz?:
   const { data, error } = await supabase
     .from("bookings")
     .select(
-      "id, status, start_date, end_date, customer_name, customer_email, customer_phone, delivery_window, delivery_address, delivery_zip, booking_items(quantity, items(name))",
+      "id, status, start_date, end_date, customer_name, customer_email, customer_phone, delivery_window, delivery_address, delivery_zip, booking_items(quantity, items(name, required_equipment))",
     )
     .eq("operator_id", operatorId)
     .in("status", ON)

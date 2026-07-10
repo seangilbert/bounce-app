@@ -60,6 +60,8 @@ export interface Item {
   unitsNeedsCleaning: number;
   unitsDamaged: number;
   unitsInRepair: number;
+  /** Gear needed to run this item — the loadout checklist. */
+  requiredEquipment: EquipmentItem[];
   /** Price in minor units (cents). */
   basePrice: number;
   priceUnit: PriceUnit;
@@ -67,6 +69,23 @@ export interface Item {
   powerRequired: boolean;
   images: string[];
   active: boolean;
+}
+
+/** One piece of gear an item needs to operate. */
+export interface EquipmentItem {
+  label: string;
+  qty: number;
+}
+
+/** Coerce raw JSONB into a clean equipment list (drops blanks, floors qty at 1). */
+export function normalizeEquipment(raw: unknown): EquipmentItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((e) => ({
+      label: String((e as EquipmentItem)?.label ?? "").trim(),
+      qty: Math.max(1, Math.round(Number((e as EquipmentItem)?.qty ?? 1)) || 1),
+    }))
+    .filter((e) => e.label);
 }
 
 /** Units currently out of service (any non-ready condition). */
@@ -88,6 +107,7 @@ export interface NewItem {
   unitsNeedsCleaning?: number;
   unitsDamaged?: number;
   unitsInRepair?: number;
+  requiredEquipment?: EquipmentItem[];
   basePrice: number;
   priceUnit?: PriceUnit;
   footprint?: Partial<Footprint>;

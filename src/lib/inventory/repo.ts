@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
-import type { Item, NewItem, Operator, PriceUnit } from "./types";
+import { normalizeEquipment, type EquipmentItem, type Item, type NewItem, type Operator, type PriceUnit } from "./types";
 
 const OPERATORS = "operators";
 const ITEMS = "items";
@@ -54,6 +54,7 @@ interface ItemRow {
   units_needs_cleaning: number | null;
   units_damaged: number | null;
   units_in_repair: number | null;
+  required_equipment: unknown;
   base_price: number;
   price_unit: Item["priceUnit"];
   footprint_w: number | null;
@@ -117,6 +118,7 @@ function rowToItem(r: ItemRow): Item {
     unitsNeedsCleaning: r.units_needs_cleaning ?? 0,
     unitsDamaged: r.units_damaged ?? 0,
     unitsInRepair: r.units_in_repair ?? 0,
+    requiredEquipment: normalizeEquipment(r.required_equipment),
     basePrice: r.base_price,
     priceUnit: r.price_unit,
     footprint: { w: r.footprint_w, l: r.footprint_l, h: r.footprint_h },
@@ -211,6 +213,7 @@ export interface ItemPatch {
   unitsNeedsCleaning?: number;
   unitsDamaged?: number;
   unitsInRepair?: number;
+  requiredEquipment?: EquipmentItem[];
   basePrice?: number;
   priceUnit?: PriceUnit;
   powerRequired?: boolean;
@@ -229,6 +232,7 @@ export async function updateItem(operatorId: string, id: string, patch: ItemPatc
   if (patch.unitsNeedsCleaning !== undefined) row.units_needs_cleaning = patch.unitsNeedsCleaning;
   if (patch.unitsDamaged !== undefined) row.units_damaged = patch.unitsDamaged;
   if (patch.unitsInRepair !== undefined) row.units_in_repair = patch.unitsInRepair;
+  if (patch.requiredEquipment !== undefined) row.required_equipment = normalizeEquipment(patch.requiredEquipment);
   if (patch.basePrice !== undefined) row.base_price = patch.basePrice;
   if (patch.priceUnit !== undefined) row.price_unit = patch.priceUnit;
   if (patch.powerRequired !== undefined) row.power_required = patch.powerRequired;
@@ -305,6 +309,7 @@ export async function createItem(input: NewItem): Promise<Item> {
       units_needs_cleaning: input.unitsNeedsCleaning ?? 0,
       units_damaged: input.unitsDamaged ?? 0,
       units_in_repair: input.unitsInRepair ?? 0,
+      required_equipment: normalizeEquipment(input.requiredEquipment),
       base_price: input.basePrice,
       price_unit: input.priceUnit ?? "per_day",
       footprint_w: input.footprint?.w ?? null,
