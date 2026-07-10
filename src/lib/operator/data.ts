@@ -467,7 +467,7 @@ export interface FunnelData {
 
 /** One "needs action" row (state-based, current — not period-scoped). */
 export interface AttentionItem {
-  kind: "deliver" | "pickup" | "balance" | "signature" | "followup";
+  kind: "deliver" | "pickup" | "balance" | "signature" | "followup" | "cleaning";
   title: string;
   subtitle: string;
   amount?: string;
@@ -506,6 +506,7 @@ const SIGNED_PLUS = new Set(["confirmed", "delivered", "completed"]);
 interface DashBooking {
   id: string;
   status: string;
+  turnaround: string;
   created_at: string;
   start_date: string;
   end_date: string;
@@ -564,7 +565,7 @@ export async function getDashboard(
     supabase
       .from("bookings")
       .select(
-        "id, status, created_at, start_date, end_date, total, subtotal, deposit, customer_name, customer_id, delivery_window, delivery_zip, booking_items(items(name))",
+        "id, status, turnaround, created_at, start_date, end_date, total, subtotal, deposit, customer_name, customer_id, delivery_window, delivery_zip, booking_items(items(name))",
       )
       .eq("operator_id", operatorId),
   ]);
@@ -590,6 +591,8 @@ export async function getDashboard(
       attention.push({ kind: "signature", title: name, subtitle: `Awaiting signature · event ${fmtDay(b.start_date)}`, href: `/bookings/${b.id}`, dateIso: b.start_date });
     if (b.status === "quoted" && b.start_date >= today)
       attention.push({ kind: "followup", title: name, subtitle: `Open quote · event ${fmtDay(b.start_date)}`, amount: money(b.total ?? b.subtotal ?? 0), href: `/bookings/${b.id}`, dateIso: b.start_date });
+    if (b.turnaround === "needs_cleaning")
+      attention.push({ kind: "cleaning", title: name, subtitle: `Awaiting cleaning · ${itemName(b)}`, href: "/deliveries", dateIso: b.end_date });
   }
   // Soonest events first; undated last.
   attention.sort((a, b) => (a.dateIso ?? "9999").localeCompare(b.dateIso ?? "9999"));

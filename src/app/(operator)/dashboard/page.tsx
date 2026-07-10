@@ -10,6 +10,7 @@ import {
   CurrencyDollar,
   Signature,
   ChatCircleDots,
+  Wrench,
   TrendUp,
   Confetti,
   ArrowsClockwise,
@@ -192,6 +193,7 @@ const ATTENTION_META: Record<
   balance: { icon: <CurrencyDollar size={16} weight="fill" />, tint: "bg-amber-tint", ink: "text-amber-deep" },
   signature: { icon: <Signature size={16} weight="fill" />, tint: "bg-sand", ink: "text-ink-soft" },
   followup: { icon: <ChatCircleDots size={16} weight="fill" />, tint: "bg-coral-tint", ink: "text-coral-deep" },
+  cleaning: { icon: <Wrench size={16} weight="fill" />, tint: "bg-amber-tint", ink: "text-amber-deep" },
 };
 
 function AttentionCard({ items, scope }: { items: AttentionItem[]; scope: DashboardScope }) {
