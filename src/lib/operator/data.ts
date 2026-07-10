@@ -438,104 +438,230 @@ const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct
 const WEEKDAY_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const WEEKDAY_ABBR = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
 
+export type DashboardScope = "day" | "week" | "month";
+
+/** Booking funnel over a period (cohort by quote-created date). A "full
+ *  booking" = quote + signed contract + deposit paid = the `confirmed`+ state. */
+export interface FunnelData {
+  quotes: number; // bookings created in the period
+  paid: number; // reached deposit/full paid
+  signed: number; // full bookings — signed contract (implies paid)
+  conversionPct: number; // signed / quotes
+}
+
+/** One "needs action" row (state-based, current — not period-scoped). */
+export interface AttentionItem {
+  kind: "deliver" | "pickup" | "balance" | "signature" | "followup";
+  title: string;
+  subtitle: string;
+  amount?: string;
+  href: string;
+  dateIso: string | null;
+}
+
+export interface MonthInsights {
+  quotes: number;
+  fullBookings: number;
+  conversionPct: number;
+  revenueBooked: string;
+  lostQuotes: number;
+  repeatCustomers: number;
+}
+
 export interface DashboardData {
-  dateLabel: string;
-  routeSummary: string;
-  revenue: string;
-  bookings: number;
-  needsYou: number;
-  quotesSent: number;
-  booked: number;
-  flaggedSummary: string | null;
-  todayStops: Stop[];
+  scope: DashboardScope;
+  periodLabel: string; // e.g. "Jul 6 – Jul 12"
+  dateLabel: string; // greeting subtitle (always today)
+  funnel: FunnelData;
+  attention: AttentionItem[];
   comingUp: { month: string; day: string; title: string; subtitle: string; tone: "coral" | "muted" }[];
+  todayStops: Stop[]; // today's deliveries (feeds the weather advisory + Day route)
+  month: MonthInsights;
 }
 
 function ymd(d: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
-export async function getDashboard(operatorId: string, tz?: string): Promise<DashboardData> {
+// Booking status groupings for the funnel + state lists.
+const PAID_PLUS = new Set(["paid", "contracted", "confirmed", "delivered", "completed"]);
+const SIGNED_PLUS = new Set(["confirmed", "delivered", "completed"]);
+
+interface DashBooking {
+  id: string;
+  status: string;
+  created_at: string;
+  start_date: string;
+  end_date: string;
+  total: number | null;
+  subtotal: number | null;
+  deposit: number | null;
+  customer_name: string | null;
+  customer_id: string | null;
+  delivery_window: string | null;
+  delivery_zip: string | null;
+  booking_items: { items: { name: string } | { name: string }[] | null }[] | null;
+}
+
+function itemName(b: DashBooking): string {
+  const li = b.booking_items?.[0]?.items;
+  const it = Array.isArray(li) ? li[0] : li;
+  return it?.name ?? "Booking";
+}
+
+function fmtDay(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return `${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
+export async function getDashboard(
+  operatorId: string,
+  tz?: string,
+  scope: DashboardScope = "week",
+): Promise<DashboardData> {
   const supabase = createAdminClient();
-  // Anchor on the operator's local "today" (server runs in UTC — see time.ts),
-  // then do week math in UTC on that date so ymd() lines up.
   const today = operatorToday(tz);
   const todayDate = new Date(`${today}T00:00:00Z`);
   const dow = todayDate.getUTCDay();
-  const weekStart = new Date(todayDate); weekStart.setUTCDate(todayDate.getUTCDate() - dow);
-  const weekEnd = new Date(weekStart); weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
 
-  // Independent — fetch in parallel instead of one round-trip after another.
-  const [, itemsRes, cRes, weekRes, inqRows] = await Promise.all([
+  // Period bounds for the selected scope (operator-local, UTC date math).
+  let pStart: string;
+  let pEnd: string;
+  if (scope === "day") {
+    pStart = today;
+    pEnd = today;
+  } else if (scope === "month") {
+    pStart = ymd(new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth(), 1)));
+    pEnd = ymd(new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth() + 1, 0)));
+  } else {
+    const ws = new Date(todayDate); ws.setUTCDate(todayDate.getUTCDate() - dow);
+    const we = new Date(ws); we.setUTCDate(ws.getUTCDate() + 6);
+    pStart = ymd(ws);
+    pEnd = ymd(we);
+  }
+  // Month bounds (always computed for the Month insights block).
+  const mStart = ymd(new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth(), 1)));
+  const mEnd = ymd(new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth() + 1, 0)));
+
+  const [, bRes] = await Promise.all([
     expireStaleCheckouts(),
-    supabase.from("items").select("id, category, quantity").eq("operator_id", operatorId),
     supabase
       .from("bookings")
-      .select("id, start_date, customer_name, status, delivery_window, delivery_zip, subtotal, booking_items(item_id, quantity, items(name, category))")
-      .eq("operator_id", operatorId)
-      .in("status", COMMITTED)
-      .gte("start_date", today),
-    supabase
-      .from("bookings")
-      .select("subtotal")
-      .eq("operator_id", operatorId)
-      .in("status", COMMITTED)
-      .gte("start_date", ymd(weekStart))
-      .lte("start_date", ymd(weekEnd)),
-    listInquiries(operatorId),
+      .select(
+        "id, status, created_at, start_date, end_date, total, subtotal, deposit, customer_name, customer_id, delivery_window, delivery_zip, booking_items(items(name))",
+      )
+      .eq("operator_id", operatorId),
   ]);
-  const bounceOwned = (itemsRes.data ?? []).filter((i) => toCategory(i.category) === "bounce");
-  const committed = (cRes.data ?? []) as unknown as BRow[];
-  const revenueCents = (weekRes.data ?? []).reduce((s, b) => s + (b.subtotal ?? 0), 0);
-  const needsYou = inqRows.filter((r) => r.status === "needs_review").length;
-  const quotesSent = inqRows.filter((r) => r.status === "auto").length;
-  const flagged = inqRows.find((r) => r.status === "needs_review");
+  const all = ((bRes.data ?? []) as unknown as DashBooking[]);
+  const createdIso = (b: DashBooking) => b.created_at.slice(0, 10);
+  const balanceOf = (b: DashBooking) => (b.total ?? 0) - (b.deposit ?? 0);
 
-  // Today's route
-  const todayStops: Stop[] = committed
-    .filter((b) => b.start_date === today)
+  // ---- Funnel (cohort of quotes created in the selected period) -------------
+  const cohort = all.filter((b) => createdIso(b) >= pStart && createdIso(b) <= pEnd);
+  const funnel = buildFunnel(cohort);
+
+  // ---- Needs-action items (current state, not period-scoped) ----------------
+  const attention: AttentionItem[] = [];
+  for (const b of all) {
+    const name = b.customer_name ?? "Customer";
+    if (PAID_PLUS.has(b.status) && b.start_date === today)
+      attention.push({ kind: "deliver", title: name, subtitle: `Deliver ${itemName(b)}`, href: `/bookings/${b.id}`, dateIso: b.start_date });
+    if (PAID_PLUS.has(b.status) && b.end_date === today)
+      attention.push({ kind: "pickup", title: name, subtitle: `Pick up ${itemName(b)}`, href: `/bookings/${b.id}`, dateIso: b.end_date });
+    if (PAID_PLUS.has(b.status) && balanceOf(b) > 0)
+      attention.push({ kind: "balance", title: name, subtitle: `Balance due · event ${fmtDay(b.start_date)}`, amount: money(balanceOf(b)), href: `/bookings/${b.id}`, dateIso: b.start_date });
+    if (b.status === "contracted")
+      attention.push({ kind: "signature", title: name, subtitle: `Awaiting signature · event ${fmtDay(b.start_date)}`, href: `/bookings/${b.id}`, dateIso: b.start_date });
+    if (b.status === "quoted" && b.start_date >= today)
+      attention.push({ kind: "followup", title: name, subtitle: `Open quote · event ${fmtDay(b.start_date)}`, amount: money(b.total ?? b.subtotal ?? 0), href: `/bookings/${b.id}`, dateIso: b.start_date });
+  }
+  // Soonest events first; undated last.
+  attention.sort((a, b) => (a.dateIso ?? "9999").localeCompare(b.dateIso ?? "9999"));
+
+  // ---- Coming up (committed events within the period, by event date) --------
+  const comingUp: DashboardData["comingUp"] = all
+    .filter((b) => PAID_PLUS.has(b.status) && b.start_date >= today && b.start_date <= pEnd)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date))
+    .slice(0, 6)
+    .map((b) => {
+      const d = new Date(`${b.start_date}T00:00:00Z`);
+      return {
+        month: WEEKDAY_ABBR[d.getUTCDay()]!,
+        day: String(d.getUTCDate()),
+        title: `${b.customer_name ?? "Customer"} · ${itemName(b)}`,
+        subtitle: b.delivery_window ? `${b.delivery_window} · ${b.delivery_zip ? `ZIP ${b.delivery_zip}` : "—"}` : (b.delivery_zip ? `ZIP ${b.delivery_zip}` : "Scheduled"),
+        tone: b.start_date === today ? "coral" : "muted",
+      };
+    });
+
+  // ---- Today's route (for the weather advisory + Day view) ------------------
+  const todayStops: Stop[] = all
+    .filter((b) => PAID_PLUS.has(b.status) && b.start_date === today)
     .map((b) => {
       const [time, meridiem] = (b.delivery_window ?? "— ").split(" ");
       return {
         time: time ?? "—",
         meridiem: meridiem ?? "",
         type: "DELIVER" as const,
-        item: b.booking_items?.[0]?.items?.name ?? "Booking",
+        item: itemName(b),
         customer: b.customer_name ?? "Customer",
         address: b.delivery_zip ? `ZIP ${b.delivery_zip}` : "Plymouth",
         status: { label: "Scheduled", tone: "muted" as const },
       };
     });
 
-  // Coming up: next fully-booked day + the escalated inquiry
-  const byDay = new Map<string, BRow[]>();
-  for (const b of committed) (byDay.get(b.start_date) ?? byDay.set(b.start_date, []).get(b.start_date)!).push(b);
-  const comingUp: DashboardData["comingUp"] = [];
-  const fbDay = [...byDay.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .find(([, bs]) => {
-      const reserved = new Map<string, number>();
-      for (const bk of bs) for (const li of bk.booking_items ?? []) reserved.set(li.item_id, (reserved.get(li.item_id) ?? 0) + li.quantity);
-      return bounceOwned.length > 0 && bounceOwned.every((bi) => (reserved.get(bi.id) ?? 0) >= bi.quantity);
-    });
-  if (fbDay) {
-    const d = new Date(`${fbDay[0]}T00:00:00Z`);
-    comingUp.push({ month: WEEKDAY_ABBR[d.getUTCDay()], day: String(d.getUTCDate()), title: "Fully booked", subtitle: `${fbDay[1].length} bookings out`, tone: "coral" });
-  }
-  if (flagged) {
-    comingUp.push({ month: "NEW", day: "•", title: "Quote to review", subtitle: `${flagged.customer_name ?? "Website visitor"} · needs you`, tone: "muted" });
-  }
+  // ---- Month insights -------------------------------------------------------
+  const monthCohort = all.filter((b) => createdIso(b) >= mStart && createdIso(b) <= mEnd);
+  const mFunnel = buildFunnel(monthCohort);
+  const revenueBooked = monthCohort.filter((b) => PAID_PLUS.has(b.status)).reduce((s, b) => s + (b.total ?? 0), 0);
+  const lostQuotes = monthCohort.filter(
+    (b) => b.status === "quoted" && (b.start_date < today || daysBetween(createdIso(b), today) >= 14),
+  ).length;
+  const repeatCustomers = countRepeatCustomers(all);
+  const month: MonthInsights = {
+    quotes: mFunnel.quotes,
+    fullBookings: mFunnel.signed,
+    conversionPct: mFunnel.conversionPct,
+    revenueBooked: money(revenueBooked),
+    lostQuotes,
+    repeatCustomers,
+  };
+
+  const periodLabel =
+    scope === "day" ? fmtDay(today) : scope === "month" ? `${MONTHS_SHORT[todayDate.getUTCMonth()]} ${todayDate.getUTCFullYear()}` : `${fmtDay(pStart)} – ${fmtDay(pEnd)}`;
 
   return {
+    scope,
+    periodLabel,
     dateLabel: `${WEEKDAY_FULL[dow]}, ${MONTHS_SHORT[todayDate.getUTCMonth()]} ${todayDate.getUTCDate()}`,
-    routeSummary: `${todayStops.length} ${todayStops.length === 1 ? "stop" : "stops"} on today's route`,
-    revenue: money(revenueCents),
-    bookings: committed.length,
-    needsYou,
-    quotesSent,
-    booked: quotesSent,
-    flaggedSummary: flagged?.inbound_message ?? null,
-    todayStops,
+    funnel,
+    attention,
     comingUp,
+    todayStops,
+    month,
   };
+}
+
+function buildFunnel(cohort: DashBooking[]): FunnelData {
+  const quotes = cohort.length;
+  const paid = cohort.filter((b) => PAID_PLUS.has(b.status)).length;
+  const signed = cohort.filter((b) => SIGNED_PLUS.has(b.status)).length;
+  return { quotes, paid, signed, conversionPct: quotes ? Math.round((signed / quotes) * 100) : 0 };
+}
+
+/** Whole days from `a` to `b` (both YYYY-MM-DD, UTC). */
+function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+}
+
+/** Customers with 2+ non-canceled bookings. */
+function countRepeatCustomers(all: DashBooking[]): number {
+  const counts = new Map<string, number>();
+  for (const b of all) {
+    if (!b.customer_id || b.status === "canceled") continue;
+    counts.set(b.customer_id, (counts.get(b.customer_id) ?? 0) + 1);
+  }
+  let repeats = 0;
+  for (const n of counts.values()) if (n >= 2) repeats++;
+  return repeats;
 }

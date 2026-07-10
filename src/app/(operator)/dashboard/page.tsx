@@ -1,33 +1,54 @@
 import Link from "next/link";
 import {
-  Sparkle,
-  ArrowRight,
   ArrowUpRight,
-  Plus,
+  ArrowDown,
   CloudRain,
   Sun,
-  ArrowUp,
-  ArrowDown,
-  TrendUp,
   CheckCircle,
+  Truck,
+  Package,
+  CurrencyDollar,
+  Signature,
+  ChatCircleDots,
+  TrendUp,
+  Confetti,
+  ArrowsClockwise,
+  ArrowRight,
 } from "@phosphor-icons/react/dist/ssr";
 import { getSessionOperator } from "@/lib/operator/session";
 import type { Operator } from "@/lib/inventory/types";
-import { getDashboard, type DashboardData } from "@/lib/operator/data";
+import {
+  getDashboard,
+  type DashboardData,
+  type DashboardScope,
+  type AttentionItem,
+} from "@/lib/operator/data";
 import { getWeatherAdvisory, type WeatherAdvisory } from "@/lib/operator/weather";
 import { ConnectBanner } from "@/components/operator/ConnectBanner";
 import { NewBookingButton } from "@/components/operator/bookings/NewBookingButton";
 import { CustomerSearchBox } from "@/components/operator/customers/CustomerSearchBox";
-// Reply-time + weekly deltas remain lightweight config (no historical series yet).
-import { aiSummary, weekStats } from "@/lib/operator/mock";
-import type { Stop } from "@/lib/operator/mock";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+const SCOPES: { key: DashboardScope; label: string }[] = [
+  { key: "day", label: "Day" },
+  { key: "week", label: "Week" },
+  { key: "month", label: "Month" },
+];
+
+function parseScope(v?: string): DashboardScope {
+  return v === "day" || v === "month" ? v : "week";
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: { view?: string };
+}) {
   const op = await getSessionOperator();
   if (!op) return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
-  const data = await getDashboard(op.id, op.timezone);
+  const scope = parseScope(searchParams.view);
+  const data = await getDashboard(op.id, op.timezone, scope);
   const weather = await getWeatherAdvisory(op, data.todayStops);
   return <DashboardBody data={data} operator={op} weather={weather} />;
 }
@@ -42,6 +63,7 @@ function DashboardBody({
   weather: WeatherAdvisory | null;
 }) {
   const firstName = operator.ownerName?.split(/\s+/)[0] ?? operator.name;
+  const scopeWord = data.scope === "day" ? "today" : data.scope === "month" ? "this month" : "this week";
   return (
     <div className="flex w-full flex-col">
       {/* Top bar */}
@@ -50,9 +72,7 @@ function DashboardBody({
           <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">
             Good morning, {firstName}
           </h1>
-          <p className="mt-0.5 text-sm font-medium text-ink-mute">
-            {data.dateLabel} · {data.routeSummary}
-          </p>
+          <p className="mt-0.5 text-sm font-medium text-ink-mute">{data.dateLabel}</p>
         </div>
         <div className="flex items-center gap-3">
           <CustomerSearchBox />
@@ -66,182 +86,227 @@ function DashboardBody({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-5 px-5 py-5 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6 lg:px-8 lg:py-6">
-        <div className="flex min-w-0 flex-col gap-5 lg:gap-6">
-          <AiHero data={data} />
-          <TodaysRoute stops={data.todayStops} />
+      <div className="flex flex-col gap-5 px-5 py-5 lg:px-8 lg:py-6">
+        {/* Scope toggle + period */}
+        <div className="flex items-center justify-between gap-3">
+          <ScopeTabs scope={data.scope} />
+          <span className="text-[13px] font-bold text-ink-mute">{data.periodLabel}</span>
         </div>
-        <div className="flex flex-col gap-4 lg:gap-5">
-          <div className="grid grid-cols-2 gap-3 lg:gap-4">
-            <StatTile label="This week" value={data.revenue}>
-              <span className="flex items-center gap-1 font-bold text-teal">
-                <TrendUp size={14} weight="bold" />
-                {weekStats.change}
-              </span>
-            </StatTile>
-            <StatTile label="Bookings" value={String(data.bookings)}>
-              <span className="font-semibold text-ink-mute">{weekStats.repliedPct}% replied</span>
-            </StatTile>
-          </div>
-          <WeatherCard weather={weather} />
-          <ComingUp items={data.comingUp} />
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function AiHero({ data }: { data: DashboardData }) {
-  return (
-    <section className="rounded-[24px] bg-brand p-5 text-white shadow-[0_24px_50px_-26px_var(--brand-glow,rgba(59,125,240,0.65))] lg:rounded-[28px] lg:p-7">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Sparkle size={18} weight="fill" />
-          <span className="text-[15px] font-extrabold">AI Quote Assistant</span>
-        </div>
-        <span className="rounded-full bg-white/20 px-3.5 py-1.5 text-xs font-bold">
-          Active since {aiSummary.since}
-        </span>
-      </div>
+        {/* Funnel — the pipeline for the selected period */}
+        <FunnelCard data={data} scopeWord={scopeWord} />
 
-      <div className="mt-4 flex items-start justify-between gap-4 lg:mt-5 lg:gap-6">
-        <div className="flex items-start gap-3 lg:gap-4">
-          <span className="font-display text-[48px] font-bold leading-[0.9] lg:text-[64px]">
-            {data.quotesSent}
-          </span>
-          <span className="mt-0.5 max-w-[12ch] font-display text-lg font-bold leading-tight lg:mt-1 lg:text-[22px]">
-            quotes sent while you were out
-          </span>
-        </div>
-        <div className="flex flex-shrink-0 gap-5 lg:gap-8">
-          <HeroStat label="Avg reply" value={`${aiSummary.avgReplyMin} min`} />
-          <HeroStat label="Booked" value={`${data.booked} of ${data.quotesSent}`} />
-        </div>
-      </div>
-
-      {data.needsYou > 0 && data.flaggedSummary ? (
-        <div className="mt-5 rounded-[16px] bg-white p-4 lg:mt-6">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-            <div className="flex items-start gap-3 lg:flex-1">
-              <span className="flex-shrink-0 rounded-full bg-brand-tint px-3 py-1.5 text-[11px] font-extrabold text-brand-deep">
-                {data.needsYou} NEEDS YOU
-              </span>
-              <p className="text-sm font-medium leading-snug text-ink">{data.flaggedSummary}</p>
+        {/* Scope-specific content */}
+        {data.scope === "month" ? (
+          <MonthInsightsCard data={data} />
+        ) : (
+          <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-6">
+            <AttentionCard items={data.attention} scope={data.scope} />
+            <div className="flex flex-col gap-5">
+              <ComingUp items={data.comingUp} scope={data.scope} />
+              <WeatherCard weather={weather} />
             </div>
-            <Link
-              href="/inquiries"
-              className="flex items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep lg:flex-shrink-0"
-            >
-              Review &amp; reply <ArrowRight size={15} weight="bold" />
-            </Link>
           </div>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function HeroStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-xs font-semibold text-white/70">{label}</div>
-      <div className="font-display text-lg font-bold lg:text-[22px]">{value}</div>
+        )}
+      </div>
     </div>
   );
 }
 
-function TodaysRoute({ stops }: { stops: Stop[] }) {
+function ScopeTabs({ scope }: { scope: DashboardScope }) {
   return (
-    <section className="rounded-[24px] border border-sand-line bg-white p-5 lg:rounded-[28px] lg:p-6">
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-bold text-ink lg:text-xl">Today&apos;s route</h2>
+    <div className="flex gap-1 rounded-xl bg-sand/50 p-1">
+      {SCOPES.map((s) => (
         <Link
-          href="/deliveries"
-          className="flex items-center gap-1.5 text-sm font-bold text-brand transition-colors hover:text-brand-deep"
+          key={s.key}
+          href={`/dashboard?view=${s.key}`}
+          className={`rounded-lg px-4 py-1.5 text-[13px] font-bold transition-colors ${
+            scope === s.key ? "bg-white text-ink shadow-sm" : "text-ink-mute hover:text-ink"
+          }`}
         >
-          <span className="hidden sm:inline">Open route</span>
-          <span className="sm:hidden">Route</span>
-          <ArrowUpRight size={15} weight="bold" />
+          {s.label}
         </Link>
+      ))}
+    </div>
+  );
+}
+
+// ---- Funnel ---------------------------------------------------------------
+
+function FunnelCard({ data, scopeWord }: { data: DashboardData; scopeWord: string }) {
+  const { quotes, paid, signed, conversionPct } = data.funnel;
+  const stages = [
+    { label: "Quotes", sub: "created", value: quotes, tone: "bg-brand" },
+    { label: "Deposit paid", sub: "payment in", value: paid, tone: "bg-teal" },
+    { label: "Full bookings", sub: "signed + paid", value: signed, tone: "bg-brand-deep" },
+  ];
+  const max = Math.max(quotes, 1);
+  return (
+    <section className="rounded-[24px] border border-sand-line bg-white p-5 lg:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-bold text-ink lg:text-xl">Booking funnel</h2>
+          <p className="text-[13px] font-medium text-ink-mute">Quotes created {scopeWord} and how far they got.</p>
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-brand-tint px-3.5 py-1.5 text-[13px] font-extrabold text-brand-deep">
+          <TrendUp size={15} weight="bold" /> {conversionPct}% converted
+        </div>
       </div>
-      {stops.length === 0 ? (
-        <p className="py-6 text-sm font-medium text-ink-mute">No deliveries scheduled today.</p>
+      {quotes === 0 ? (
+        <p className="mt-5 text-sm font-medium text-ink-mute">No quotes created {scopeWord} yet.</p>
       ) : (
-        <ol className="mt-2 divide-y divide-sand-line">
-          {stops.map((stop, i) => (
-            <RouteRow key={i} stop={stop} />
+        <div className="mt-5 flex flex-col gap-3">
+          {stages.map((s) => (
+            <div key={s.label} className="flex items-center gap-3">
+              <div className="w-24 flex-shrink-0 text-right lg:w-28">
+                <div className="text-[13px] font-bold text-ink">{s.label}</div>
+                <div className="text-[11px] font-medium text-ink-faint">{s.sub}</div>
+              </div>
+              <div className="relative h-9 flex-1 overflow-hidden rounded-lg bg-sand/40">
+                <div
+                  className={`flex h-full items-center rounded-lg ${s.tone} px-3 text-[13px] font-extrabold text-white`}
+                  style={{ width: `${Math.max((s.value / max) * 100, s.value > 0 ? 12 : 0)}%` }}
+                >
+                  {s.value > 0 ? s.value : null}
+                </div>
+                {s.value === 0 ? (
+                  <span className="absolute inset-y-0 left-0 flex items-center px-3 text-[13px] font-bold text-ink-faint">0</span>
+                ) : null}
+              </div>
+            </div>
           ))}
-        </ol>
+        </div>
       )}
     </section>
   );
 }
 
-function RouteRow({ stop }: { stop: Stop }) {
-  const deliver = stop.type === "DELIVER";
+// ---- Needs action (Day / Week) --------------------------------------------
+
+const ATTENTION_META: Record<
+  AttentionItem["kind"],
+  { icon: React.ReactNode; tint: string; ink: string }
+> = {
+  deliver: { icon: <Truck size={16} weight="fill" />, tint: "bg-brand-tint", ink: "text-brand-deep" },
+  pickup: { icon: <Package size={16} weight="fill" />, tint: "bg-teal-tint", ink: "text-teal-deep" },
+  balance: { icon: <CurrencyDollar size={16} weight="fill" />, tint: "bg-amber-tint", ink: "text-amber-deep" },
+  signature: { icon: <Signature size={16} weight="fill" />, tint: "bg-sand", ink: "text-ink-soft" },
+  followup: { icon: <ChatCircleDots size={16} weight="fill" />, tint: "bg-coral-tint", ink: "text-coral-deep" },
+};
+
+function AttentionCard({ items, scope }: { items: AttentionItem[]; scope: DashboardScope }) {
+  // Day shows everything (incl. today's deliveries/pickups); Week focuses on the
+  // open pipeline gaps (balances, signatures, follow-ups).
+  const all = scope === "day" ? items : items.filter((i) => i.kind !== "deliver" && i.kind !== "pickup");
+  const CAP = 8;
+  const shown = all.slice(0, CAP);
+  const overflow = all.length - shown.length;
   return (
-    <li className="flex items-center gap-3 py-4 lg:gap-4">
-      <div className="w-12 flex-shrink-0 lg:w-14">
-        <div className="font-display text-base font-bold text-ink">{stop.time}</div>
-        <div className="text-[11px] font-bold text-ink-faint">{stop.meridiem}</div>
+    <section className="rounded-[24px] border border-sand-line bg-white p-5 lg:p-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-lg font-bold text-ink lg:text-xl">Needs attention</h2>
+        {all.length > 0 ? (
+          <span className="rounded-full bg-coral-tint px-2.5 py-1 text-[11px] font-extrabold text-coral-deep">{all.length}</span>
+        ) : null}
       </div>
-      <span
-        className={`flex flex-shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold tracking-wide ${
-          deliver ? "bg-brand-tint text-brand-deep" : "bg-teal-tint text-teal-deep"
-        }`}
-      >
-        {deliver ? <ArrowUp size={9} weight="fill" /> : <ArrowDown size={9} weight="fill" />}
-        {stop.type}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-bold text-ink lg:text-[15px]">{stop.item}</div>
-        <div className="truncate text-[13px] font-medium text-ink-mute">
-          {stop.customer} · {stop.address}
-        </div>
-      </div>
-      <RouteStatus status={stop.status} />
-    </li>
+      {shown.length === 0 ? (
+        <p className="mt-3 flex items-center gap-2 text-sm font-medium text-ink-mute">
+          <CheckCircle size={18} weight="fill" className="text-teal" /> All clear — nothing needs you right now.
+        </p>
+      ) : (
+        <ul className="mt-3 divide-y divide-sand-line">
+          {shown.map((it, i) => {
+            const m = ATTENTION_META[it.kind];
+            return (
+              <li key={i}>
+                <Link href={it.href} className="flex items-center gap-3 py-3 transition-opacity hover:opacity-80">
+                  <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${m.tint} ${m.ink}`}>
+                    {m.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-ink">{it.title}</div>
+                    <div className="truncate text-[12.5px] font-medium text-ink-mute">{it.subtitle}</div>
+                  </div>
+                  {it.amount ? <span className="flex-shrink-0 font-display text-sm font-bold text-ink tabular-nums">{it.amount}</span> : null}
+                  <ArrowRight size={15} weight="bold" className="flex-shrink-0 text-ink-faint" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {overflow > 0 ? (
+        <Link href="/calendar" className="mt-3 flex items-center gap-1 text-[13px] font-bold text-brand transition-colors hover:text-brand-deep">
+          +{overflow} more on the calendar <ArrowRight size={13} weight="bold" />
+        </Link>
+      ) : null}
+    </section>
   );
 }
 
-function RouteStatus({ status }: { status: Stop["status"] }) {
-  if (status.tone === "ok") {
-    return (
-      <span className="flex flex-shrink-0 items-center gap-1.5 text-[13px] font-bold text-teal">
-        <CheckCircle size={17} weight="fill" />
-        <span className="hidden sm:inline">{status.label}</span>
-      </span>
-    );
-  }
-  if (status.tone === "warn") {
-    return (
-      <span className="flex flex-shrink-0 items-center gap-1.5 text-[13px] font-bold text-amber-deep">
-        <CloudRain size={16} weight="fill" />
-        <span className="hidden sm:inline">{status.label}</span>
-      </span>
-    );
-  }
+// ---- Month insights -------------------------------------------------------
+
+function MonthInsightsCard({ data }: { data: DashboardData }) {
+  const m = data.month;
+  const tiles = [
+    { label: "Quotes → bookings", value: `${m.conversionPct}%`, sub: `${m.fullBookings} of ${m.quotes} quotes`, icon: <TrendUp size={18} weight="bold" />, tint: "text-brand" },
+    { label: "Revenue booked", value: m.revenueBooked, sub: "paid bookings this month", icon: <CurrencyDollar size={18} weight="fill" />, tint: "text-teal" },
+    { label: "Lost quotes", value: String(m.lostQuotes), sub: "expired or past-event", icon: <ArrowDown size={18} weight="bold" />, tint: "text-coral-deep" },
+    { label: "Repeat customers", value: String(m.repeatCustomers), sub: "2+ bookings", icon: <ArrowsClockwise size={18} weight="bold" />, tint: "text-amber-deep" },
+  ];
   return (
-    <span className="hidden flex-shrink-0 text-[13px] font-semibold text-ink-mute sm:block">
-      {status.label}
-    </span>
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        {tiles.map((t) => (
+          <div key={t.label} className="rounded-[20px] border border-sand-line bg-white p-4 lg:p-5">
+            <div className={`flex items-center gap-1.5 ${t.tint}`}>{t.icon}</div>
+            <div className="mt-2 font-display text-[26px] font-bold text-ink lg:text-[30px]">{t.value}</div>
+            <div className="mt-0.5 text-[13px] font-bold text-ink-soft">{t.label}</div>
+            <div className="text-[12px] font-medium text-ink-mute">{t.sub}</div>
+          </div>
+        ))}
+      </div>
+      <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink-faint">
+        <Confetti size={14} weight="fill" /> Discounts &amp; promos tracking is coming — not yet available.
+      </p>
+    </div>
   );
 }
 
-function StatTile({
-  label,
-  value,
-  children,
-}: {
-  label: string;
-  value: string;
-  children: React.ReactNode;
-}) {
+// ---- Coming up (event date) ----------------------------------------------
+
+function ComingUp({ items, scope }: { items: DashboardData["comingUp"]; scope: DashboardScope }) {
+  const title = scope === "day" ? "Today's route" : "Coming up";
   return (
-    <div className="rounded-[20px] border border-sand-line bg-white p-4 lg:p-5">
-      <div className="text-[13px] font-semibold text-ink-mute">{label}</div>
-      <div className="mt-1 font-display text-[26px] font-bold text-ink lg:text-[28px]">{value}</div>
-      <div className="mt-1 text-[13px]">{children}</div>
+    <div className="rounded-[20px] border border-sand-line bg-white p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-lg font-bold text-ink">{title}</h3>
+        <Link href="/calendar" className="flex items-center gap-1 text-[13px] font-bold text-brand transition-colors hover:text-brand-deep">
+          Calendar <ArrowUpRight size={14} weight="bold" />
+        </Link>
+      </div>
+      {items.length === 0 ? (
+        <p className="mt-2 text-sm font-medium text-ink-mute">Nothing scheduled {scope === "day" ? "today" : "in range"}.</p>
+      ) : (
+        <ul className="mt-3 flex flex-col gap-3.5">
+          {items.map((c, i) => (
+            <li key={i} className="flex items-center gap-3">
+              <div
+                className={`flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-xl leading-none ${
+                  c.tone === "coral" ? "bg-coral-tint text-coral-deep" : "bg-sand text-ink-soft"
+                }`}
+              >
+                <span className="text-[9px] font-extrabold">{c.month}</span>
+                <span className="font-display text-[15px] font-bold">{c.day}</span>
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-bold text-ink">{c.title}</div>
+                <div className="truncate text-[12.5px] font-medium text-ink-mute">{c.subtitle}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -267,36 +332,6 @@ function WeatherCard({ weather }: { weather: WeatherAdvisory | null }) {
         <span className="text-base font-extrabold text-[#5C4B22]">{weather.headline}</span>
       </div>
       <p className="mt-2 text-[13.5px] font-medium leading-snug text-[#8A7A55]">{weather.detail}</p>
-    </div>
-  );
-}
-
-function ComingUp({ items }: { items: DashboardData["comingUp"] }) {
-  return (
-    <div className="rounded-[20px] border border-sand-line bg-white p-5">
-      <h3 className="font-display text-lg font-bold text-ink">Coming up</h3>
-      {items.length === 0 ? (
-        <p className="mt-2 text-sm font-medium text-ink-mute">Nothing upcoming.</p>
-      ) : (
-        <ul className="mt-3 flex flex-col gap-3.5">
-          {items.map((c, i) => (
-            <li key={i} className="flex items-center gap-3">
-              <div
-                className={`flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-xl leading-none ${
-                  c.tone === "coral" ? "bg-coral-tint text-coral-deep" : "bg-sand text-ink-soft"
-                }`}
-              >
-                <span className="text-[9px] font-extrabold">{c.month}</span>
-                <span className="font-display text-[15px] font-bold">{c.day}</span>
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-bold text-ink">{c.title}</div>
-                <div className="truncate text-[12.5px] font-medium text-ink-mute">{c.subtitle}</div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
