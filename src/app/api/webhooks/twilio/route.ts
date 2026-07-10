@@ -122,7 +122,7 @@ export async function POST(req: Request) {
     if (result.status === "review") {
       // Over the auto-quote cap / unmatched items — hand to the operator.
       await setInquiryStatus(inquiry.id, "needs_review");
-      if (operator?.contactEmail) {
+      if (operator?.contactEmail && operator.notifyNewInquiry) {
         try {
           await notifyOperatorNewInquiry({
             to: operator.contactEmail,

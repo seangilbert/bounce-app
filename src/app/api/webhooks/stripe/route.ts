@@ -9,7 +9,7 @@ import {
 import { autoSendEnabled, sendAgreementForOrder } from "@/lib/esign/agreements";
 import { confirmBookingPaid, getBooking, setBookingDeposit } from "@/lib/bookings/repo";
 import { getOperatorById } from "@/lib/inventory/repo";
-import { notifyBookingConfirmed, notifyOperatorNewBooking } from "@/lib/email";
+import { notifyBookingConfirmed, notifyOperatorNewBooking, notifyOperatorBalancePaid } from "@/lib/email";
 import { isBillingEvent, handleBillingEvent } from "@/lib/billing/webhook";
 import type Stripe from "stripe";
 
@@ -78,6 +78,15 @@ export async function POST(req: Request) {
           if (order.bookingId && isBalance) {
             const booking = await getBooking(order.bookingId);
             if (booking) await setBookingDeposit(order.bookingId, booking.total);
+            // Alert the operator that the balance is settled (best-effort).
+            try {
+              const operator = booking ? await getOperatorById(booking.operatorId) : null;
+              if (booking && operator && operator.notifyBalancePaid) {
+                await notifyOperatorBalancePaid(booking, operator, order.amountTotal);
+              }
+            } catch (e) {
+              console.error("[webhook] balance-paid email failed:", e);
+            }
             break;
           }
 
@@ -95,7 +104,9 @@ export async function POST(req: Request) {
               const operator = booking ? await getOperatorById(booking.operatorId) : null;
               if (booking && operator) {
                 await notifyBookingConfirmed(booking, operator, order.amountTotal);
-                await notifyOperatorNewBooking(booking, operator, order.amountTotal);
+                if (operator.notifyNewBooking) {
+                  await notifyOperatorNewBooking(booking, operator, order.amountTotal);
+                }
               }
             } catch (e) {
               console.error("[webhook] booking emails failed:", e);

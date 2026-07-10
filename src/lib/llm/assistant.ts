@@ -338,7 +338,7 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
     }
 
     // Alert the operator to inquiries that need their review (best-effort).
-    if (!auto && operator.contactEmail) {
+    if (!auto && operator.contactEmail && operator.notifyNewInquiry) {
       const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://bounce-app.vercel.app";
       try {
         await notifyOperatorNewInquiry({

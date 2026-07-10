@@ -18,6 +18,7 @@ import {
   updatePricingAction,
   updateDeliveryPricingAction,
   updateCustomerPoliciesAction,
+  updateNotificationPrefsAction,
   type ActionResult,
 } from "@/app/(operator)/settings/actions";
 import { normalizeDeliveryConfig } from "@/lib/delivery/pricing";
@@ -43,6 +44,10 @@ interface OperatorSettings {
   deliveryConfig: unknown;
   cancellationPolicy: string | null;
   damagePolicy: string | null;
+  notifyNewInquiry: boolean;
+  notifyNewBooking: boolean;
+  notifyBalancePaid: boolean;
+  notifyContractSigned: boolean;
 }
 
 export function SettingsView({ operator }: { operator: OperatorSettings }) {
@@ -54,6 +59,7 @@ export function SettingsView({ operator }: { operator: OperatorSettings }) {
       <DeliverySection operator={operator} />
       <PolicySection operator={operator} />
       <CustomerPoliciesSection operator={operator} />
+      <NotificationsSection operator={operator} />
       <AccountSection operator={operator} />
     </div>
   );
@@ -231,6 +237,46 @@ function PolicySection({ operator }: { operator: OperatorSettings }) {
           )
         }
       />
+    </Section>
+  );
+}
+
+function NotificationsSection({ operator }: { operator: OperatorSettings }) {
+  const { busy, saved, error, save } = useSaver();
+  const [prefs, setPrefs] = useState({
+    notifyNewInquiry: operator.notifyNewInquiry,
+    notifyNewBooking: operator.notifyNewBooking,
+    notifyBalancePaid: operator.notifyBalancePaid,
+    notifyContractSigned: operator.notifyContractSigned,
+  });
+  const toggle = (k: keyof typeof prefs) => setPrefs((s) => ({ ...s, [k]: !s[k] }));
+
+  const ROWS: { key: keyof typeof prefs; label: string; desc: string }[] = [
+    { key: "notifyNewInquiry", label: "New inquiry", desc: "A lead needs your review (over the auto-quote cap or unmatched)." },
+    { key: "notifyNewBooking", label: "New booking & payment", desc: "A customer booked and paid a deposit or in full." },
+    { key: "notifyBalancePaid", label: "Balance paid", desc: "A customer paid their remaining balance online." },
+    { key: "notifyContractSigned", label: "Contract signed", desc: "The rental agreement is fully signed." },
+  ];
+
+  return (
+    <Section title="Notifications" desc="Which emails you receive. Customers are always notified regardless.">
+      <div className="divide-y divide-sand-line">
+        {ROWS.map((r) => (
+          <label key={r.key} className="flex cursor-pointer items-start gap-3 py-3 first:pt-0">
+            <input
+              type="checkbox"
+              checked={prefs[r.key]}
+              onChange={() => toggle(r.key)}
+              className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand"
+            />
+            <span className="min-w-0">
+              <span className="block text-[14px] font-bold text-ink-soft">{r.label}</span>
+              <span className="block text-[12.5px] font-medium text-ink-mute">{r.desc}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+      <SaveBar busy={busy} saved={saved} error={error} onSave={() => save(() => updateNotificationPrefsAction(prefs))} />
     </Section>
   );
 }

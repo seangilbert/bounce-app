@@ -29,6 +29,10 @@ export interface Operator {
   deliveryConfig: unknown;
   cancellationPolicy: string | null;
   damagePolicy: string | null;
+  notifyNewInquiry: boolean;
+  notifyNewBooking: boolean;
+  notifyBalancePaid: boolean;
+  notifyContractSigned: boolean;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

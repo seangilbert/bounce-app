@@ -33,6 +33,10 @@ interface OperatorRow {
   delivery_config: unknown;
   cancellation_policy: string | null;
   damage_policy: string | null;
+  notify_new_inquiry: boolean | null;
+  notify_new_booking: boolean | null;
+  notify_balance_paid: boolean | null;
+  notify_contract_signed: boolean | null;
 }
 
 interface ItemRow {
@@ -84,6 +88,10 @@ function rowToOperator(r: OperatorRow): Operator {
     deliveryConfig: r.delivery_config ?? {},
     cancellationPolicy: r.cancellation_policy,
     damagePolicy: r.damage_policy,
+    notifyNewInquiry: r.notify_new_inquiry ?? true,
+    notifyNewBooking: r.notify_new_booking ?? true,
+    notifyBalancePaid: r.notify_balance_paid ?? true,
+    notifyContractSigned: r.notify_contract_signed ?? true,
   };
 }
 

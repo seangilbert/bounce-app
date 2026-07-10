@@ -98,6 +98,32 @@ export async function updateCustomerPoliciesAction(input: unknown): Promise<Acti
   return { ok: true };
 }
 
+const NotificationPrefsInput = z.object({
+  notifyNewInquiry: z.boolean(),
+  notifyNewBooking: z.boolean(),
+  notifyBalancePaid: z.boolean(),
+  notifyContractSigned: z.boolean(),
+});
+
+export async function updateNotificationPrefsAction(input: unknown): Promise<ActionResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  const p = NotificationPrefsInput.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
+  const { error } = await createAdminClient()
+    .from("operators")
+    .update({
+      notify_new_inquiry: p.data.notifyNewInquiry,
+      notify_new_booking: p.data.notifyNewBooking,
+      notify_balance_paid: p.data.notifyBalancePaid,
+      notify_contract_signed: p.data.notifyContractSigned,
+    })
+    .eq("id", op.id);
+  if (error) return { ok: false, error: "Could not save notification settings." };
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
 const PricingInput = z.object({
   taxPercent: z.number().min(0).max(100),
   deliveryTaxable: z.boolean(),

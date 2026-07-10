@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getESignatureProvider } from "@/lib/esign";
 import { setEsignStatusByDocumentId } from "@/lib/orders/repo";
-import { setBookingStatus } from "@/lib/bookings/repo";
+import { getBooking, setBookingStatus } from "@/lib/bookings/repo";
+import { getOperatorById } from "@/lib/inventory/repo";
+import { notifyOperatorContractSigned } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +43,16 @@ export async function POST(req: Request) {
       } else if (order.bookingId && event.type === "completed") {
         // Both parties signed → the booking is confirmed.
         await setBookingStatus(order.bookingId, "confirmed");
+        // Alert the operator that the contract is fully signed (best-effort).
+        try {
+          const booking = await getBooking(order.bookingId);
+          const operator = booking ? await getOperatorById(booking.operatorId) : null;
+          if (booking && operator && operator.notifyContractSigned) {
+            await notifyOperatorContractSigned(booking, operator);
+          }
+        } catch (e) {
+          console.error("[signwell] contract-signed email failed:", e);
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "handler error";

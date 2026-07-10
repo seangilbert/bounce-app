@@ -162,6 +162,39 @@ export async function notifyOperatorNewBooking(booking: Booking, operator: Opera
   });
 }
 
+/** Alert to the operator that a booking's remaining balance was paid. */
+export async function notifyOperatorBalancePaid(booking: Booking, operator: Operator, amountPaid: number) {
+  if (!operator.contactEmail) return;
+  const body =
+    p(`<b>${esc(booking.customerName ?? "A customer")}</b> paid the remaining balance of ${money(amountPaid)}.`) +
+    lineTable([
+      { label: "Date", value: fmtRange(booking.startDate, booking.endDate) },
+      { label: "Total", value: money(booking.total), bold: true },
+      { label: "Paid in full", value: "Yes" },
+    ]);
+  await sendEmail({
+    to: operator.contactEmail,
+    subject: `Balance paid — ${booking.customerName ?? "customer"}`,
+    html: layout(operator.name, "Balance paid ✅", body),
+  });
+}
+
+/** Alert to the operator that both parties signed the rental agreement. */
+export async function notifyOperatorContractSigned(booking: Booking, operator: Operator) {
+  if (!operator.contactEmail) return;
+  const body =
+    p(`The rental agreement for <b>${esc(booking.customerName ?? "a customer")}</b> is fully signed.`) +
+    lineTable([
+      { label: "Date", value: fmtRange(booking.startDate, booking.endDate) },
+      { label: "Contact", value: booking.customerEmail ?? "—" },
+    ]);
+  await sendEmail({
+    to: operator.contactEmail,
+    subject: `Contract signed — ${booking.customerName ?? "customer"}`,
+    html: layout(operator.name, "Contract signed ✍️", body),
+  });
+}
+
 /** The operator's reply, delivered to the customer. */
 export async function notifyInquiryReply(opts: {
   to: string;

@@ -31,6 +31,10 @@ export default async function SettingsPage() {
         deliveryConfig: op.deliveryConfig,
         cancellationPolicy: op.cancellationPolicy,
         damagePolicy: op.damagePolicy,
+        notifyNewInquiry: op.notifyNewInquiry,
+        notifyNewBooking: op.notifyNewBooking,
+        notifyBalancePaid: op.notifyBalancePaid,
+        notifyContractSigned: op.notifyContractSigned,
       }}
     />
   );
