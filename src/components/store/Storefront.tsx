@@ -135,11 +135,15 @@ export function StoreShell({
   slug,
   brandColor,
   operatorName,
+  tagline,
+  about,
 }: {
   operatorId?: string;
   slug: string;
   brandColor?: string | null;
   operatorName?: string;
+  tagline?: string | null;
+  about?: string | null;
 }) {
   const opParam = operatorId ? `&operator=${operatorId}` : "";
   const [date, setDate] = useState(nextSaturday);
@@ -349,11 +353,11 @@ export function StoreShell({
               <section className="flex flex-col border-b border-sand bg-white lg:w-1/3 lg:min-h-0 lg:border-b-0 lg:border-r">
                 <div className="flex-shrink-0 px-5 pt-6 lg:px-7 lg:pt-7">
                   <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-ink lg:text-[28px]">
-                    Bouncy fun, delivered to your party.
+                    {tagline || "Bouncy fun, delivered to your party."}
                   </h1>
                   <p className="mt-2 text-sm font-medium text-ink-soft">
-                    Tell me about your event for an instant quote — or browse the full lineup.
-                    Delivery, setup &amp; pickup always included.
+                    {about ||
+                      "Tell me about your event for an instant quote — or browse the full lineup. Delivery, setup & pickup always included."}
                   </p>
                   <div className="mt-4 flex items-center gap-2">
                     <Sparkle size={16} weight="fill" className="text-brand" />

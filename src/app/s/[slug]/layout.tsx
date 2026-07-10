@@ -8,7 +8,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const op = await getOperatorBySlug(params.slug);
   return {
     title: op ? `Book — ${op.name}` : "Storefront",
-    description: op ? `Rent from ${op.name} — delivered and set up.` : undefined,
+    description: op ? op.tagline ?? `Rent from ${op.name} — delivered and set up.` : undefined,
   };
 }
 
@@ -35,6 +35,8 @@ export default async function StoreLayout({
         slug={params.slug}
         brandColor={op.brandColor}
         operatorName={op.name}
+        tagline={op.tagline}
+        about={op.about}
       />
       {children}
     </>

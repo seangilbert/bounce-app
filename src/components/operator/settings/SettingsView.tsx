@@ -19,9 +19,11 @@ import {
   updateDeliveryPricingAction,
   updateCustomerPoliciesAction,
   updateNotificationPrefsAction,
+  updateBrandingAction,
   type ActionResult,
 } from "@/app/(operator)/settings/actions";
 import { normalizeDeliveryConfig } from "@/lib/delivery/pricing";
+import { ACCENT_COLORS, deriveShades } from "@/lib/branding/palette";
 
 interface OperatorSettings {
   name: string;
@@ -48,6 +50,9 @@ interface OperatorSettings {
   notifyNewBooking: boolean;
   notifyBalancePaid: boolean;
   notifyContractSigned: boolean;
+  brandColor: string | null;
+  tagline: string | null;
+  about: string | null;
 }
 
 export function SettingsView({ operator }: { operator: OperatorSettings }) {
@@ -55,6 +60,7 @@ export function SettingsView({ operator }: { operator: OperatorSettings }) {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 py-6 lg:px-8">
       <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">Settings</h1>
       <ProfileSection operator={operator} />
+      <BrandingSection operator={operator} />
       <PricingSection operator={operator} />
       <DeliverySection operator={operator} />
       <PolicySection operator={operator} />
@@ -236,6 +242,86 @@ function PolicySection({ operator }: { operator: OperatorSettings }) {
             }),
           )
         }
+      />
+    </Section>
+  );
+}
+
+function BrandingSection({ operator }: { operator: OperatorSettings }) {
+  const { busy, saved, error, save } = useSaver();
+  const [color, setColor] = useState(operator.brandColor ?? ACCENT_COLORS[0]!.base);
+  const [tagline, setTagline] = useState(operator.tagline ?? "");
+  const [about, setAbout] = useState(operator.about ?? "");
+  const shades = deriveShades(color);
+
+  return (
+    <Section title="Branding" desc="Your color and copy on the storefront customers see.">
+      <div className="space-y-4">
+        <div>
+          <span className="mb-1.5 block text-[13px] font-bold text-ink-soft">Brand color</span>
+          <div className="flex flex-wrap items-center gap-2">
+            {ACCENT_COLORS.map((c) => (
+              <button
+                key={c.key}
+                onClick={() => setColor(c.base)}
+                title={c.name}
+                className={`h-9 w-9 rounded-full transition-transform hover:scale-105 ${
+                  color.toLowerCase() === c.base.toLowerCase() ? "ring-2 ring-ink ring-offset-2 ring-offset-white" : ""
+                }`}
+                style={{ background: c.base }}
+              />
+            ))}
+            <label className="flex h-9 cursor-pointer items-center gap-2 rounded-full border border-sand px-3 text-[13px] font-bold text-ink-soft">
+              <input
+                type="color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="h-5 w-5 cursor-pointer border-0 bg-transparent p-0"
+              />
+              Custom
+            </label>
+          </div>
+          {/* Live preview of the derived shades on the storefront canvas. */}
+          <div className="mt-3 flex items-center gap-2 rounded-xl bg-cream p-3">
+            <span className="rounded-full px-3.5 py-1.5 text-[13px] font-bold text-white" style={{ background: shades.DEFAULT }}>
+              Book now
+            </span>
+            <span
+              className="rounded-full px-3 py-1.5 text-[12px] font-bold"
+              style={{ background: shades.tint, color: shades.deep }}
+            >
+              Instant quote
+            </span>
+            <span className="ml-auto font-mono text-[12px] font-semibold uppercase text-ink-mute">{color}</span>
+          </div>
+          <p className="mt-1 text-[12px] font-medium text-ink-mute">Deep, saturated colors read best on the cream storefront.</p>
+        </div>
+
+        <Field label="Tagline" hint="Headline on your storefront. Blank = default.">
+          <input
+            value={tagline}
+            onChange={(e) => setTagline(e.target.value)}
+            maxLength={80}
+            placeholder="Bouncy fun, delivered to your party."
+            className="input"
+          />
+        </Field>
+        <Field label="About" hint="Short blurb under the headline. Blank = default.">
+          <textarea
+            value={about}
+            onChange={(e) => setAbout(e.target.value)}
+            rows={3}
+            maxLength={400}
+            placeholder="Tell customers what makes you great — clean equipment, on-time delivery, family-run…"
+            className="input resize-none"
+          />
+        </Field>
+      </div>
+      <SaveBar
+        busy={busy}
+        saved={saved}
+        error={error}
+        onSave={() => save(() => updateBrandingAction({ brandColor: color, tagline, about }))}
       />
     </Section>
   );

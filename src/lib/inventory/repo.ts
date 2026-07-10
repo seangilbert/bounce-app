@@ -37,6 +37,8 @@ interface OperatorRow {
   notify_new_booking: boolean | null;
   notify_balance_paid: boolean | null;
   notify_contract_signed: boolean | null;
+  tagline: string | null;
+  about: string | null;
 }
 
 interface ItemRow {
@@ -92,6 +94,8 @@ function rowToOperator(r: OperatorRow): Operator {
     notifyNewBooking: r.notify_new_booking ?? true,
     notifyBalancePaid: r.notify_balance_paid ?? true,
     notifyContractSigned: r.notify_contract_signed ?? true,
+    tagline: r.tagline,
+    about: r.about,
   };
 }
 

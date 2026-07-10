@@ -35,6 +35,9 @@ export default async function SettingsPage() {
         notifyNewBooking: op.notifyNewBooking,
         notifyBalancePaid: op.notifyBalancePaid,
         notifyContractSigned: op.notifyContractSigned,
+        brandColor: op.brandColor,
+        tagline: op.tagline,
+        about: op.about,
       }}
     />
   );

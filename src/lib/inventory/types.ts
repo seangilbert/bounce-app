@@ -33,6 +33,8 @@ export interface Operator {
   notifyNewBooking: boolean;
   notifyBalancePaid: boolean;
   notifyContractSigned: boolean;
+  tagline: string | null;
+  about: string | null;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

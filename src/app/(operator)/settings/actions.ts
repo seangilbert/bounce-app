@@ -124,6 +124,34 @@ export async function updateNotificationPrefsAction(input: unknown): Promise<Act
   return { ok: true };
 }
 
+const BrandingInput = z.object({
+  brandColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Pick a valid color.")
+    .nullable(),
+  tagline: z.string().trim().max(80).optional().nullable(),
+  about: z.string().trim().max(400).optional().nullable(),
+});
+
+export async function updateBrandingAction(input: unknown): Promise<ActionResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  const p = BrandingInput.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
+  const { error } = await createAdminClient()
+    .from("operators")
+    .update({
+      brand_color: p.data.brandColor,
+      tagline: p.data.tagline?.trim() || null,
+      about: p.data.about?.trim() || null,
+    })
+    .eq("id", op.id);
+  if (error) return { ok: false, error: "Could not save branding." };
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 const PricingInput = z.object({
   taxPercent: z.number().min(0).max(100),
   deliveryTaxable: z.boolean(),
