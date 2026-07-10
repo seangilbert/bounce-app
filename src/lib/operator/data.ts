@@ -98,7 +98,10 @@ export async function getCalendarData(
 
   const [, itemsRes, bookingsRes] = await Promise.all([
     expireStaleCheckouts(),
-    supabase.from("items").select("id, category, quantity").eq("operator_id", operatorId),
+    supabase
+      .from("items")
+      .select("id, category, quantity, units_needs_cleaning, units_damaged, units_in_repair")
+      .eq("operator_id", operatorId),
     supabase
       .from("bookings")
       .select(
@@ -109,7 +112,20 @@ export async function getCalendarData(
       .gte("start_date", isoOf(gridStartTs))
       .lte("start_date", isoOf(gridEndTs)),
   ]);
-  const bounceOwned = (itemsRes.data ?? []).filter((i) => toCategory(i.category) === "bounce");
+  // Bounce inventory with a "ready" ceiling (out-of-service units held back), so
+  // a day reads "fully booked" once the bookable units are all reserved.
+  const bounceOwned = (itemsRes.data ?? [])
+    .filter((i) => toCategory(i.category) === "bounce")
+    .map((i) => ({
+      id: i.id as string,
+      ready: Math.max(
+        0,
+        (i.quantity as number) -
+          ((i.units_needs_cleaning as number) ?? 0) -
+          ((i.units_damaged as number) ?? 0) -
+          ((i.units_in_repair as number) ?? 0),
+      ),
+    }));
   if (bookingsRes.error) throw new Error(`getCalendarData failed: ${bookingsRes.error.message}`);
   const rows = (bookingsRes.data ?? []) as unknown as BRow[];
 
@@ -135,7 +151,7 @@ export async function getCalendarData(
       for (const li of b.booking_items ?? [])
         reserved.set(li.item_id, (reserved.get(li.item_id) ?? 0) + li.quantity);
     const fullyBooked =
-      bounceOwned.length > 0 && bounceOwned.every((bi) => (reserved.get(bi.id) ?? 0) >= bi.quantity);
+      bounceOwned.length > 0 && bounceOwned.every((bi) => (reserved.get(bi.id) ?? 0) >= bi.ready);
 
     // Events + detail respect the category filter.
     const dayBookings = allDay

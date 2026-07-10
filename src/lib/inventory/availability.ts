@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { listItems } from "./repo";
 import { expireStaleCheckouts } from "@/lib/bookings/expire";
-import type { Item } from "./types";
+import { bookableUnits, type Item } from "./types";
 
 export interface Availability {
   /** Units the operator owns. */
@@ -30,7 +30,7 @@ export async function checkAvailability(
 
   const { data: item, error: itemErr } = await supabase
     .from("items")
-    .select("quantity")
+    .select("quantity, units_needs_cleaning, units_damaged, units_in_repair")
     .eq("id", itemId)
     .maybeSingle();
   if (itemErr) throw new Error(`checkAvailability failed: ${itemErr.message}`);
@@ -43,7 +43,14 @@ export async function checkAvailability(
   });
   if (rpcErr) throw new Error(`checkAvailability failed: ${rpcErr.message}`);
 
-  const owned = item.quantity as number;
+  // Ready units = owned minus anything out of service.
+  const owned = Math.max(
+    0,
+    (item.quantity as number) -
+      (item.units_needs_cleaning ?? 0) -
+      (item.units_damaged ?? 0) -
+      (item.units_in_repair ?? 0),
+  );
   const reserved = (peak as number) ?? 0;
   const available = owned - reserved;
   return { owned, reserved, available, ok: available >= quantityNeeded };
@@ -74,9 +81,11 @@ export async function availabilityForOperator(
 
   return items.map((item) => {
     const reserved = reservedByItem.get(item.id) ?? 0;
+    // "owned" for booking purposes = ready units (out-of-service held back).
+    const owned = bookableUnits(item);
     return {
       ...item,
-      availability: { owned: item.quantity, reserved, available: item.quantity - reserved },
+      availability: { owned, reserved, available: owned - reserved },
     };
   });
 }

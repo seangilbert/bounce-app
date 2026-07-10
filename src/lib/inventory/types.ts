@@ -56,6 +56,10 @@ export interface Item {
   category: string | null;
   /** Units the operator owns — the ceiling for concurrent bookings. */
   quantity: number;
+  /** Units held out of service by readiness condition (reduce bookable stock). */
+  unitsNeedsCleaning: number;
+  unitsDamaged: number;
+  unitsInRepair: number;
   /** Price in minor units (cents). */
   basePrice: number;
   priceUnit: PriceUnit;
@@ -65,12 +69,25 @@ export interface Item {
   active: boolean;
 }
 
+/** Units currently out of service (any non-ready condition). */
+export function outOfServiceUnits(i: Pick<Item, "unitsNeedsCleaning" | "unitsDamaged" | "unitsInRepair">): number {
+  return i.unitsNeedsCleaning + i.unitsDamaged + i.unitsInRepair;
+}
+
+/** Ready-to-book units: owned minus anything out of service (never negative). */
+export function bookableUnits(i: Pick<Item, "quantity" | "unitsNeedsCleaning" | "unitsDamaged" | "unitsInRepair">): number {
+  return Math.max(0, i.quantity - outOfServiceUnits(i));
+}
+
 export interface NewItem {
   operatorId: string;
   name: string;
   description?: string | null;
   category?: string | null;
   quantity: number;
+  unitsNeedsCleaning?: number;
+  unitsDamaged?: number;
+  unitsInRepair?: number;
   basePrice: number;
   priceUnit?: PriceUnit;
   footprint?: Partial<Footprint>;

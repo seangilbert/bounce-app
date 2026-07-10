@@ -15,7 +15,7 @@ import {
   ImageSquare,
   Star,
 } from "@phosphor-icons/react/dist/ssr";
-import type { Item } from "@/lib/inventory/types";
+import { bookableUnits, outOfServiceUnits, type Item } from "@/lib/inventory/types";
 import { createItemAction, updateItemAction, deleteItemAction } from "@/app/(operator)/inventory/actions";
 
 type Category = "bounce" | "tent" | "tables" | "other";
@@ -40,6 +40,9 @@ interface DraftForm {
   powerRequired: boolean;
   images: string[]; // public URLs; images[0] is the primary
   active: boolean;
+  needsCleaning: string;
+  damaged: string;
+  inRepair: string;
 }
 
 const emptyDraft: DraftForm = {
@@ -52,6 +55,9 @@ const emptyDraft: DraftForm = {
   powerRequired: false,
   images: [],
   active: true,
+  needsCleaning: "0",
+  damaged: "0",
+  inRepair: "0",
 };
 
 function itemToDraft(i: Item): DraftForm {
@@ -65,6 +71,9 @@ function itemToDraft(i: Item): DraftForm {
     powerRequired: i.powerRequired,
     images: i.images ?? [],
     active: i.active,
+    needsCleaning: String(i.unitsNeedsCleaning),
+    damaged: String(i.unitsDamaged),
+    inRepair: String(i.unitsInRepair),
   };
 }
 
@@ -170,8 +179,13 @@ export function InventoryManager({ items }: { items: Item[] }) {
                         </span>
                       ) : null}
                     </div>
-                    <div className="mt-0.5 text-[13px] font-medium text-ink-mute">
-                      {m.label} · {item.quantity} in stock
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[13px] font-medium text-ink-mute">
+                      <span>{m.label} · {item.quantity} in stock</span>
+                      {outOfServiceUnits(item) > 0 ? (
+                        <span className="rounded-full bg-amber-tint px-2 py-0.5 text-[11px] font-extrabold text-amber-deep">
+                          {bookableUnits(item)} ready · {outOfServiceUnits(item)} out
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex-shrink-0 text-right">
@@ -217,7 +231,13 @@ function ItemDrawer({
   const set = <K extends keyof DraftForm>(k: K, v: DraftForm[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const priceCents = Math.round(parseFloat(draft.price || "0") * 100);
   const qty = parseInt(draft.quantity || "0", 10);
-  const valid = draft.name.trim() && priceCents >= 0 && Number.isFinite(priceCents) && qty >= 0;
+  const outOfService =
+    (parseInt(draft.needsCleaning || "0", 10) || 0) +
+    (parseInt(draft.damaged || "0", 10) || 0) +
+    (parseInt(draft.inRepair || "0", 10) || 0);
+  const readyUnits = (qty || 0) - outOfService;
+  const valid =
+    draft.name.trim() && priceCents >= 0 && Number.isFinite(priceCents) && qty >= 0 && readyUnits >= 0;
 
   async function addPhotos(files: FileList | null) {
     if (!files?.length) return;
@@ -255,6 +275,9 @@ function ItemDrawer({
       category: draft.category,
       description: draft.description.trim() || null,
       quantity: qty,
+      unitsNeedsCleaning: parseInt(draft.needsCleaning || "0", 10),
+      unitsDamaged: parseInt(draft.damaged || "0", 10),
+      unitsInRepair: parseInt(draft.inRepair || "0", 10),
       basePrice: priceCents,
       priceUnit: draft.priceUnit,
       powerRequired: draft.powerRequired,
@@ -362,6 +385,27 @@ function ItemDrawer({
               className="input"
             />
           </Field>
+
+          {/* Readiness — units in a non-ready condition are held out of bookable
+              stock. Ready = owned − (needs cleaning + damaged + in repair). */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[13px] font-bold text-ink-soft">Readiness</span>
+              <span className={`text-[13px] font-bold ${readyUnits < 0 ? "text-coral-deep" : "text-teal"}`}>
+                {Math.max(0, readyUnits)} of {qty || 0} ready to book
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <ReadinessInput label="Needs cleaning" value={draft.needsCleaning} onChange={(v) => set("needsCleaning", v)} />
+              <ReadinessInput label="Damaged" value={draft.damaged} onChange={(v) => set("damaged", v)} />
+              <ReadinessInput label="In repair" value={draft.inRepair} onChange={(v) => set("inRepair", v)} />
+            </div>
+            {readyUnits < 0 ? (
+              <p className="mt-1 text-[12px] font-semibold text-coral-deep">Out-of-service units exceed the quantity owned.</p>
+            ) : (
+              <p className="mt-1 text-[12px] font-medium text-ink-mute">Out-of-service units won&apos;t be offered for booking.</p>
+            )}
+          </div>
 
           <Field label="Description (optional)">
             <textarea
@@ -484,6 +528,30 @@ function ItemDrawer({
         </div>
       </div>
     </div>
+  );
+}
+
+function ReadinessInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-ink-faint">{label}</span>
+      <input
+        type="number"
+        min="0"
+        step="1"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="input"
+      />
+    </label>
   );
 }
 

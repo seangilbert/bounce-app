@@ -12,6 +12,9 @@ const ItemInput = z.object({
   category: z.string().trim().max(40).nullable().optional(),
   description: z.string().trim().max(500).nullable().optional(),
   quantity: z.number().int().min(0).max(9999),
+  unitsNeedsCleaning: z.number().int().min(0).max(9999).optional(),
+  unitsDamaged: z.number().int().min(0).max(9999).optional(),
+  unitsInRepair: z.number().int().min(0).max(9999).optional(),
   basePrice: z.number().int().min(0), // minor units (cents)
   priceUnit: z.enum(["per_day", "per_hour", "flat"]),
   powerRequired: z.boolean().optional(),
@@ -69,7 +72,11 @@ export async function updateItemAction(id: string, input: unknown): Promise<Acti
     revalidatePath("/inventory");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Could not update item." };
+    const msg = e instanceof Error ? e.message : "Could not update item.";
+    if (/items_out_of_service_within_owned/.test(msg)) {
+      return { ok: false, error: "Units out of service can't exceed the total owned." };
+    }
+    return { ok: false, error: msg };
   }
 }
 

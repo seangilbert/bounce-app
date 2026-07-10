@@ -51,6 +51,9 @@ interface ItemRow {
   description: string | null;
   category: string | null;
   quantity: number;
+  units_needs_cleaning: number | null;
+  units_damaged: number | null;
+  units_in_repair: number | null;
   base_price: number;
   price_unit: Item["priceUnit"];
   footprint_w: number | null;
@@ -111,6 +114,9 @@ function rowToItem(r: ItemRow): Item {
     description: r.description,
     category: r.category,
     quantity: r.quantity,
+    unitsNeedsCleaning: r.units_needs_cleaning ?? 0,
+    unitsDamaged: r.units_damaged ?? 0,
+    unitsInRepair: r.units_in_repair ?? 0,
     basePrice: r.base_price,
     priceUnit: r.price_unit,
     footprint: { w: r.footprint_w, l: r.footprint_l, h: r.footprint_h },
@@ -202,6 +208,9 @@ export interface ItemPatch {
   description?: string | null;
   category?: string | null;
   quantity?: number;
+  unitsNeedsCleaning?: number;
+  unitsDamaged?: number;
+  unitsInRepair?: number;
   basePrice?: number;
   priceUnit?: PriceUnit;
   powerRequired?: boolean;
@@ -217,6 +226,9 @@ export async function updateItem(operatorId: string, id: string, patch: ItemPatc
   if (patch.description !== undefined) row.description = patch.description;
   if (patch.category !== undefined) row.category = patch.category;
   if (patch.quantity !== undefined) row.quantity = patch.quantity;
+  if (patch.unitsNeedsCleaning !== undefined) row.units_needs_cleaning = patch.unitsNeedsCleaning;
+  if (patch.unitsDamaged !== undefined) row.units_damaged = patch.unitsDamaged;
+  if (patch.unitsInRepair !== undefined) row.units_in_repair = patch.unitsInRepair;
   if (patch.basePrice !== undefined) row.base_price = patch.basePrice;
   if (patch.priceUnit !== undefined) row.price_unit = patch.priceUnit;
   if (patch.powerRequired !== undefined) row.power_required = patch.powerRequired;
@@ -290,6 +302,9 @@ export async function createItem(input: NewItem): Promise<Item> {
       description: input.description ?? null,
       category: input.category ?? null,
       quantity: input.quantity,
+      units_needs_cleaning: input.unitsNeedsCleaning ?? 0,
+      units_damaged: input.unitsDamaged ?? 0,
+      units_in_repair: input.unitsInRepair ?? 0,
       base_price: input.basePrice,
       price_unit: input.priceUnit ?? "per_day",
       footprint_w: input.footprint?.w ?? null,
