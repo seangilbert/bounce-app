@@ -93,10 +93,16 @@ export default async function PayPage({
           </div>
         ))}
         <div className="mt-2 space-y-1 border-t border-sand-line pt-2.5 text-sm">
-          {booking.deliveryFee > 0 || booking.taxAmount > 0 ? (
+          {booking.deliveryFee > 0 || booking.taxAmount > 0 || booking.discount > 0 ? (
             <div className="flex justify-between text-ink-mute">
               <span>Subtotal</span>
               <span className="font-semibold text-ink">{money(booking.subtotal)}</span>
+            </div>
+          ) : null}
+          {booking.discount > 0 ? (
+            <div className="flex justify-between font-semibold text-teal">
+              <span>Discount{booking.promoCode ? ` · ${booking.promoCode}` : ""}</span>
+              <span>− {money(booking.discount)}</span>
             </div>
           ) : null}
           {booking.deliveryFee > 0 ? (

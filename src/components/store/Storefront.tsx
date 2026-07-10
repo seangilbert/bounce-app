@@ -24,6 +24,7 @@ import type { Icon } from "@phosphor-icons/react";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
 import { priceBreakdown } from "@/lib/inventory/pricing";
 import { previewDeliveryFeeAction, type DeliveryFeePreview } from "@/lib/delivery/actions";
+import { previewPromoAction, type PromoPreview } from "@/lib/promos/actions";
 import { assessRange, normalizeSchedule, type Schedule } from "@/lib/availability/schedule";
 import { brandVars } from "@/lib/branding/palette";
 import { StoreSidebar } from "./StoreSidebar";
@@ -563,6 +564,9 @@ function CheckoutDrawer({
   // the customer enters an address (createBooking re-resolves authoritatively).
   const [feePreview, setFeePreview] = useState<DeliveryFeePreview | null>(null);
   const [feeLoading, setFeeLoading] = useState(false);
+  const [promoInput, setPromoInput] = useState("");
+  const [promo, setPromo] = useState<PromoPreview | null>(null);
+  const [promoBusy, setPromoBusy] = useState(false);
   const valid =
     form.name.trim() &&
     /.+@.+\..+/.test(form.email) &&
@@ -595,8 +599,25 @@ function CheckoutDrawer({
 
   const effectiveDeliveryFee =
     deliveryMode === "flat" ? deliveryFeeCents : feePreview?.feeCents ?? 0;
-  const bd = priceBreakdown(subtotal, effectiveDeliveryFee, taxPercent, deliveryTaxable);
+  const discountCents = promo?.ok ? promo.discountCents : 0;
+  const bd = priceBreakdown(subtotal, effectiveDeliveryFee, taxPercent, deliveryTaxable, discountCents);
   const deposit = depositAmount(bd.total, depositPercent);
+
+  async function applyPromo() {
+    const code = promoInput.trim();
+    if (!code || !operatorId) return;
+    setPromoBusy(true);
+    try {
+      const res = await previewPromoAction({ operatorId, code, subtotalCents: subtotal });
+      setPromo(res);
+    } finally {
+      setPromoBusy(false);
+    }
+  }
+  function clearPromo() {
+    setPromo(null);
+    setPromoInput("");
+  }
   const balance = bd.total - deposit;
   const amountNow = payType === "deposit" ? deposit : bd.total;
 
@@ -621,6 +642,7 @@ function CheckoutDrawer({
           deliveryAddress: form.address,
           deliveryZip: form.zip || undefined,
           deliveryWindow: deliveryWindow || undefined,
+          promoCode: promo?.ok ? promoInput.trim() : undefined,
           operatorId,
         }),
       });
@@ -684,10 +706,16 @@ function CheckoutDrawer({
               </div>
             ))}
             <div className="mt-2 space-y-1 border-t border-sand-line pt-2.5 text-sm">
-              {bd.deliveryFee > 0 || bd.tax > 0 ? (
+              {bd.deliveryFee > 0 || bd.tax > 0 || bd.discount > 0 ? (
                 <div className="flex items-center justify-between text-ink-mute">
                   <span>Subtotal</span>
                   <span className="font-semibold text-ink">{money(bd.subtotal)}</span>
+                </div>
+              ) : null}
+              {bd.discount > 0 ? (
+                <div className="flex items-center justify-between font-semibold text-teal">
+                  <span>Discount{promo?.code ? ` · ${promo.code}` : ""}</span>
+                  <span>−{money(bd.discount)}</span>
                 </div>
               ) : null}
               {deliveryMode !== "flat" && (feeLoading || feePreview?.needsLocation || feePreview?.outOfArea) ? (
@@ -718,6 +746,48 @@ function CheckoutDrawer({
                 <span className="font-display text-lg font-extrabold text-ink">{money(bd.total)}</span>
               </div>
             </div>
+          </div>
+
+          {/* Promo code */}
+          <div>
+            {promo?.ok ? (
+              <div className="flex items-center justify-between rounded-2xl border border-teal/40 bg-teal-tint/50 px-4 py-3">
+                <span className="text-[13px] font-bold text-teal-deep">
+                  {promo.code} applied · −{money(promo.discountCents)}
+                </span>
+                <button onClick={clearPromo} className="text-[13px] font-bold text-ink-mute hover:text-coral-deep">
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  value={promoInput}
+                  onChange={(e) => {
+                    setPromoInput(e.target.value.toUpperCase());
+                    if (promo) setPromo(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      applyPromo();
+                    }
+                  }}
+                  placeholder="Promo code"
+                  className="min-w-0 flex-1 rounded-xl border border-sand bg-white px-3.5 py-2.5 text-sm font-bold tracking-wide text-ink outline-none placeholder:font-medium placeholder:tracking-normal placeholder:text-ink-faint"
+                />
+                <button
+                  onClick={applyPromo}
+                  disabled={!promoInput.trim() || promoBusy}
+                  className="flex-shrink-0 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-cream transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  {promoBusy ? "…" : "Apply"}
+                </button>
+              </div>
+            )}
+            {promo && !promo.ok && promo.reason ? (
+              <p className="mt-1.5 text-[12.5px] font-semibold text-coral-deep">{promo.reason}</p>
+            ) : null}
           </div>
 
           {/* Deposit vs full */}

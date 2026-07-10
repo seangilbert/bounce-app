@@ -5,6 +5,8 @@ import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing
 import { resolveOperatorDeliveryFee } from "@/lib/delivery/resolve";
 import type { DeliveryMode } from "@/lib/delivery/pricing";
 import { assessRange, normalizeSchedule } from "@/lib/availability/schedule";
+import { applyPromo, redeemPromoForBooking } from "@/lib/promos/repo";
+import { operatorToday } from "@/lib/operator/time";
 import type { PriceUnit } from "@/lib/inventory/types";
 import type { Booking, BookingLineItem, BookingStatus, NewBooking } from "./types";
 
@@ -27,6 +29,8 @@ interface BookingRow {
   delivery_zip: string | null;
   subtotal: number;
   delivery_fee: number | null;
+  discount_cents: number | null;
+  promo_code: string | null;
   tax_amount: number | null;
   total: number | null;
   deposit: number | null;
@@ -59,6 +63,8 @@ function rowToBooking(row: BookingRow, items: BookingLineItem[]): Booking {
     deliveryZip: row.delivery_zip,
     subtotal: row.subtotal,
     deliveryFee: row.delivery_fee ?? 0,
+    discount: row.discount_cents ?? 0,
+    promoCode: row.promo_code,
     taxAmount: row.tax_amount ?? 0,
     total: row.total ?? row.subtotal,
     deposit: row.deposit,
@@ -139,7 +145,7 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
   const { data: op } = await supabase
     .from("operators")
     .select(
-      "tax_percent, delivery_fee_cents, delivery_taxable, delivery_mode, delivery_config, latitude, longitude, availability_config",
+      "tax_percent, delivery_fee_cents, delivery_taxable, delivery_mode, delivery_config, latitude, longitude, availability_config, timezone",
     )
     .eq("id", input.operatorId)
     .single();
@@ -175,11 +181,30 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
     deliveryFeeCents = quote.feeCents ?? 0;
   }
 
+  // Resolve a promo code (authoritative) against the items subtotal. An invalid
+  // code is ignored silently here — the checkout preview surfaces the reason.
+  let discountCents = 0;
+  let promoId: string | null = null;
+  let promoCode: string | null = null;
+  if (input.promoCode?.trim()) {
+    try {
+      const res = await applyPromo(input.operatorId, input.promoCode, subtotal, operatorToday(op?.timezone ?? undefined));
+      if (res.ok) {
+        discountCents = res.discountCents;
+        promoId = res.promoId ?? null;
+        promoCode = res.code ?? null;
+      }
+    } catch (e) {
+      console.error("[promos] applyPromo on booking failed:", e);
+    }
+  }
+
   const bd = priceBreakdown(
     subtotal,
     deliveryFeeCents,
     Number(op?.tax_percent ?? 0),
     op?.delivery_taxable ?? true,
+    discountCents,
   );
 
   // Resolve/create the CRM customer first so the booking carries customer_id
@@ -213,6 +238,9 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
       subtotal,
       delivery_fee: bd.deliveryFee,
       delivery_fee_override_cents: input.deliveryFeeOverrideCents ?? null,
+      discount_cents: bd.discount,
+      promo_id: promoId,
+      promo_code: promoCode,
       tax_amount: bd.tax,
       total: bd.total,
       currency: "usd",
@@ -338,6 +366,12 @@ export async function confirmBookingPaid(
   if (!booking) return { booking: null, oversold: [] };
 
   await setBookingStatus(bookingId, "paid");
+  // A paid promo booking counts as a redemption (best-effort).
+  try {
+    await redeemPromoForBooking(bookingId);
+  } catch (e) {
+    console.error("[promos] redeem on paid failed:", e);
+  }
 
   const oversold: { itemId: string; owned: number; reserved: number }[] = [];
   for (const li of booking.items) {

@@ -76,9 +76,12 @@ export async function notifyBookingConfirmed(booking: Booking, operator: Operato
     label: `${li.quantity > 1 ? `${li.quantity}× ` : ""}${li.name}`,
     value: money(li.lineTotal),
   }));
-  const hasExtras = booking.deliveryFee > 0 || booking.taxAmount > 0;
+  const hasExtras = booking.deliveryFee > 0 || booking.taxAmount > 0 || booking.discount > 0;
   const totals = [
     ...(hasExtras ? [{ label: "Subtotal", value: money(booking.subtotal) }] : []),
+    ...(booking.discount > 0
+      ? [{ label: `Discount${booking.promoCode ? ` (${booking.promoCode})` : ""}`, value: `−${money(booking.discount)}` }]
+      : []),
     ...(booking.deliveryFee > 0 ? [{ label: "Delivery", value: money(booking.deliveryFee) }] : []),
     ...(booking.taxAmount > 0 ? [{ label: "Sales tax", value: money(booking.taxAmount) }] : []),
     { label: "Total", value: money(booking.total), bold: true },
@@ -115,9 +118,12 @@ export async function notifyQuoteLink(
     label: `${li.quantity > 1 ? `${li.quantity}× ` : ""}${li.name}`,
     value: money(li.lineTotal),
   }));
-  const hasExtras = booking.deliveryFee > 0 || booking.taxAmount > 0;
+  const hasExtras = booking.deliveryFee > 0 || booking.taxAmount > 0 || booking.discount > 0;
   const totals = [
     ...(hasExtras ? [{ label: "Subtotal", value: money(booking.subtotal) }] : []),
+    ...(booking.discount > 0
+      ? [{ label: `Discount${booking.promoCode ? ` (${booking.promoCode})` : ""}`, value: `−${money(booking.discount)}` }]
+      : []),
     ...(booking.deliveryFee > 0 ? [{ label: "Delivery", value: money(booking.deliveryFee) }] : []),
     ...(booking.taxAmount > 0 ? [{ label: "Sales tax", value: money(booking.taxAmount) }] : []),
     { label: "Total", value: money(booking.total), bold: true },

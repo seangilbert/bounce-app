@@ -140,8 +140,11 @@ export function BookingDetail({
           </div>
         ))}
         <div className="mt-2 space-y-1 border-t border-sand-line pt-2.5 text-sm">
-          {booking.deliveryFee > 0 || booking.taxAmount > 0 ? (
+          {booking.deliveryFee > 0 || booking.taxAmount > 0 || booking.discount > 0 ? (
             <Row label="Subtotal" value={money(booking.subtotal)} />
+          ) : null}
+          {booking.discount > 0 ? (
+            <Row label={`Discount${booking.promoCode ? ` · ${booking.promoCode}` : ""}`} value={`− ${money(booking.discount)}`} />
           ) : null}
           {booking.deliveryFee > 0 ? <Row label="Delivery" value={money(booking.deliveryFee)} /> : null}
           {booking.taxAmount > 0 ? <Row label="Sales tax" value={money(booking.taxAmount)} /> : null}

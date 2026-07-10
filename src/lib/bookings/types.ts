@@ -28,6 +28,8 @@ export interface NewBooking {
   deliveryZip?: string | null;
   /** Explicit delivery fee (cents) that overrides the operator's pricing. */
   deliveryFeeOverrideCents?: number | null;
+  /** Promo code to validate + apply against the items subtotal. */
+  promoCode?: string | null;
   /** Skip the availability-schedule check (operator-created bookings override). */
   skipAvailabilityCheck?: boolean;
   notes?: string | null;
@@ -58,6 +60,10 @@ export interface Booking {
   deliveryZip: string | null;
   subtotal: number;
   deliveryFee: number;
+  /** Promo discount applied to the subtotal (cents). */
+  discount: number;
+  /** The promo code applied, if any (snapshot). */
+  promoCode: string | null;
   taxAmount: number;
   total: number;
   deposit: number | null;

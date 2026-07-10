@@ -24,26 +24,31 @@ export function lineTotal(
 
 export interface PriceBreakdown {
   subtotal: number;
+  /** Promo discount applied to the items subtotal (pre-tax). */
+  discount: number;
   deliveryFee: number;
   tax: number;
   total: number;
 }
 
 /**
- * Canonical price breakdown (minor units). Tax applies to the items subtotal
- * plus, when `deliveryTaxable`, the delivery fee. Some states (e.g. MA) tax the
- * rental items but not separately-stated delivery. Single source of truth for
- * createBooking, the AI quote, the storefront, and checkout so every surface
- * shows the same numbers.
+ * Canonical price breakdown (minor units). A promo discount reduces the items
+ * subtotal first; tax then applies to the discounted subtotal plus, when
+ * `deliveryTaxable`, the delivery fee (delivery itself is never discounted).
+ * Single source of truth for createBooking, the AI quote, the storefront, and
+ * checkout so every surface shows the same numbers.
  */
 export function priceBreakdown(
   subtotal: number,
   deliveryFeeCents: number,
   taxPercent: number,
   deliveryTaxable = true,
+  discountCents = 0,
 ): PriceBreakdown {
+  const discount = Math.min(Math.max(0, Math.round(discountCents)), subtotal);
+  const netSubtotal = subtotal - discount;
   const deliveryFee = deliveryFeeCents;
-  const taxBase = deliveryTaxable ? subtotal + deliveryFee : subtotal;
+  const taxBase = deliveryTaxable ? netSubtotal + deliveryFee : netSubtotal;
   const tax = Math.round((taxBase * taxPercent) / 100);
-  return { subtotal, deliveryFee, tax, total: subtotal + deliveryFee + tax };
+  return { subtotal, discount, deliveryFee, tax, total: netSubtotal + deliveryFee + tax };
 }

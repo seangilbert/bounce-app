@@ -12,7 +12,7 @@ import {
   ChatCircleDots,
   Wrench,
   TrendUp,
-  Confetti,
+  Tag,
   ArrowsClockwise,
   ArrowRight,
 } from "@phosphor-icons/react/dist/ssr";
@@ -255,6 +255,7 @@ function MonthInsightsCard({ data }: { data: DashboardData }) {
     { label: "Revenue booked", value: m.revenueBooked, sub: "paid bookings this month", icon: <CurrencyDollar size={18} weight="fill" />, tint: "text-teal" },
     { label: "Lost quotes", value: String(m.lostQuotes), sub: "expired or past-event", icon: <ArrowDown size={18} weight="bold" />, tint: "text-coral-deep" },
     { label: "Repeat customers", value: String(m.repeatCustomers), sub: "2+ bookings", icon: <ArrowsClockwise size={18} weight="bold" />, tint: "text-amber-deep" },
+    { label: "Discounts given", value: m.discountsGiven, sub: "promo codes redeemed", icon: <Tag size={18} weight="fill" />, tint: "text-brand-deep" },
   ];
   return (
     <div className="flex flex-col gap-4">
@@ -268,9 +269,6 @@ function MonthInsightsCard({ data }: { data: DashboardData }) {
           </div>
         ))}
       </div>
-      <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink-faint">
-        <Confetti size={14} weight="fill" /> Discounts &amp; promos tracking is coming — not yet available.
-      </p>
     </div>
   );
 }

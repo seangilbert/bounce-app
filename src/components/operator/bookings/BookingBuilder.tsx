@@ -13,6 +13,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { priceBreakdown } from "@/lib/inventory/pricing";
 import { previewDeliveryFeeAction, type DeliveryFeePreview } from "@/lib/delivery/actions";
+import { previewPromoAction, type PromoPreview } from "@/lib/promos/actions";
 import { depositAmount, DEPOSIT_PERCENT } from "@/lib/deposit";
 import { createOperatorBookingAction } from "@/app/(operator)/bookings/actions";
 
@@ -91,6 +92,9 @@ export function BookingBuilder({
   const [feePreview, setFeePreview] = useState<DeliveryFeePreview | null>(null);
   const [feeLoading, setFeeLoading] = useState(false);
   const [overrideFee, setOverrideFee] = useState("");
+  const [promoInput, setPromoInput] = useState("");
+  const [promo, setPromo] = useState<PromoPreview | null>(null);
+  const [promoBusy, setPromoBusy] = useState(false);
   const [busy, setBusy] = useState<null | "link" | "manual">(null);
   const [error, setError] = useState<string | null>(null);
   const [sentLink, setSentLink] = useState(false);
@@ -133,8 +137,21 @@ export function BookingBuilder({
       : mode === "flat"
         ? op?.deliveryFeeCents ?? 0
         : feePreview?.feeCents ?? 0;
-  const bd = priceBreakdown(subtotal, effectiveDeliveryFee, op?.taxPercent ?? 0, op?.deliveryTaxable ?? true);
+  const discountCents = promo?.ok ? promo.discountCents : 0;
+  const bd = priceBreakdown(subtotal, effectiveDeliveryFee, op?.taxPercent ?? 0, op?.deliveryTaxable ?? true, discountCents);
   const deposit = depositAmount(bd.total, op?.depositPercent ?? DEPOSIT_PERCENT);
+
+  async function applyPromo() {
+    const code = promoInput.trim();
+    if (!code) return;
+    setPromoBusy(true);
+    try {
+      const res = await previewPromoAction({ operatorId, code, subtotalCents: subtotal });
+      setPromo(res);
+    } finally {
+      setPromoBusy(false);
+    }
+  }
 
   // Resolve the delivery fee server-side for zones/distance operators once an
   // address is entered (skipped when the operator typed an explicit override).
@@ -184,6 +201,7 @@ export function BookingBuilder({
       deliveryAddress: form.address.trim() || undefined,
       deliveryZip: form.zip.trim() || undefined,
       deliveryFeeOverrideCents: overrideCents ?? undefined,
+      promoCode: promo?.ok ? promoInput.trim() : undefined,
       startDate: date,
       endDate,
       items: cartLines.map((l) => ({ itemId: l.item.id, quantity: l.qty })),
@@ -401,6 +419,12 @@ export function BookingBuilder({
                         <span className="font-semibold text-ink">{money(lineTotalOf(l.item, l.qty, days))}</span>
                       </div>
                     ))}
+                    {bd.discount > 0 ? (
+                      <div className="flex justify-between font-semibold text-teal">
+                        <span>Discount{promo?.code ? ` · ${promo.code}` : ""}</span>
+                        <span>−{money(bd.discount)}</span>
+                      </div>
+                    ) : null}
                     {bd.deliveryFee > 0 ? (
                       <div className="flex justify-between text-ink-mute">
                         <span>Delivery</span>
@@ -420,6 +444,40 @@ export function BookingBuilder({
                     <div className="text-right text-xs font-semibold text-ink-mute">
                       Deposit ({op?.depositPercent ?? DEPOSIT_PERCENT}%): {money(deposit)}
                     </div>
+                  </div>
+
+                  {/* Promo code */}
+                  <div className="mt-3 border-t border-sand-line pt-3">
+                    {promo?.ok ? (
+                      <div className="flex items-center justify-between text-[13px]">
+                        <span className="font-bold text-teal">{promo.code} · −{money(promo.discountCents)}</span>
+                        <button
+                          onClick={() => { setPromo(null); setPromoInput(""); }}
+                          className="font-bold text-ink-mute hover:text-coral-deep"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={promoInput}
+                          onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); if (promo) setPromo(null); }}
+                          placeholder="Promo code"
+                          className="input flex-1 py-2 text-[13px]"
+                        />
+                        <button
+                          onClick={applyPromo}
+                          disabled={!promoInput.trim() || promoBusy}
+                          className="flex-shrink-0 rounded-lg bg-ink px-3 py-2 text-[13px] font-bold text-cream disabled:opacity-40"
+                        >
+                          {promoBusy ? "…" : "Apply"}
+                        </button>
+                      </div>
+                    )}
+                    {promo && !promo.ok && promo.reason ? (
+                      <p className="mt-1 text-[12px] font-semibold text-coral-deep">{promo.reason}</p>
+                    ) : null}
                   </div>
                 </div>
               ) : null}

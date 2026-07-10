@@ -482,6 +482,7 @@ export interface MonthInsights {
   revenueBooked: string;
   lostQuotes: number;
   repeatCustomers: number;
+  discountsGiven: string;
 }
 
 export interface DashboardData {
@@ -507,6 +508,7 @@ interface DashBooking {
   id: string;
   status: string;
   turnaround: string;
+  discount_cents: number | null;
   created_at: string;
   start_date: string;
   end_date: string;
@@ -565,7 +567,7 @@ export async function getDashboard(
     supabase
       .from("bookings")
       .select(
-        "id, status, turnaround, created_at, start_date, end_date, total, subtotal, deposit, customer_name, customer_id, delivery_window, delivery_zip, booking_items(items(name))",
+        "id, status, turnaround, discount_cents, created_at, start_date, end_date, total, subtotal, deposit, customer_name, customer_id, delivery_window, delivery_zip, booking_items(items(name))",
       )
       .eq("operator_id", operatorId),
   ]);
@@ -637,6 +639,9 @@ export async function getDashboard(
     (b) => b.status === "quoted" && (b.start_date < today || daysBetween(createdIso(b), today) >= 14),
   ).length;
   const repeatCustomers = countRepeatCustomers(all);
+  const discountsGiven = monthCohort
+    .filter((b) => PAID_PLUS.has(b.status))
+    .reduce((s, b) => s + (b.discount_cents ?? 0), 0);
   const month: MonthInsights = {
     quotes: mFunnel.quotes,
     fullBookings: mFunnel.signed,
@@ -644,6 +649,7 @@ export async function getDashboard(
     revenueBooked: money(revenueBooked),
     lostQuotes,
     repeatCustomers,
+    discountsGiven: money(discountsGiven),
   };
 
   const periodLabel =

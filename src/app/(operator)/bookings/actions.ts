@@ -15,6 +15,7 @@ import {
 import { getOrderByBookingId, setOrderStatusByPaymentId, recordCashPayment } from "@/lib/orders/repo";
 import { getPaymentProvider, type PaymentProviderName } from "@/lib/payments";
 import { linkInquiryToBooking } from "@/lib/inquiries/repo";
+import { redeemPromoForBooking } from "@/lib/promos/repo";
 import { notifyQuoteLink } from "@/lib/email";
 import { depositAmount } from "@/lib/deposit";
 import { toE164US } from "@/lib/phone";
@@ -41,6 +42,7 @@ const NewBookingInput = z
     inquiryId: z.string().uuid().optional(),
     depositCents: z.number().int().min(0).optional(),
     deliveryFeeOverrideCents: z.number().int().min(0).optional(),
+    promoCode: z.string().trim().max(30).optional(),
   })
   .refine((d) => d.endDate >= d.startDate, { message: "End date must be on or after the start date." });
 
@@ -74,6 +76,7 @@ export async function createOperatorBookingAction(
       deliveryAddress: d.deliveryAddress ?? null,
       deliveryZip: d.deliveryZip ?? null,
       deliveryFeeOverrideCents: d.deliveryFeeOverrideCents ?? null,
+      promoCode: d.promoCode ?? null,
       skipAvailabilityCheck: true, // operators can book their own off-days
     });
 
@@ -93,6 +96,12 @@ export async function createOperatorBookingAction(
       const reserved = await reserveBooking(booking.id);
       if (!reserved.ok) return { ok: false, error: "Not enough inventory for those dates." };
       await setBookingStatus(booking.id, "confirmed");
+      // A recorded (manual) booking counts as a promo redemption.
+      try {
+        await redeemPromoForBooking(booking.id);
+      } catch (e) {
+        console.error("[promos] redeem on manual booking failed:", e);
+      }
       if (d.depositCents && d.depositCents > 0) {
         await setBookingDeposit(booking.id, d.depositCents);
         // Recorded cash deposit → show it in payment history + "Collected".

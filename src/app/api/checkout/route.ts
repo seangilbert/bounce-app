@@ -121,6 +121,13 @@ export async function POST(req: Request) {
         { name: `Deposit (${depositPct}%) — balance due on delivery`, quantity: 1, unitAmount: dep },
       ];
       depositToRecord = dep;
+    } else if (booking.discount > 0) {
+      // Stripe line items can't be negative, so a discounted booking is charged
+      // as a single total line (the itemized breakdown lives in the app / email).
+      lineItems = [
+        { name: `Booking #${booking.id.slice(0, 8).toUpperCase()} (incl. discount)`, quantity: 1, unitAmount: total },
+      ];
+      depositToRecord = total; // paid in full
     } else {
       // Per-unit for the whole rental = line_total / quantity (integer for our
       // pricing: unit_price × days), plus delivery + tax as their own lines.
