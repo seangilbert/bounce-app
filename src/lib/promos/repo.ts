@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 
 export type PromoKind = "percent" | "fixed";
+export type PromoTrigger = "code" | "weekday" | "repeat";
 
 export interface Promo {
   id: string;
@@ -9,6 +10,9 @@ export interface Promo {
   kind: PromoKind;
   /** percent (0–100) or fixed amount in cents. */
   value: number;
+  trigger: PromoTrigger;
+  /** For `weekday`: days it applies (0=Sun … 6=Sat). */
+  weekdays: number[];
   active: boolean;
   startsOn: string | null;
   endsOn: string | null;
@@ -24,6 +28,8 @@ interface PromoRow {
   code: string;
   kind: PromoKind;
   value: number;
+  trigger: PromoTrigger | null;
+  weekdays: number[] | null;
   active: boolean;
   starts_on: string | null;
   ends_on: string | null;
@@ -39,6 +45,8 @@ const rowToPromo = (r: PromoRow): Promo => ({
   code: r.code,
   kind: r.kind,
   value: r.value,
+  trigger: r.trigger ?? "code",
+  weekdays: r.weekdays ?? [],
   active: r.active,
   startsOn: r.starts_on,
   endsOn: r.ends_on,
@@ -65,6 +73,8 @@ export interface PromoInput {
   code: string;
   kind: PromoKind;
   value: number;
+  trigger: PromoTrigger;
+  weekdays: number[];
   active: boolean;
   startsOn: string | null;
   endsOn: string | null;
@@ -77,6 +87,8 @@ function toRow(input: PromoInput) {
     code: input.code.trim().toUpperCase(),
     kind: input.kind,
     value: input.value,
+    trigger: input.trigger,
+    weekdays: input.trigger === "weekday" ? [...new Set(input.weekdays)].sort() : [],
     active: input.active,
     starts_on: input.startsOn,
     ends_on: input.endsOn,
@@ -173,6 +185,7 @@ export async function applyPromo(
     .from(PROMOS)
     .select("*")
     .eq("operator_id", operatorId)
+    .eq("trigger", "code") // auto-promos aren't redeemable by typing their name
     .ilike("code", trimmed)
     .maybeSingle();
   const promo = data ? rowToPromo(data as PromoRow) : null;
@@ -188,4 +201,84 @@ export async function applyPromo(
   const discountCents = computeDiscount(promo, subtotalCents);
   if (discountCents <= 0) return { ok: false, reason: "This code doesn't apply here.", discountCents: 0 };
   return { ok: true, discountCents, promoId: promo.id, code: promo.code };
+}
+
+/** Customer-facing label for an applied promo. */
+export function promoLabel(promo: Pick<Promo, "trigger" | "code">): string {
+  if (promo.trigger === "weekday") return "Weekday discount";
+  if (promo.trigger === "repeat") return "Returning customer";
+  return promo.code;
+}
+
+function weekdayOf(iso: string): number {
+  return new Date(`${iso}T00:00:00Z`).getUTCDay();
+}
+
+export type AppliedKind = "code" | "weekday" | "repeat" | null;
+
+export interface DiscountResolution {
+  discountCents: number;
+  promoId: string | null;
+  /** Snapshot value stored on the booking (the code / promo name). */
+  code: string | null;
+  /** Display label. */
+  label: string;
+  appliedKind: AppliedKind;
+  /** Why a typed code didn't apply (when it lost or was invalid). */
+  codeReason?: string;
+}
+
+/**
+ * The single best discount for a booking: the typed code (if any) plus every
+ * applicable automatic promo, taking whichever gives the largest discount. No
+ * stacking. Shared by createBooking (authoritative) and the checkout preview.
+ */
+export async function resolveBookingDiscount(
+  operatorId: string,
+  input: { code?: string | null; subtotalCents: number; startDate: string; customerHasPrior: boolean; today: string },
+): Promise<DiscountResolution> {
+  const candidates: { discountCents: number; promoId: string; code: string; label: string; kind: AppliedKind }[] = [];
+  let codeReason: string | undefined;
+
+  if (input.code?.trim()) {
+    const r = await applyPromo(operatorId, input.code, input.subtotalCents, input.today);
+    if (r.ok && r.promoId && r.code) {
+      candidates.push({ discountCents: r.discountCents, promoId: r.promoId, code: r.code, label: r.code, kind: "code" });
+    } else {
+      codeReason = r.reason;
+    }
+  }
+
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from(PROMOS)
+    .select("*")
+    .eq("operator_id", operatorId)
+    .eq("active", true)
+    .in("trigger", ["weekday", "repeat"]);
+  for (const row of (data ?? []) as PromoRow[]) {
+    const p = rowToPromo(row);
+    if (p.startsOn && input.today < p.startsOn) continue;
+    if (p.endsOn && input.today > p.endsOn) continue;
+    if (p.usageLimit != null && p.usedCount >= p.usageLimit) continue;
+    if (input.subtotalCents < p.minSubtotalCents) continue;
+    const applies =
+      p.trigger === "weekday" ? p.weekdays.includes(weekdayOf(input.startDate)) : input.customerHasPrior;
+    if (!applies) continue;
+    const d = computeDiscount(p, input.subtotalCents);
+    if (d > 0) candidates.push({ discountCents: d, promoId: p.id, code: p.code, label: promoLabel(p), kind: p.trigger });
+  }
+
+  const best = candidates.sort((a, b) => b.discountCents - a.discountCents)[0];
+  if (!best) return { discountCents: 0, promoId: null, code: null, label: "", appliedKind: null, codeReason };
+  // Only surface a code error when the code itself was what failed (not when an
+  // auto-promo simply beat a valid code).
+  return {
+    discountCents: best.discountCents,
+    promoId: best.promoId,
+    code: best.code,
+    label: best.label,
+    appliedKind: best.kind,
+    codeReason: best.kind === "code" ? undefined : codeReason,
+  };
 }

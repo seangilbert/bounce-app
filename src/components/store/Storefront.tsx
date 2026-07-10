@@ -24,7 +24,7 @@ import type { Icon } from "@phosphor-icons/react";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
 import { priceBreakdown } from "@/lib/inventory/pricing";
 import { previewDeliveryFeeAction, type DeliveryFeePreview } from "@/lib/delivery/actions";
-import { previewPromoAction, type PromoPreview } from "@/lib/promos/actions";
+import { resolveDiscountPreviewAction, type DiscountPreview } from "@/lib/promos/actions";
 import { assessRange, normalizeSchedule, type Schedule } from "@/lib/availability/schedule";
 import { brandVars } from "@/lib/branding/palette";
 import { StoreSidebar } from "./StoreSidebar";
@@ -565,7 +565,8 @@ function CheckoutDrawer({
   const [feePreview, setFeePreview] = useState<DeliveryFeePreview | null>(null);
   const [feeLoading, setFeeLoading] = useState(false);
   const [promoInput, setPromoInput] = useState("");
-  const [promo, setPromo] = useState<PromoPreview | null>(null);
+  const [appliedCode, setAppliedCode] = useState("");
+  const [discountRes, setDiscountRes] = useState<DiscountPreview | null>(null);
   const [promoBusy, setPromoBusy] = useState(false);
   const valid =
     form.name.trim() &&
@@ -599,25 +600,41 @@ function CheckoutDrawer({
 
   const effectiveDeliveryFee =
     deliveryMode === "flat" ? deliveryFeeCents : feePreview?.feeCents ?? 0;
-  const discountCents = promo?.ok ? promo.discountCents : 0;
+  const discountCents = discountRes?.discountCents ?? 0;
   const bd = priceBreakdown(subtotal, effectiveDeliveryFee, taxPercent, deliveryTaxable, discountCents);
   const deposit = depositAmount(bd.total, depositPercent);
 
-  async function applyPromo() {
-    const code = promoInput.trim();
-    if (!code || !operatorId) return;
+  // Resolve the best discount (typed code + automatic weekday/repeat promos)
+  // whenever the date, cart, email, or applied code changes.
+  useEffect(() => {
+    if (!operatorId) return;
+    let cancelled = false;
     setPromoBusy(true);
-    try {
-      const res = await previewPromoAction({ operatorId, code, subtotalCents: subtotal });
-      setPromo(res);
-    } finally {
-      setPromoBusy(false);
-    }
-  }
-  function clearPromo() {
-    setPromo(null);
+    const t = setTimeout(async () => {
+      try {
+        const res = await resolveDiscountPreviewAction({
+          operatorId,
+          code: appliedCode || undefined,
+          subtotalCents: subtotal,
+          startDate: date,
+          customerEmail: form.email.includes("@") ? form.email : undefined,
+        });
+        if (!cancelled) setDiscountRes(res);
+      } finally {
+        if (!cancelled) setPromoBusy(false);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [operatorId, subtotal, date, form.email, appliedCode]);
+
+  const applyCode = () => setAppliedCode(promoInput.trim().toUpperCase());
+  const clearCode = () => {
+    setAppliedCode("");
     setPromoInput("");
-  }
+  };
   const balance = bd.total - deposit;
   const amountNow = payType === "deposit" ? deposit : bd.total;
 
@@ -642,7 +659,7 @@ function CheckoutDrawer({
           deliveryAddress: form.address,
           deliveryZip: form.zip || undefined,
           deliveryWindow: deliveryWindow || undefined,
-          promoCode: promo?.ok ? promoInput.trim() : undefined,
+          promoCode: appliedCode || undefined,
           operatorId,
         }),
       });
@@ -714,7 +731,7 @@ function CheckoutDrawer({
               ) : null}
               {bd.discount > 0 ? (
                 <div className="flex items-center justify-between font-semibold text-teal">
-                  <span>Discount{promo?.code ? ` · ${promo.code}` : ""}</span>
+                  <span>{discountRes?.label ? `Discount · ${discountRes.label}` : "Discount"}</span>
                   <span>−{money(bd.discount)}</span>
                 </div>
               ) : null}
@@ -748,46 +765,46 @@ function CheckoutDrawer({
             </div>
           </div>
 
-          {/* Promo code */}
+          {/* Promo code (auto-promos apply on their own) */}
           <div>
-            {promo?.ok ? (
+            {appliedCode && discountRes?.appliedKind === "code" && discountCents > 0 ? (
               <div className="flex items-center justify-between rounded-2xl border border-teal/40 bg-teal-tint/50 px-4 py-3">
-                <span className="text-[13px] font-bold text-teal-deep">
-                  {promo.code} applied · −{money(promo.discountCents)}
-                </span>
-                <button onClick={clearPromo} className="text-[13px] font-bold text-ink-mute hover:text-coral-deep">
+                <span className="text-[13px] font-bold text-teal-deep">{appliedCode} applied · −{money(discountCents)}</span>
+                <button onClick={clearCode} className="text-[13px] font-bold text-ink-mute hover:text-coral-deep">
                   Remove
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <input
-                  value={promoInput}
-                  onChange={(e) => {
-                    setPromoInput(e.target.value.toUpperCase());
-                    if (promo) setPromo(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      applyPromo();
-                    }
-                  }}
-                  placeholder="Promo code"
-                  className="min-w-0 flex-1 rounded-xl border border-sand bg-white px-3.5 py-2.5 text-sm font-bold tracking-wide text-ink outline-none placeholder:font-medium placeholder:tracking-normal placeholder:text-ink-faint"
-                />
-                <button
-                  onClick={applyPromo}
-                  disabled={!promoInput.trim() || promoBusy}
-                  className="flex-shrink-0 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-cream transition-opacity hover:opacity-90 disabled:opacity-40"
-                >
-                  {promoBusy ? "…" : "Apply"}
-                </button>
-              </div>
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={promoInput}
+                    onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        applyCode();
+                      }
+                    }}
+                    placeholder="Promo code"
+                    className="min-w-0 flex-1 rounded-xl border border-sand bg-white px-3.5 py-2.5 text-sm font-bold tracking-wide text-ink outline-none placeholder:font-medium placeholder:tracking-normal placeholder:text-ink-faint"
+                  />
+                  <button
+                    onClick={applyCode}
+                    disabled={!promoInput.trim() || promoBusy}
+                    className="flex-shrink-0 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-cream transition-opacity hover:opacity-90 disabled:opacity-40"
+                  >
+                    {promoBusy ? "…" : "Apply"}
+                  </button>
+                </div>
+                {discountCents > 0 && discountRes?.appliedKind !== "code" ? (
+                  <p className="mt-1.5 text-[12.5px] font-semibold text-teal">{discountRes?.label} applied — −{money(discountCents)}</p>
+                ) : null}
+                {appliedCode && discountRes?.codeReason ? (
+                  <p className="mt-1.5 text-[12.5px] font-semibold text-coral-deep">{discountRes.codeReason}</p>
+                ) : null}
+              </>
             )}
-            {promo && !promo.ok && promo.reason ? (
-              <p className="mt-1.5 text-[12.5px] font-semibold text-coral-deep">{promo.reason}</p>
-            ) : null}
           </div>
 
           {/* Deposit vs full */}

@@ -1,28 +1,61 @@
 "use server";
 
+import { createAdminClient } from "@/utils/supabase/admin";
 import { getOperatorById } from "@/lib/inventory/repo";
 import { operatorToday } from "@/lib/operator/time";
-import { applyPromo } from "./repo";
+import { resolveBookingDiscount, type AppliedKind } from "./repo";
 
-export interface PromoPreview {
-  ok: boolean;
-  reason?: string;
+export interface DiscountPreview {
   discountCents: number;
-  code?: string;
+  label: string;
+  appliedKind: AppliedKind;
+  /** Set when a typed code didn't apply. */
+  codeReason?: string;
+}
+
+/** Whether a customer (by email) already has a committed booking with this operator. */
+async function hasPriorBooking(operatorId: string, email?: string | null): Promise<boolean> {
+  const clean = email?.trim().toLowerCase();
+  if (!clean) return false;
+  const supabase = createAdminClient();
+  const { data: cust } = await supabase
+    .from("customers")
+    .select("id")
+    .eq("operator_id", operatorId)
+    .eq("email", clean)
+    .maybeSingle();
+  if (!cust) return false;
+  const { data } = await supabase
+    .from("bookings")
+    .select("id")
+    .eq("operator_id", operatorId)
+    .eq("customer_id", cust.id)
+    .in("status", ["paid", "contracted", "confirmed", "delivered", "completed"])
+    .limit(1);
+  return !!(data && data.length);
 }
 
 /**
- * Validate a promo code against a subtotal for the storefront checkout / booking
- * builder. Returns the discount or a friendly reason. createBooking re-resolves
- * it authoritatively, so this is display-only.
+ * Preview the best discount for the checkout/builder: a typed code plus any
+ * applicable automatic promo (weekday / repeat customer). createBooking
+ * re-resolves this authoritatively, so it's display-only.
  */
-export async function previewPromoAction(input: {
+export async function resolveDiscountPreviewAction(input: {
   operatorId: string;
-  code: string;
+  code?: string | null;
   subtotalCents: number;
-}): Promise<PromoPreview> {
+  startDate: string;
+  customerEmail?: string | null;
+}): Promise<DiscountPreview> {
   const op = await getOperatorById(input.operatorId);
-  if (!op) return { ok: false, reason: "That code isn't valid.", discountCents: 0 };
-  const res = await applyPromo(input.operatorId, input.code, input.subtotalCents, operatorToday(op.timezone));
-  return { ok: res.ok, reason: res.reason, discountCents: res.discountCents, code: res.code };
+  if (!op) return { discountCents: 0, label: "", appliedKind: null };
+  const customerHasPrior = await hasPriorBooking(input.operatorId, input.customerEmail);
+  const res = await resolveBookingDiscount(input.operatorId, {
+    code: input.code,
+    subtotalCents: input.subtotalCents,
+    startDate: input.startDate,
+    customerHasPrior,
+    today: operatorToday(op.timezone),
+  });
+  return { discountCents: res.discountCents, label: res.label, appliedKind: res.appliedKind, codeReason: res.codeReason };
 }

@@ -17,6 +17,8 @@ interface Draft {
   code: string;
   kind: "percent" | "fixed";
   value: string; // percent or dollars
+  trigger: "code" | "weekday" | "repeat";
+  weekdays: number[];
   active: boolean;
   minSubtotal: string; // dollars
   usageLimit: string;
@@ -28,6 +30,8 @@ const emptyDraft: Draft = {
   code: "",
   kind: "percent",
   value: "",
+  trigger: "code",
+  weekdays: [1, 2, 3, 4],
   active: true,
   minSubtotal: "",
   usageLimit: "",
@@ -40,6 +44,8 @@ function toDraft(p: Promo): Draft {
     code: p.code,
     kind: p.kind,
     value: p.kind === "percent" ? String(p.value) : String(p.value / 100),
+    trigger: p.trigger,
+    weekdays: p.weekdays.length ? p.weekdays : [1, 2, 3, 4],
     active: p.active,
     minSubtotal: p.minSubtotalCents ? String(p.minSubtotalCents / 100) : "",
     usageLimit: p.usageLimit != null ? String(p.usageLimit) : "",
@@ -47,6 +53,13 @@ function toDraft(p: Promo): Draft {
     endsOn: p.endsOn ?? "",
   };
 }
+
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const TRIGGERS: { key: Draft["trigger"]; label: string }[] = [
+  { key: "code", label: "Code" },
+  { key: "weekday", label: "Weekday" },
+  { key: "repeat", label: "Repeat" },
+];
 
 export function PromosManager({ promos }: { promos: Promo[] }) {
   const [editing, setEditing] = useState<Promo | "new" | null>(null);
@@ -106,6 +119,11 @@ function PromoCard({ promo, onEdit }: { promo: Promo; onEdit: () => void }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="font-display text-[15px] font-extrabold tracking-wide text-ink">{promo.code}</span>
+          {promo.trigger !== "code" ? (
+            <span className="rounded-full bg-brand-tint px-2 py-0.5 text-[10px] font-extrabold uppercase text-brand-deep">
+              {promo.trigger === "weekday" ? "Auto · weekday" : "Auto · repeat"}
+            </span>
+          ) : null}
           {!live ? (
             <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-extrabold text-ink-mute">
               {!promo.active ? "OFF" : expired ? "EXPIRED" : "USED UP"}
@@ -114,6 +132,7 @@ function PromoCard({ promo, onEdit }: { promo: Promo; onEdit: () => void }) {
         </div>
         <div className="truncate text-[13px] font-medium text-ink-mute">
           {off}
+          {promo.trigger === "weekday" && promo.weekdays.length ? ` · ${promo.weekdays.map((w) => DOW[w]).join(" ")}` : ""}
           {promo.minSubtotalCents ? ` · min ${money(promo.minSubtotalCents)}` : ""}
           {window ? ` · ${window}` : ""}
         </div>
@@ -136,7 +155,7 @@ function PromoDrawer({ promo, onClose }: { promo: Promo | null; onClose: () => v
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((s) => ({ ...s, [k]: v }));
 
-  const valid = d.code.trim().length >= 2 && parseFloat(d.value || "0") > 0;
+  const valid = d.code.trim().length >= 2 && parseFloat(d.value || "0") > 0 && (d.trigger !== "weekday" || d.weekdays.length > 0);
 
   async function save() {
     setBusy(true);
@@ -145,6 +164,8 @@ function PromoDrawer({ promo, onClose }: { promo: Promo | null; onClose: () => v
       code: d.code.trim(),
       kind: d.kind,
       value: d.kind === "percent" ? Math.round(parseFloat(d.value || "0")) : Math.round(parseFloat(d.value || "0") * 100),
+      trigger: d.trigger,
+      weekdays: d.trigger === "weekday" ? d.weekdays : [],
       active: d.active,
       startsOn: d.startsOn || null,
       endsOn: d.endsOn || null,
@@ -186,14 +207,56 @@ function PromoDrawer({ promo, onClose }: { promo: Promo | null; onClose: () => v
         </div>
 
         <div className="flex-1 space-y-4 px-5 py-5">
-          <Field label="Code">
+          <div>
+            <span className="mb-1.5 block text-[13px] font-bold text-ink-soft">Type</span>
+            <div className="flex gap-1 rounded-xl bg-sand/50 p-1">
+              {TRIGGERS.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => set("trigger", t.key)}
+                  className={`flex-1 rounded-lg py-2 text-[13px] font-bold transition-colors ${d.trigger === t.key ? "bg-white text-ink shadow-sm" : "text-ink-mute hover:text-ink"}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[12px] font-medium text-ink-mute">
+              {d.trigger === "code"
+                ? "Customers type this code at checkout."
+                : d.trigger === "weekday"
+                  ? "Applies automatically when the rental day is a selected weekday."
+                  : "Applies automatically for customers with a previous booking."}
+            </p>
+          </div>
+
+          <Field label={d.trigger === "code" ? "Code" : "Name"} hint={d.trigger !== "code" ? "For your reference (not shown to customers)." : undefined}>
             <input
               value={d.code}
               onChange={(e) => set("code", e.target.value.toUpperCase())}
-              placeholder="SUMMER20"
+              placeholder={d.trigger === "code" ? "SUMMER20" : d.trigger === "weekday" ? "WEEKDAY15" : "WELCOMEBACK"}
               className="input font-bold tracking-wide"
             />
           </Field>
+
+          {d.trigger === "weekday" ? (
+            <div>
+              <span className="mb-1.5 block text-[13px] font-bold text-ink-soft">Applies on</span>
+              <div className="flex flex-wrap gap-1.5">
+                {DOW.map((label, i) => {
+                  const on = d.weekdays.includes(i);
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => set("weekdays", on ? d.weekdays.filter((x) => x !== i) : [...d.weekdays, i].sort())}
+                      className={`h-10 w-11 rounded-xl text-[13px] font-bold transition-colors ${on ? "bg-brand text-white" : "bg-cream text-ink-mute hover:text-ink"}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           <div>
             <span className="mb-1.5 block text-[13px] font-bold text-ink-soft">Discount</span>

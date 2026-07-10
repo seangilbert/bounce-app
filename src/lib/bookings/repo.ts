@@ -5,7 +5,7 @@ import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing
 import { resolveOperatorDeliveryFee } from "@/lib/delivery/resolve";
 import type { DeliveryMode } from "@/lib/delivery/pricing";
 import { assessRange, normalizeSchedule } from "@/lib/availability/schedule";
-import { applyPromo, redeemPromoForBooking } from "@/lib/promos/repo";
+import { resolveBookingDiscount, redeemPromoForBooking } from "@/lib/promos/repo";
 import { operatorToday } from "@/lib/operator/time";
 import type { PriceUnit } from "@/lib/inventory/types";
 import type { Booking, BookingLineItem, BookingStatus, NewBooking } from "./types";
@@ -181,34 +181,8 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
     deliveryFeeCents = quote.feeCents ?? 0;
   }
 
-  // Resolve a promo code (authoritative) against the items subtotal. An invalid
-  // code is ignored silently here — the checkout preview surfaces the reason.
-  let discountCents = 0;
-  let promoId: string | null = null;
-  let promoCode: string | null = null;
-  if (input.promoCode?.trim()) {
-    try {
-      const res = await applyPromo(input.operatorId, input.promoCode, subtotal, operatorToday(op?.timezone ?? undefined));
-      if (res.ok) {
-        discountCents = res.discountCents;
-        promoId = res.promoId ?? null;
-        promoCode = res.code ?? null;
-      }
-    } catch (e) {
-      console.error("[promos] applyPromo on booking failed:", e);
-    }
-  }
-
-  const bd = priceBreakdown(
-    subtotal,
-    deliveryFeeCents,
-    Number(op?.tax_percent ?? 0),
-    op?.delivery_taxable ?? true,
-    discountCents,
-  );
-
-  // Resolve/create the CRM customer first so the booking carries customer_id
-  // (best-effort — a CRM hiccup never blocks a booking).
+  // Resolve/create the CRM customer first so the booking carries customer_id and
+  // we can evaluate a repeat-customer promo (best-effort — never blocks a booking).
   let customerId: string | null = null;
   try {
     customerId = await upsertCustomer(input.operatorId, {
@@ -219,6 +193,46 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
   } catch (e) {
     console.error("[customers] upsert on booking failed:", e);
   }
+
+  // Does this customer already have a committed booking? (repeat-customer promo)
+  let customerHasPrior = false;
+  if (customerId) {
+    const { data: prior } = await supabase
+      .from(BOOKINGS)
+      .select("id")
+      .eq("operator_id", input.operatorId)
+      .eq("customer_id", customerId)
+      .in("status", ["paid", "contracted", "confirmed", "delivered", "completed"])
+      .limit(1);
+    customerHasPrior = !!(prior && prior.length);
+  }
+
+  // Best single discount: typed code + applicable auto-promos, no stacking.
+  let discountCents = 0;
+  let promoId: string | null = null;
+  let promoCode: string | null = null;
+  try {
+    const res = await resolveBookingDiscount(input.operatorId, {
+      code: input.promoCode,
+      subtotalCents: subtotal,
+      startDate: input.startDate,
+      customerHasPrior,
+      today: operatorToday(op?.timezone ?? undefined),
+    });
+    discountCents = res.discountCents;
+    promoId = res.promoId;
+    promoCode = res.code;
+  } catch (e) {
+    console.error("[promos] resolveBookingDiscount failed:", e);
+  }
+
+  const bd = priceBreakdown(
+    subtotal,
+    deliveryFeeCents,
+    Number(op?.tax_percent ?? 0),
+    op?.delivery_taxable ?? true,
+    discountCents,
+  );
 
   const { data: booking, error: bErr } = await supabase
     .from(BOOKINGS)

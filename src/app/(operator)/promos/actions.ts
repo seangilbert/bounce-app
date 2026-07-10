@@ -10,9 +10,11 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const PromoSchema = z
   .object({
-    code: z.string().trim().min(2, "Code must be at least 2 characters.").max(30).regex(/^[A-Za-z0-9_-]+$/, "Letters, numbers, - and _ only."),
+    code: z.string().trim().min(2, "Name must be at least 2 characters.").max(30).regex(/^[A-Za-z0-9_-]+$/, "Letters, numbers, - and _ only."),
     kind: z.enum(["percent", "fixed"]),
     value: z.number().int().min(0),
+    trigger: z.enum(["code", "weekday", "repeat"]),
+    weekdays: z.array(z.number().int().min(0).max(6)).max(7),
     active: z.boolean(),
     startsOn: z.string().regex(ISO_DATE).nullable(),
     endsOn: z.string().regex(ISO_DATE).nullable(),
@@ -20,7 +22,8 @@ const PromoSchema = z
     usageLimit: z.number().int().min(1).nullable(),
   })
   .refine((d) => (d.kind === "percent" ? d.value <= 100 : true), { message: "Percent off can't exceed 100.", path: ["value"] })
-  .refine((d) => !d.startsOn || !d.endsOn || d.endsOn >= d.startsOn, { message: "End date must be on or after the start.", path: ["endsOn"] });
+  .refine((d) => !d.startsOn || !d.endsOn || d.endsOn >= d.startsOn, { message: "End date must be on or after the start.", path: ["endsOn"] })
+  .refine((d) => d.trigger !== "weekday" || d.weekdays.length > 0, { message: "Pick at least one weekday.", path: ["weekdays"] });
 
 export async function createPromoAction(input: unknown): Promise<ActionResult> {
   const op = await getSessionOperator();

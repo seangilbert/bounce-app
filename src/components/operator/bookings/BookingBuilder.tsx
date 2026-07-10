@@ -13,7 +13,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { priceBreakdown } from "@/lib/inventory/pricing";
 import { previewDeliveryFeeAction, type DeliveryFeePreview } from "@/lib/delivery/actions";
-import { previewPromoAction, type PromoPreview } from "@/lib/promos/actions";
+import { resolveDiscountPreviewAction, type DiscountPreview } from "@/lib/promos/actions";
 import { depositAmount, DEPOSIT_PERCENT } from "@/lib/deposit";
 import { createOperatorBookingAction } from "@/app/(operator)/bookings/actions";
 
@@ -93,7 +93,8 @@ export function BookingBuilder({
   const [feeLoading, setFeeLoading] = useState(false);
   const [overrideFee, setOverrideFee] = useState("");
   const [promoInput, setPromoInput] = useState("");
-  const [promo, setPromo] = useState<PromoPreview | null>(null);
+  const [appliedCode, setAppliedCode] = useState("");
+  const [discountRes, setDiscountRes] = useState<DiscountPreview | null>(null);
   const [promoBusy, setPromoBusy] = useState(false);
   const [busy, setBusy] = useState<null | "link" | "manual">(null);
   const [error, setError] = useState<string | null>(null);
@@ -137,21 +138,39 @@ export function BookingBuilder({
       : mode === "flat"
         ? op?.deliveryFeeCents ?? 0
         : feePreview?.feeCents ?? 0;
-  const discountCents = promo?.ok ? promo.discountCents : 0;
+  const discountCents = discountRes?.discountCents ?? 0;
   const bd = priceBreakdown(subtotal, effectiveDeliveryFee, op?.taxPercent ?? 0, op?.deliveryTaxable ?? true, discountCents);
   const deposit = depositAmount(bd.total, op?.depositPercent ?? DEPOSIT_PERCENT);
 
-  async function applyPromo() {
-    const code = promoInput.trim();
-    if (!code) return;
-    setPromoBusy(true);
-    try {
-      const res = await previewPromoAction({ operatorId, code, subtotalCents: subtotal });
-      setPromo(res);
-    } finally {
-      setPromoBusy(false);
+  const applyPromo = () => setAppliedCode(promoInput.trim().toUpperCase());
+
+  // Resolve the best discount (code + auto weekday/repeat) as inputs change.
+  useEffect(() => {
+    if (cartLines.length === 0) {
+      setDiscountRes(null);
+      return;
     }
-  }
+    let cancelled = false;
+    setPromoBusy(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await resolveDiscountPreviewAction({
+          operatorId,
+          code: appliedCode || undefined,
+          subtotalCents: subtotal,
+          startDate: date,
+          customerEmail: form.email.includes("@") ? form.email : undefined,
+        });
+        if (!cancelled) setDiscountRes(res);
+      } finally {
+        if (!cancelled) setPromoBusy(false);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [operatorId, subtotal, date, form.email, appliedCode, cartLines.length]);
 
   // Resolve the delivery fee server-side for zones/distance operators once an
   // address is entered (skipped when the operator typed an explicit override).
@@ -201,7 +220,7 @@ export function BookingBuilder({
       deliveryAddress: form.address.trim() || undefined,
       deliveryZip: form.zip.trim() || undefined,
       deliveryFeeOverrideCents: overrideCents ?? undefined,
-      promoCode: promo?.ok ? promoInput.trim() : undefined,
+      promoCode: appliedCode || undefined,
       startDate: date,
       endDate,
       items: cartLines.map((l) => ({ itemId: l.item.id, quantity: l.qty })),
@@ -421,7 +440,7 @@ export function BookingBuilder({
                     ))}
                     {bd.discount > 0 ? (
                       <div className="flex justify-between font-semibold text-teal">
-                        <span>Discount{promo?.code ? ` · ${promo.code}` : ""}</span>
+                        <span>Discount{discountRes?.label ? ` · ${discountRes.label}` : ""}</span>
                         <span>−{money(bd.discount)}</span>
                       </div>
                     ) : null}
@@ -446,38 +465,43 @@ export function BookingBuilder({
                     </div>
                   </div>
 
-                  {/* Promo code */}
+                  {/* Promo code (auto-promos apply on their own) */}
                   <div className="mt-3 border-t border-sand-line pt-3">
-                    {promo?.ok ? (
+                    {appliedCode && discountRes?.appliedKind === "code" && discountCents > 0 ? (
                       <div className="flex items-center justify-between text-[13px]">
-                        <span className="font-bold text-teal">{promo.code} · −{money(promo.discountCents)}</span>
+                        <span className="font-bold text-teal">{appliedCode} · −{money(discountCents)}</span>
                         <button
-                          onClick={() => { setPromo(null); setPromoInput(""); }}
+                          onClick={() => { setAppliedCode(""); setPromoInput(""); }}
                           className="font-bold text-ink-mute hover:text-coral-deep"
                         >
                           Remove
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={promoInput}
-                          onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); if (promo) setPromo(null); }}
-                          placeholder="Promo code"
-                          className="input flex-1 py-2 text-[13px]"
-                        />
-                        <button
-                          onClick={applyPromo}
-                          disabled={!promoInput.trim() || promoBusy}
-                          className="flex-shrink-0 rounded-lg bg-ink px-3 py-2 text-[13px] font-bold text-cream disabled:opacity-40"
-                        >
-                          {promoBusy ? "…" : "Apply"}
-                        </button>
-                      </div>
+                      <>
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={promoInput}
+                            onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                            placeholder="Promo code"
+                            className="input flex-1 py-2 text-[13px]"
+                          />
+                          <button
+                            onClick={applyPromo}
+                            disabled={!promoInput.trim() || promoBusy}
+                            className="flex-shrink-0 rounded-lg bg-ink px-3 py-2 text-[13px] font-bold text-cream disabled:opacity-40"
+                          >
+                            {promoBusy ? "…" : "Apply"}
+                          </button>
+                        </div>
+                        {discountCents > 0 && discountRes?.appliedKind !== "code" ? (
+                          <p className="mt-1 text-[12px] font-semibold text-teal">{discountRes?.label} applied automatically.</p>
+                        ) : null}
+                        {appliedCode && discountRes?.codeReason ? (
+                          <p className="mt-1 text-[12px] font-semibold text-coral-deep">{discountRes.codeReason}</p>
+                        ) : null}
+                      </>
                     )}
-                    {promo && !promo.ok && promo.reason ? (
-                      <p className="mt-1 text-[12px] font-semibold text-coral-deep">{promo.reason}</p>
-                    ) : null}
                   </div>
                 </div>
               ) : null}
