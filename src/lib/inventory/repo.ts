@@ -28,6 +28,7 @@ interface OperatorRow {
   min_lead_hours: number | null;
   tax_percent: number | string | null;
   delivery_fee_cents: number | null;
+  delivery_taxable: boolean | null;
 }
 
 interface ItemRow {
@@ -74,6 +75,7 @@ function rowToOperator(r: OperatorRow): Operator {
     minLeadHours: r.min_lead_hours ?? 48,
     taxPercent: Number(r.tax_percent ?? 0),
     deliveryFeeCents: r.delivery_fee_cents ?? 0,
+    deliveryTaxable: r.delivery_taxable ?? true,
   };
 }
 

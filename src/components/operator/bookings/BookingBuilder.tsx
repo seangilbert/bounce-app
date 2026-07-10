@@ -27,6 +27,7 @@ interface OpConfig {
   depositPercent?: number;
   taxPercent?: number;
   deliveryFeeCents?: number;
+  deliveryTaxable?: boolean;
 }
 export interface BookingPrefill {
   customerName?: string;
@@ -118,7 +119,7 @@ export function BookingBuilder({
     .map(([id, qty]) => ({ item: byId.get(id), qty }))
     .filter((l): l is { item: BuilderItem; qty: number } => Boolean(l.item));
   const subtotal = cartLines.reduce((s, l) => s + lineTotalOf(l.item, l.qty, days), 0);
-  const bd = priceBreakdown(subtotal, op?.deliveryFeeCents ?? 0, op?.taxPercent ?? 0);
+  const bd = priceBreakdown(subtotal, op?.deliveryFeeCents ?? 0, op?.taxPercent ?? 0, op?.deliveryTaxable ?? true);
   const deposit = depositAmount(bd.total, op?.depositPercent ?? DEPOSIT_PERCENT);
   const changeStart = (v: string) => {
     setDate(v);

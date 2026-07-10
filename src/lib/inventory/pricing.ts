@@ -30,16 +30,20 @@ export interface PriceBreakdown {
 }
 
 /**
- * Canonical price breakdown (minor units). Tax applies to the taxable base
- * (items + delivery). Single source of truth for createBooking, the AI quote,
- * the storefront, and checkout so every surface shows the same numbers.
+ * Canonical price breakdown (minor units). Tax applies to the items subtotal
+ * plus, when `deliveryTaxable`, the delivery fee. Some states (e.g. MA) tax the
+ * rental items but not separately-stated delivery. Single source of truth for
+ * createBooking, the AI quote, the storefront, and checkout so every surface
+ * shows the same numbers.
  */
 export function priceBreakdown(
   subtotal: number,
   deliveryFeeCents: number,
   taxPercent: number,
+  deliveryTaxable = true,
 ): PriceBreakdown {
   const deliveryFee = deliveryFeeCents;
-  const tax = Math.round(((subtotal + deliveryFee) * taxPercent) / 100);
+  const taxBase = deliveryTaxable ? subtotal + deliveryFee : subtotal;
+  const tax = Math.round((taxBase * taxPercent) / 100);
   return { subtotal, deliveryFee, tax, total: subtotal + deliveryFee + tax };
 }

@@ -279,7 +279,7 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
   }
 
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  const bd = priceBreakdown(subtotal, operator.deliveryFeeCents, operator.taxPercent);
+  const bd = priceBreakdown(subtotal, operator.deliveryFeeCents, operator.taxPercent, operator.deliveryTaxable);
   const suggestedDeposit = Math.round((bd.total * operator.depositPercent) / 100);
 
   // Escalation gate — much lighter now that ambiguity is handled by asking.

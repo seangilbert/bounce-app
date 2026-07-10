@@ -24,6 +24,7 @@ export interface Operator {
   minLeadHours: number;
   taxPercent: number;
   deliveryFeeCents: number;
+  deliveryTaxable: boolean;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

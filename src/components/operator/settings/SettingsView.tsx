@@ -33,6 +33,7 @@ interface OperatorSettings {
   minLeadHours: number;
   taxPercent: number;
   deliveryFeeCents: number;
+  deliveryTaxable: boolean;
 }
 
 export function SettingsView({ operator }: { operator: OperatorSettings }) {
@@ -227,17 +228,32 @@ function PricingSection({ operator }: { operator: OperatorSettings }) {
   const { busy, saved, error, save } = useSaver();
   const [tax, setTax] = useState(String(operator.taxPercent));
   const [delivery, setDelivery] = useState(String(Math.round(operator.deliveryFeeCents / 100)));
+  const [deliveryTaxable, setDeliveryTaxable] = useState(operator.deliveryTaxable);
 
   return (
     <Section title="Pricing" desc="Applied to every quote and checkout. 0 = free delivery / no tax.">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Sales tax %" hint="On items + delivery">
+        <Field label="Sales tax %" hint={deliveryTaxable ? "On items + delivery" : "On items only"}>
           <input type="number" min="0" max="100" step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} className="input" />
         </Field>
         <Field label="Delivery fee ($)" hint="Flat fee per booking">
           <input type="number" min="0" value={delivery} onChange={(e) => setDelivery(e.target.value)} className="input" />
         </Field>
       </div>
+      <label className="mt-3 flex cursor-pointer items-start gap-3">
+        <input
+          type="checkbox"
+          checked={deliveryTaxable}
+          onChange={(e) => setDeliveryTaxable(e.target.checked)}
+          className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand"
+        />
+        <span className="text-[13px] font-medium text-ink-soft">
+          Charge sales tax on the delivery fee
+          <span className="mt-0.5 block text-[12px] font-medium text-ink-mute">
+            Turn off where delivery isn&apos;t taxable (e.g. Massachusetts taxes rental items but not separately-stated delivery).
+          </span>
+        </span>
+      </label>
       <SaveBar
         busy={busy}
         saved={saved}
@@ -247,6 +263,7 @@ function PricingSection({ operator }: { operator: OperatorSettings }) {
             updatePricingAction({
               taxPercent: parseFloat(tax || "0"),
               deliveryFeeCents: Math.round(parseFloat(delivery || "0") * 100),
+              deliveryTaxable,
             }),
           )
         }

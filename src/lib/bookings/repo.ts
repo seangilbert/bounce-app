@@ -135,10 +135,15 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
   // Snapshot the operator's tax + delivery fee into the booking total.
   const { data: op } = await supabase
     .from("operators")
-    .select("tax_percent, delivery_fee_cents")
+    .select("tax_percent, delivery_fee_cents, delivery_taxable")
     .eq("id", input.operatorId)
     .single();
-  const bd = priceBreakdown(subtotal, op?.delivery_fee_cents ?? 0, Number(op?.tax_percent ?? 0));
+  const bd = priceBreakdown(
+    subtotal,
+    op?.delivery_fee_cents ?? 0,
+    Number(op?.tax_percent ?? 0),
+    op?.delivery_taxable ?? true,
+  );
 
   // Resolve/create the CRM customer first so the booking carries customer_id
   // (best-effort — a CRM hiccup never blocks a booking).

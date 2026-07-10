@@ -26,6 +26,7 @@ export default async function SettingsPage() {
         minLeadHours: op.minLeadHours,
         taxPercent: op.taxPercent,
         deliveryFeeCents: op.deliveryFeeCents,
+        deliveryTaxable: op.deliveryTaxable,
       }}
     />
   );

@@ -46,6 +46,7 @@ interface ApiResponse {
     depositPercent?: number;
     taxPercent?: number;
     deliveryFeeCents?: number;
+    deliveryTaxable?: boolean;
   } | null;
   items: ApiItem[];
 }
@@ -477,6 +478,7 @@ export function StoreShell({
           depositPercent={data?.operator?.depositPercent ?? DEPOSIT_PERCENT}
           taxPercent={data?.operator?.taxPercent ?? 0}
           deliveryFeeCents={data?.operator?.deliveryFeeCents ?? 0}
+          deliveryTaxable={data?.operator?.deliveryTaxable ?? true}
           onClose={() => setCheckoutOpen(false)}
         />
       ) : null}
@@ -496,6 +498,7 @@ function CheckoutDrawer({
   depositPercent,
   taxPercent,
   deliveryFeeCents,
+  deliveryTaxable,
   onClose,
 }: {
   date: string;
@@ -508,6 +511,7 @@ function CheckoutDrawer({
   depositPercent: number;
   taxPercent: number;
   deliveryFeeCents: number;
+  deliveryTaxable: boolean;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
@@ -520,7 +524,7 @@ function CheckoutDrawer({
     form.phone.replace(/\D/g, "").length >= 10 &&
     form.address.trim();
 
-  const bd = priceBreakdown(subtotal, deliveryFeeCents, taxPercent);
+  const bd = priceBreakdown(subtotal, deliveryFeeCents, taxPercent, deliveryTaxable);
   const deposit = depositAmount(bd.total, depositPercent);
   const balance = bd.total - deposit;
   const amountNow = payType === "deposit" ? deposit : bd.total;
