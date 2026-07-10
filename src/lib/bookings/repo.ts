@@ -278,6 +278,24 @@ export async function setBookingStatus(
   return getBooking(id);
 }
 
+/** Persist the loadout checklist (checked required-equipment labels) for a booking. */
+export async function setBookingLoadout(id: string, labels: string[]): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from(BOOKINGS).update({ loadout: labels }).eq("id", id);
+  if (error) throw new Error(`setBookingLoadout failed: ${error.message}`);
+}
+
+/**
+ * Advance a booking's cleaning turnaround. `needs_cleaning` moves its units into
+ * the item needs-cleaning pool (drops them from availability); `clean` frees
+ * them again. Atomic + idempotent via the set_booking_turnaround RPC.
+ */
+export async function setBookingTurnaround(id: string, stage: "needs_cleaning" | "clean"): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.rpc("set_booking_turnaround", { p_booking_id: id, p_stage: stage });
+  if (error) throw new Error(`setBookingTurnaround failed: ${error.message}`);
+}
+
 /**
  * Atomically reserve inventory for a quoted booking and move it to
  * `pending_payment` (the reserving state). Locks the booking's items + re-checks

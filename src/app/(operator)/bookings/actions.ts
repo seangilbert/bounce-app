@@ -9,6 +9,8 @@ import {
   setBookingDeposit,
   createBooking,
   reserveBooking,
+  setBookingLoadout,
+  setBookingTurnaround,
 } from "@/lib/bookings/repo";
 import { getOrderByBookingId, setOrderStatusByPaymentId, recordCashPayment } from "@/lib/orders/repo";
 import { getPaymentProvider, type PaymentProviderName } from "@/lib/payments";
@@ -158,6 +160,51 @@ export async function markCompletedAction(id: string): Promise<ActionResult> {
   await setBookingStatus(id, "completed");
   revalidate(id);
   return { ok: true };
+}
+
+/** Persist which loadout items are checked off for a booking (deliveries screen). */
+export async function setBookingLoadoutAction(id: string, labels: string[]): Promise<ActionResult> {
+  const a = await authorize(id);
+  if ("error" in a) return { ok: false, error: a.error };
+  const clean = Array.isArray(labels) ? labels.map((l) => String(l).slice(0, 60)).slice(0, 40) : [];
+  try {
+    await setBookingLoadout(id, clean);
+    revalidatePath("/deliveries");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not save loadout." };
+  }
+}
+
+/**
+ * Mark a pickup returned (booking completed). When `needsCleaning`, the returned
+ * units are moved into each item's needs-cleaning pool so they're held out of
+ * availability until cleaned.
+ */
+export async function markReturnedAction(id: string, needsCleaning: boolean): Promise<ActionResult> {
+  const a = await authorize(id);
+  if ("error" in a) return { ok: false, error: a.error };
+  try {
+    await setBookingStatus(id, "completed");
+    if (needsCleaning) await setBookingTurnaround(id, "needs_cleaning");
+    revalidate(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not mark returned." };
+  }
+}
+
+/** Mark a returned booking's units cleaned — frees them back into availability. */
+export async function markCleanedAction(id: string): Promise<ActionResult> {
+  const a = await authorize(id);
+  if ("error" in a) return { ok: false, error: a.error };
+  try {
+    await setBookingTurnaround(id, "clean");
+    revalidate(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not mark cleaned." };
+  }
 }
 
 export async function cancelBookingAction(id: string): Promise<ActionResult> {

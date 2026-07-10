@@ -28,6 +28,14 @@ export interface RouteStop {
   items: string;
   /** Aggregated loadout gear for this stop's items. */
   equipment: EquipmentItem[];
+  /** Persisted loadout ticks (equipment labels already loaded). */
+  loadout: string[];
+}
+
+export interface CleaningItem {
+  bookingId: string;
+  customer: string;
+  items: string;
 }
 
 export interface DeliveryRoute {
@@ -36,6 +44,8 @@ export interface DeliveryRoute {
   todayIso: string;
   dropOffs: RouteStop[];
   pickUps: RouteStop[];
+  /** Returned bookings whose units are awaiting cleaning (not date-scoped). */
+  cleaning: CleaningItem[];
 }
 
 interface Row {
@@ -49,6 +59,7 @@ interface Row {
   delivery_window: string | null;
   delivery_address: string | null;
   delivery_zip: string | null;
+  loadout: unknown;
   booking_items: { quantity: number; items: { name: string; required_equipment: unknown } | null }[];
 }
 
@@ -97,6 +108,7 @@ function toStop(r: Row, kind: StopKind): RouteStop {
     zip: r.delivery_zip,
     items: itemsLabel(r.booking_items),
     equipment: aggregateEquipment(r.booking_items),
+    loadout: Array.isArray(r.loadout) ? (r.loadout as unknown[]).map(String) : [],
   };
 }
 
@@ -107,20 +119,35 @@ function toStop(r: Row, kind: StopKind): RouteStop {
  */
 export async function getDeliveryRoute(operatorId: string, dateIso: string, tz?: string): Promise<DeliveryRoute> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("bookings")
-    .select(
-      "id, status, start_date, end_date, customer_name, customer_email, customer_phone, delivery_window, delivery_address, delivery_zip, booking_items(quantity, items(name, required_equipment))",
-    )
-    .eq("operator_id", operatorId)
-    .in("status", ON)
-    .or(`start_date.eq.${dateIso},end_date.eq.${dateIso}`);
+  const SELECT =
+    "id, status, turnaround, loadout, start_date, end_date, customer_name, customer_email, customer_phone, delivery_window, delivery_address, delivery_zip, booking_items(quantity, items(name, required_equipment))";
+  const [{ data, error }, { data: cleanData }] = await Promise.all([
+    supabase
+      .from("bookings")
+      .select(SELECT)
+      .eq("operator_id", operatorId)
+      .in("status", ON)
+      .or(`start_date.eq.${dateIso},end_date.eq.${dateIso}`),
+    // The cleaning backlog isn't date-scoped — anything still awaiting cleaning.
+    supabase
+      .from("bookings")
+      .select("id, customer_name, booking_items(quantity, items(name))")
+      .eq("operator_id", operatorId)
+      .eq("turnaround", "needs_cleaning")
+      .order("end_date", { ascending: true }),
+  ]);
   if (error) throw new Error(`getDeliveryRoute failed: ${error.message}`);
   const rows = (data ?? []) as unknown as Row[];
 
   const byWindow = (a: RouteStop, b: RouteStop) => windowStart(a.timeWindow) - windowStart(b.timeWindow);
   const dropOffs = rows.filter((r) => r.start_date === dateIso).map((r) => toStop(r, "DELIVER")).sort(byWindow);
   const pickUps = rows.filter((r) => r.end_date === dateIso).map((r) => toStop(r, "PICKUP")).sort(byWindow);
+
+  const cleaning: CleaningItem[] = ((cleanData ?? []) as unknown as Row[]).map((r) => ({
+    bookingId: r.id,
+    customer: r.customer_name ?? "Customer",
+    items: itemsLabel(r.booking_items),
+  }));
 
   const dt = new Date(`${dateIso}T00:00:00Z`);
 
@@ -130,5 +157,6 @@ export async function getDeliveryRoute(operatorId: string, dateIso: string, tz?:
     todayIso: operatorToday(tz),
     dropOffs,
     pickUps,
+    cleaning,
   };
 }

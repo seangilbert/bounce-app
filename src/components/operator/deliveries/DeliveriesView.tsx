@@ -18,7 +18,12 @@ import {
   Wrench,
 } from "@phosphor-icons/react/dist/ssr";
 import type { DeliveryRoute, RouteStop } from "@/lib/operator/deliveries";
-import { markDeliveredAction, markCompletedAction } from "@/app/(operator)/bookings/actions";
+import {
+  markDeliveredAction,
+  markReturnedAction,
+  markCleanedAction,
+  setBookingLoadoutAction,
+} from "@/app/(operator)/bookings/actions";
 
 function shiftIso(iso: string, delta: number): string {
   const d = new Date(new Date(`${iso}T00:00:00Z`).getTime() + delta * 86_400_000);
@@ -30,15 +35,31 @@ export function DeliveriesView({ route }: { route: DeliveryRoute }) {
   const router = useRouter();
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
-  async function mark(stop: RouteStop) {
+  async function markDelivered(stop: RouteStop) {
     setBusyKey(stop.key);
-    const res =
-      stop.kind === "DELIVER"
-        ? await markDeliveredAction(stop.bookingId)
-        : await markCompletedAction(stop.bookingId);
+    const res = await markDeliveredAction(stop.bookingId);
     if (res.ok) router.refresh();
     setBusyKey(null);
   }
+
+  async function markReturned(stop: RouteStop, needsCleaning: boolean) {
+    setBusyKey(stop.key);
+    const res = await markReturnedAction(stop.bookingId, needsCleaning);
+    if (res.ok) router.refresh();
+    setBusyKey(null);
+  }
+
+  async function markCleaned(bookingId: string) {
+    setBusyKey(`clean:${bookingId}`);
+    const res = await markCleanedAction(bookingId);
+    if (res.ok) router.refresh();
+    setBusyKey(null);
+  }
+
+  // Persist loadout ticks best-effort (local state already reflects the change).
+  const saveLoadout = (bookingId: string, labels: string[]) => {
+    void setBookingLoadoutAction(bookingId, labels);
+  };
 
   const href = (iso: string) => `/deliveries?d=${iso}`;
   const total = route.dropOffs.length + route.pickUps.length;
@@ -84,16 +105,67 @@ export function DeliveriesView({ route }: { route: DeliveryRoute }) {
           <div className="flex flex-col gap-7">
             <Section title="Drop-offs" count={route.dropOffs.length} kind="DELIVER">
               {route.dropOffs.map((s) => (
-                <StopCard key={s.key} stop={s} busy={busyKey === s.key} onMark={() => mark(s)} />
+                <StopCard
+                  key={s.key}
+                  stop={s}
+                  busy={busyKey === s.key}
+                  onDeliver={() => markDelivered(s)}
+                  onReturn={(needsCleaning) => markReturned(s, needsCleaning)}
+                  onLoadout={(labels) => saveLoadout(s.bookingId, labels)}
+                />
               ))}
             </Section>
             <Section title="Pick-ups" count={route.pickUps.length} kind="PICKUP">
               {route.pickUps.map((s) => (
-                <StopCard key={s.key} stop={s} busy={busyKey === s.key} onMark={() => mark(s)} />
+                <StopCard
+                  key={s.key}
+                  stop={s}
+                  busy={busyKey === s.key}
+                  onDeliver={() => markDelivered(s)}
+                  onReturn={(needsCleaning) => markReturned(s, needsCleaning)}
+                  onLoadout={(labels) => saveLoadout(s.bookingId, labels)}
+                />
               ))}
             </Section>
           </div>
         )}
+
+        {route.cleaning.length > 0 ? (
+          <div className="mt-7">
+            <div className="mb-3 flex items-center gap-2">
+              <Wrench size={16} weight="fill" className="text-amber-deep" />
+              <h2 className="font-display text-lg font-bold text-ink">Awaiting cleaning</h2>
+              <span className="rounded-full bg-amber-tint px-2.5 py-0.5 text-[11px] font-extrabold text-amber-deep">
+                {route.cleaning.length}
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-sand-line bg-white">
+              {route.cleaning.map((c) => (
+                <div key={c.bookingId} className="flex items-center gap-3 border-t border-sand-line px-4 py-3 first:border-t-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-ink">{c.customer}</div>
+                    <div className="truncate text-[13px] font-medium text-ink-mute">{c.items}</div>
+                  </div>
+                  <button
+                    onClick={() => markCleaned(c.bookingId)}
+                    disabled={busyKey === `clean:${c.bookingId}`}
+                    className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-teal px-4 py-2 text-[13px] font-bold text-white transition-colors hover:bg-teal-deep disabled:opacity-50"
+                  >
+                    {busyKey === `clean:${c.bookingId}` ? (
+                      <CircleNotch size={14} weight="bold" className="animate-spin" />
+                    ) : (
+                      <CheckCircle size={14} weight="fill" />
+                    )}
+                    Mark cleaned
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[12px] font-medium text-ink-mute">
+              These units are held out of availability until cleaned.
+            </p>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -158,16 +230,29 @@ function ActionBtn({
   );
 }
 
-function StopCard({ stop, busy, onMark }: { stop: RouteStop; busy: boolean; onMark: () => void }) {
+function StopCard({
+  stop,
+  busy,
+  onDeliver,
+  onReturn,
+  onLoadout,
+}: {
+  stop: RouteStop;
+  busy: boolean;
+  onDeliver: () => void;
+  onReturn: (needsCleaning: boolean) => void;
+  onLoadout: (labels: string[]) => void;
+}) {
   const isDeliver = stop.kind === "DELIVER";
-  // Loadout checklist ticks — a local aid for this session (not yet persisted).
-  const [loaded, setLoaded] = useState<Set<string>>(new Set());
+  // Loadout checklist ticks — seeded from the persisted loadout, saved on change.
+  const [loaded, setLoaded] = useState<Set<string>>(() => new Set(stop.loadout));
   const allLoaded = stop.equipment.length > 0 && stop.equipment.every((e) => loaded.has(e.label));
   const toggleLoaded = (label: string) =>
     setLoaded((s) => {
       const n = new Set(s);
       if (n.has(label)) n.delete(label);
       else n.add(label);
+      onLoadout([...n]);
       return n;
     });
   const mapsUrl = stop.address
@@ -280,19 +365,34 @@ function StopCard({ stop, busy, onMark }: { stop: RouteStop; busy: boolean; onMa
           <div className="flex items-center justify-center gap-2 text-sm font-bold text-teal-deep">
             <CheckCircle size={18} weight="fill" /> {isDeliver ? "Delivered" : "Picked up"}
           </div>
-        ) : (
+        ) : isDeliver ? (
           <button
-            onClick={onMark}
+            onClick={onDeliver}
             disabled={busy}
             className="flex w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
           >
-            {busy ? (
-              <CircleNotch size={16} weight="bold" className="animate-spin" />
-            ) : (
-              <CheckCircle size={16} weight="fill" />
-            )}
-            {isDeliver ? "Mark delivered" : "Mark picked up"}
+            {busy ? <CircleNotch size={16} weight="bold" className="animate-spin" /> : <CheckCircle size={16} weight="fill" />}
+            Mark delivered
           </button>
+        ) : (
+          // Pickup: capture whether the returned units need cleaning (feeds readiness).
+          <div className="flex gap-2">
+            <button
+              onClick={() => onReturn(false)}
+              disabled={busy}
+              className="flex flex-1 items-center justify-center gap-2 rounded-full bg-brand px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
+            >
+              {busy ? <CircleNotch size={16} weight="bold" className="animate-spin" /> : <CheckCircle size={16} weight="fill" />}
+              Returned · clean
+            </button>
+            <button
+              onClick={() => onReturn(true)}
+              disabled={busy}
+              className="flex flex-1 items-center justify-center gap-2 rounded-full border border-amber bg-amber-tint px-4 py-3 text-sm font-bold text-amber-deep transition-colors hover:bg-amber-tint/70 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Wrench size={16} weight="fill" /> Needs cleaning
+            </button>
+          </div>
         )}
       </div>
     </div>
