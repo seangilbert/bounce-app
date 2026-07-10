@@ -17,6 +17,7 @@ import {
   ArrowRight,
 } from "@phosphor-icons/react/dist/ssr";
 import { getSessionOperator } from "@/lib/operator/session";
+import { timeGreeting } from "@/lib/operator/time";
 import type { Operator } from "@/lib/inventory/types";
 import {
   getDashboard,
@@ -64,6 +65,7 @@ function DashboardBody({
   weather: WeatherAdvisory | null;
 }) {
   const firstName = operator.ownerName?.split(/\s+/)[0] ?? operator.name;
+  const greeting = timeGreeting(operator.timezone);
   const scopeWord = data.scope === "day" ? "today" : data.scope === "month" ? "this month" : "this week";
   return (
     <div className="flex w-full flex-col">
@@ -71,7 +73,7 @@ function DashboardBody({
       <div className="flex flex-col gap-4 border-b border-sand px-5 py-5 sm:flex-row sm:items-center sm:justify-between lg:px-8 lg:py-6">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">
-            Good morning, {firstName}
+            {greeting}, {firstName}
           </h1>
           <p className="mt-0.5 text-sm font-medium text-ink-mute">{data.dateLabel}</p>
         </div>

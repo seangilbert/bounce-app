@@ -34,3 +34,19 @@ export function operatorToday(tz?: string | null): string {
   // en-CA renders as YYYY-MM-DD.
   return new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(new Date());
 }
+
+/** Current hour (0–23) in the operator's timezone. */
+export function operatorHour(tz?: string | null): number {
+  const zone = tz && isValidTimeZone(tz) ? tz : FALLBACK_TZ;
+  return Number(
+    new Intl.DateTimeFormat("en-US", { timeZone: zone, hour: "2-digit", hourCycle: "h23" }).format(new Date()),
+  );
+}
+
+/** Time-of-day greeting in the operator's local time. */
+export function timeGreeting(tz?: string | null): string {
+  const h = operatorHour(tz);
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
