@@ -22,6 +22,13 @@ export default async function CalendarPage({
   const month = Math.min(12, Math.max(1, monthRaw));
   const category = isCatFilter(searchParams.cat) ? searchParams.cat : "all";
 
-  const data = await getCalendarData(operator.id, year, month, category, operator.timezone);
+  const data = await getCalendarData(
+    operator.id,
+    year,
+    month,
+    category,
+    operator.timezone,
+    operator.availabilityConfig,
+  );
   return <CalendarView data={data} operatorId={operator.id} />;
 }

@@ -6,6 +6,7 @@ import {
   CaretLeft,
   CaretRight,
   LockSimple,
+  Prohibit,
   CastleTurret,
   SealCheck,
   ClockCountdown,
@@ -147,7 +148,7 @@ export function CalendarView({ data, operatorId }: { data: CalendarData; operato
 
       {/* Detail panel */}
       <aside className="border-t border-sand p-5 lg:h-dvh lg:w-[360px] lg:flex-shrink-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
-        <DetailPanel detail={active?.detail ?? null} />
+        <DetailPanel detail={active?.detail ?? null} blackout={!!active?.blackout} closed={!!active?.closed} />
       </aside>
     </div>
   );
@@ -192,11 +193,15 @@ function DayCell({
   const fb = day.fullyBooked;
   const shell = selected
     ? "border-2 border-coral bg-coral-tint/50"
-    : fb
-      ? "border border-coral bg-coral-tint/40"
-      : day.inMonth
-        ? "border border-sand-line bg-white hover:border-sand"
-        : "border border-transparent bg-sand/20";
+    : day.blackout
+      ? "border border-sand bg-sand/50"
+      : fb
+        ? "border border-coral bg-coral-tint/40"
+        : day.closed
+          ? "border border-transparent bg-sand/25"
+          : day.inMonth
+            ? "border border-sand-line bg-white hover:border-sand"
+            : "border border-transparent bg-sand/20";
   const shown = day.events.slice(0, MONTH_CAP);
   const more = day.events.length - shown.length;
   return (
@@ -220,8 +225,16 @@ function DayCell({
         >
           {day.dayNum}
         </span>
-        {fb ? <LockSimple size={12} weight="fill" className="text-coral-deep" /> : null}
+        {day.blackout ? (
+          <Prohibit size={12} weight="bold" className="text-ink-mute" />
+        ) : fb ? (
+          <LockSimple size={12} weight="fill" className="text-coral-deep" />
+        ) : null}
       </div>
+
+      {day.blackout ? (
+        <span className="mt-1 hidden text-[10px] font-bold uppercase tracking-wide text-ink-mute lg:block">Blackout</span>
+      ) : null}
 
       {/* Desktop: full pills */}
       <div className="mt-1 hidden flex-col gap-1 lg:flex">
@@ -257,9 +270,13 @@ function WeekColumn({
 }) {
   const shell = selected
     ? "border-2 border-coral bg-coral-tint/40"
-    : day.fullyBooked
-      ? "border border-coral bg-coral-tint/30"
-      : "border border-sand-line bg-white hover:border-sand";
+    : day.blackout
+      ? "border border-sand bg-sand/50"
+      : day.fullyBooked
+        ? "border border-coral bg-coral-tint/30"
+        : day.closed
+          ? "border border-transparent bg-sand/25"
+          : "border border-sand-line bg-white hover:border-sand";
   return (
     <div
       role="button"
@@ -281,7 +298,15 @@ function WeekColumn({
         >
           {day.dayNum}
         </span>
-        {day.fullyBooked ? <LockSimple size={12} weight="fill" className="text-coral-deep" /> : null}
+        {day.blackout ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-ink-mute">
+            <Prohibit size={12} weight="bold" /> Blackout
+          </span>
+        ) : day.fullyBooked ? (
+          <LockSimple size={12} weight="fill" className="text-coral-deep" />
+        ) : day.closed ? (
+          <span className="text-[10px] font-bold uppercase tracking-wide text-ink-faint">Closed</span>
+        ) : null}
       </div>
       {day.events.length > 0 ? (
         day.events.map((e, i) => <EventPill key={i} event={e} />)
@@ -292,13 +317,22 @@ function WeekColumn({
   );
 }
 
-function DetailPanel({ detail }: { detail: SelectedDayDetail | null }) {
+function DetailPanel({ detail, blackout, closed }: { detail: SelectedDayDetail | null; blackout?: boolean; closed?: boolean }) {
   if (!detail) {
     return <p className="text-sm font-medium text-ink-mute">Select a day to see its bookings.</p>;
   }
   const d = detail;
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 lg:max-w-none">
+      {blackout ? (
+        <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-sand px-3 py-1.5 text-[11px] font-extrabold tracking-wide text-ink-soft">
+          <Prohibit size={12} weight="bold" /> BLACKOUT · NOT ACCEPTING BOOKINGS
+        </span>
+      ) : closed ? (
+        <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-sand px-3 py-1.5 text-[11px] font-extrabold tracking-wide text-ink-mute">
+          <Prohibit size={12} weight="bold" /> CLOSED · NOT AN OPERATING DAY
+        </span>
+      ) : null}
       {d.fullyBooked ? (
         <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-coral-tint px-3 py-1.5 text-[11px] font-extrabold tracking-wide text-coral-deep">
           <LockSimple size={12} weight="fill" /> FULLY BOOKED

@@ -13,6 +13,7 @@ import type { InquiryListItem, InquiryDetail, BookingOutcome } from "./inquiries
 import { bookingsForOutcomes, type OutcomeBookingRow } from "@/lib/bookings/repo";
 import { listInquiries, listMessagesByInquiry, type InquiryRow, type ThreadMessage } from "@/lib/inquiries/repo";
 import { expireStaleCheckouts } from "@/lib/bookings/expire";
+import { normalizeSchedule } from "@/lib/availability/schedule";
 import type { Stop } from "./mock";
 
 /** Booking statuses that occupy inventory (shown on the calendar). */
@@ -77,8 +78,11 @@ export async function getCalendarData(
   month: number,
   category: CatFilter = "all",
   tz?: string,
+  availabilityConfig?: unknown,
 ): Promise<CalendarData> {
   const supabase = createAdminClient();
+  const schedule = normalizeSchedule(availabilityConfig);
+  const isBlackout = (iso: string) => schedule.blackouts.some((b) => iso >= b.start && iso <= b.end);
   const pad = (n: number) => String(n).padStart(2, "0");
   const isoOf = (ts: number) => {
     const dt = new Date(ts);
@@ -159,6 +163,8 @@ export async function getCalendarData(
       inMonth: mm === month,
       events,
       fullyBooked,
+      blackout: isBlackout(iso),
+      closed: !schedule.operatingDays.includes(dt.getUTCDay()),
       detail: buildDayDetail(iso, dt, dayBookings, fullyBooked),
     });
   }

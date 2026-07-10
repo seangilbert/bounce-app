@@ -42,6 +42,8 @@ export interface CalDayData {
   inMonth: boolean; // belongs to the displayed month
   events: CalEvent[]; // all events that day (month view caps; week view shows all)
   fullyBooked: boolean;
+  blackout: boolean; // an explicit blackout date — no bookings taken
+  closed: boolean; // a non-operating weekday per the availability schedule
   detail: SelectedDayDetail;
 }
 
