@@ -1,6 +1,7 @@
 import { getESignatureProvider } from "./index";
 import { setOrderEsignDocument } from "@/lib/orders/repo";
-import { setBookingStatus } from "@/lib/bookings/repo";
+import { getBooking, setBookingStatus } from "@/lib/bookings/repo";
+import { getOperatorById } from "@/lib/inventory/repo";
 import type { Order } from "@/lib/orders/types";
 
 /**
@@ -35,9 +36,28 @@ export async function sendAgreementForOrder(order: Order): Promise<void> {
     return;
   }
 
+  // Merge the operator's customer policies into the agreement, but only when the
+  // template actually has matching text fields (api_ids `cancellation_policy` /
+  // `damage_policy`) — opt in with SIGNWELL_POLICY_FIELDS=true. Off by default so
+  // sends never break on a template that lacks the fields.
+  let fields: Record<string, string> | undefined;
+  if (process.env.SIGNWELL_POLICY_FIELDS === "true" && order.bookingId) {
+    try {
+      const booking = await getBooking(order.bookingId);
+      const operator = booking ? await getOperatorById(booking.operatorId) : null;
+      const f: Record<string, string> = {};
+      if (operator?.cancellationPolicy?.trim()) f.cancellation_policy = operator.cancellationPolicy.trim();
+      if (operator?.damagePolicy?.trim()) f.damage_policy = operator.damagePolicy.trim();
+      if (Object.keys(f).length) fields = f;
+    } catch (e) {
+      console.error("[esign] loading policy fields failed; sending without them:", e);
+    }
+  }
+
   const provider = getESignatureProvider();
   const doc = await provider.createFromTemplate({
     templateId,
+    fields,
     // Live documents are billable + legally binding — opt in explicitly by
     // setting SIGNWELL_TEST_MODE=false. Anything else stays test mode.
     testMode: process.env.SIGNWELL_TEST_MODE !== "false",
