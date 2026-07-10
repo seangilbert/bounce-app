@@ -17,6 +17,7 @@ import {
   updatePolicyAction,
   updatePricingAction,
   updateDeliveryPricingAction,
+  updateCustomerPoliciesAction,
   type ActionResult,
 } from "@/app/(operator)/settings/actions";
 import { normalizeDeliveryConfig } from "@/lib/delivery/pricing";
@@ -40,6 +41,8 @@ interface OperatorSettings {
   deliveryTaxable: boolean;
   deliveryMode: "flat" | "zones" | "distance";
   deliveryConfig: unknown;
+  cancellationPolicy: string | null;
+  damagePolicy: string | null;
 }
 
 export function SettingsView({ operator }: { operator: OperatorSettings }) {
@@ -50,6 +53,7 @@ export function SettingsView({ operator }: { operator: OperatorSettings }) {
       <PricingSection operator={operator} />
       <DeliverySection operator={operator} />
       <PolicySection operator={operator} />
+      <CustomerPoliciesSection operator={operator} />
       <AccountSection operator={operator} />
     </div>
   );
@@ -223,6 +227,53 @@ function PolicySection({ operator }: { operator: OperatorSettings }) {
               depositPercent: parseInt(deposit || "0", 10),
               autoQuoteCapCents: Math.round(parseFloat(cap || "0") * 100),
               minLeadHours: parseInt(lead || "0", 10),
+            }),
+          )
+        }
+      />
+    </Section>
+  );
+}
+
+function CustomerPoliciesSection({ operator }: { operator: OperatorSettings }) {
+  const { busy, saved, error, save } = useSaver();
+  const [cancellation, setCancellation] = useState(operator.cancellationPolicy ?? "");
+  const [damage, setDamage] = useState(operator.damagePolicy ?? "");
+
+  return (
+    <Section
+      title="Customer policies"
+      desc="Shown at checkout and included in the quote & confirmation emails. Leave blank to omit."
+    >
+      <div className="space-y-3">
+        <Field label="Cancellation policy" hint="e.g. Full refund if canceled 7+ days before the event.">
+          <textarea
+            value={cancellation}
+            onChange={(e) => setCancellation(e.target.value)}
+            rows={3}
+            placeholder="Describe your cancellation & refund terms…"
+            className="input resize-none"
+          />
+        </Field>
+        <Field label="Damage & cleaning policy" hint="e.g. Renter is responsible for damage; return clean and dry.">
+          <textarea
+            value={damage}
+            onChange={(e) => setDamage(e.target.value)}
+            rows={3}
+            placeholder="Describe damage, cleaning, or care terms…"
+            className="input resize-none"
+          />
+        </Field>
+      </div>
+      <SaveBar
+        busy={busy}
+        saved={saved}
+        error={error}
+        onSave={() =>
+          save(() =>
+            updateCustomerPoliciesAction({
+              cancellationPolicy: cancellation,
+              damagePolicy: damage,
             }),
           )
         }

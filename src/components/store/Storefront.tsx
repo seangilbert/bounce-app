@@ -49,6 +49,8 @@ interface ApiResponse {
     deliveryFeeCents?: number;
     deliveryTaxable?: boolean;
     deliveryMode?: "flat" | "zones" | "distance";
+    cancellationPolicy?: string | null;
+    damagePolicy?: string | null;
   } | null;
   items: ApiItem[];
 }
@@ -482,6 +484,8 @@ export function StoreShell({
           deliveryFeeCents={data?.operator?.deliveryFeeCents ?? 0}
           deliveryTaxable={data?.operator?.deliveryTaxable ?? true}
           deliveryMode={data?.operator?.deliveryMode ?? "flat"}
+          cancellationPolicy={data?.operator?.cancellationPolicy ?? null}
+          damagePolicy={data?.operator?.damagePolicy ?? null}
           onClose={() => setCheckoutOpen(false)}
         />
       ) : null}
@@ -503,6 +507,8 @@ function CheckoutDrawer({
   deliveryFeeCents,
   deliveryTaxable,
   deliveryMode,
+  cancellationPolicy,
+  damagePolicy,
   onClose,
 }: {
   date: string;
@@ -517,6 +523,8 @@ function CheckoutDrawer({
   deliveryFeeCents: number;
   deliveryTaxable: boolean;
   deliveryMode: "flat" | "zones" | "distance";
+  cancellationPolicy: string | null;
+  damagePolicy: string | null;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
@@ -711,6 +719,23 @@ function CheckoutDrawer({
               <ShieldCheck size={16} weight="fill" /> Secure payment · e-signed rental agreement
             </span>
           </div>
+
+          {cancellationPolicy || damagePolicy ? (
+            <div className="space-y-2.5 rounded-2xl border border-sand-line bg-white p-4">
+              {cancellationPolicy ? (
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">Cancellation policy</div>
+                  <p className="mt-0.5 whitespace-pre-line text-[13px] font-medium leading-relaxed text-ink-soft">{cancellationPolicy}</p>
+                </div>
+              ) : null}
+              {damagePolicy ? (
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">Damage &amp; cleaning</div>
+                  <p className="mt-0.5 whitespace-pre-line text-[13px] font-medium leading-relaxed text-ink-soft">{damagePolicy}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="space-y-3">
             <Field label="Full name" value={form.name} onChange={field("name")} placeholder="Jane Smith" />

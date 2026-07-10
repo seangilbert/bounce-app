@@ -29,6 +29,8 @@ export default async function SettingsPage() {
         deliveryTaxable: op.deliveryTaxable,
         deliveryMode: op.deliveryMode,
         deliveryConfig: op.deliveryConfig,
+        cancellationPolicy: op.cancellationPolicy,
+        damagePolicy: op.damagePolicy,
       }}
     />
   );

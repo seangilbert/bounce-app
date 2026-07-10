@@ -31,6 +31,8 @@ interface OperatorRow {
   delivery_taxable: boolean | null;
   delivery_mode: "flat" | "zones" | "distance" | null;
   delivery_config: unknown;
+  cancellation_policy: string | null;
+  damage_policy: string | null;
 }
 
 interface ItemRow {
@@ -80,6 +82,8 @@ function rowToOperator(r: OperatorRow): Operator {
     deliveryTaxable: r.delivery_taxable ?? true,
     deliveryMode: r.delivery_mode ?? "flat",
     deliveryConfig: r.delivery_config ?? {},
+    cancellationPolicy: r.cancellation_policy,
+    damagePolicy: r.damage_policy,
   };
 }
 

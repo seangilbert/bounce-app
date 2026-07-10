@@ -34,6 +34,28 @@ function layout(businessName: string, heading: string, body: string): string {
 
 const p = (t: string) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.5;color:#463F38;">${t}</p>`;
 
+/** Operator's customer-facing policies, rendered as an email footer block. */
+function policiesBlock(operator: Operator): string {
+  const items = [
+    { label: "Cancellation policy", value: operator.cancellationPolicy },
+    { label: "Damage & cleaning", value: operator.damagePolicy },
+  ].filter((i) => i.value?.trim());
+  if (!items.length) return "";
+  return (
+    `<hr style="border:none;border-top:1px solid #F1E8DE;margin:16px 0 12px;">` +
+    items
+      .map(
+        (i) =>
+          `<div style="font-weight:700;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:#9A9186;margin-top:10px;">${esc(
+            i.label,
+          )}</div><div style="font-size:13px;line-height:1.5;color:#6B6259;margin-top:2px;white-space:pre-line;">${esc(
+            i.value!.trim(),
+          )}</div>`,
+      )
+      .join("")
+  );
+}
+
 function lineTable(rows: { label: string; value: string; bold?: boolean }[]): string {
   return `<table style="width:100%;border-collapse:collapse;margin:8px 0;">${rows
     .map(
@@ -69,7 +91,8 @@ export async function notifyBookingConfirmed(booking: Booking, operator: Operato
     lineTable(items) +
     `<hr style="border:none;border-top:1px solid #F1E8DE;margin:8px 0;">` +
     lineTable(totals) +
-    p("You'll receive a rental agreement to e-sign shortly. We handle delivery, setup, and pickup.");
+    p("You'll receive a rental agreement to e-sign shortly. We handle delivery, setup, and pickup.") +
+    policiesBlock(operator);
   if (!booking.customerEmail) return;
   await sendEmail({
     to: booking.customerEmail,
@@ -110,7 +133,8 @@ export async function notifyQuoteLink(
     `<hr style="border:none;border-top:1px solid #F1E8DE;margin:8px 0;">` +
     lineTable(totals) +
     `<a href="${esc(payUrl)}" style="display:inline-block;margin-top:14px;background:#3B7DF0;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:999px;">Review &amp; reserve</a>` +
-    p(`<span style="color:#9A9186;font-size:13px;">Delivery, setup &amp; pickup included. This link holds nothing until you pay.</span>`);
+    p(`<span style="color:#9A9186;font-size:13px;">Delivery, setup &amp; pickup included. This link holds nothing until you pay.</span>`) +
+    policiesBlock(operator);
   await sendEmail({
     to: booking.customerEmail,
     subject: `Your quote from ${operator.name}`,

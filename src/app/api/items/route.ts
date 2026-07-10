@@ -56,6 +56,8 @@ export async function GET(req: Request) {
       deliveryFeeCents: operator.deliveryFeeCents,
       deliveryTaxable: operator.deliveryTaxable,
       deliveryMode: operator.deliveryMode,
+      cancellationPolicy: operator.cancellationPolicy,
+      damagePolicy: operator.damagePolicy,
     };
 
     // Availability is real-time — never let a browser/CDN serve a stale copy.

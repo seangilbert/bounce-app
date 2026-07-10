@@ -76,6 +76,28 @@ export async function updatePolicyAction(input: unknown): Promise<ActionResult> 
   return { ok: true };
 }
 
+const CustomerPoliciesInput = z.object({
+  cancellationPolicy: z.string().trim().max(2000).optional().nullable(),
+  damagePolicy: z.string().trim().max(2000).optional().nullable(),
+});
+
+export async function updateCustomerPoliciesAction(input: unknown): Promise<ActionResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  const p = CustomerPoliciesInput.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
+  const { error } = await createAdminClient()
+    .from("operators")
+    .update({
+      cancellation_policy: p.data.cancellationPolicy?.trim() || null,
+      damage_policy: p.data.damagePolicy?.trim() || null,
+    })
+    .eq("id", op.id);
+  if (error) return { ok: false, error: "Could not save your policies." };
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
 const PricingInput = z.object({
   taxPercent: z.number().min(0).max(100),
   deliveryTaxable: z.boolean(),

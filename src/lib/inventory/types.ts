@@ -27,6 +27,8 @@ export interface Operator {
   deliveryTaxable: boolean;
   deliveryMode: "flat" | "zones" | "distance";
   deliveryConfig: unknown;
+  cancellationPolicy: string | null;
+  damagePolicy: string | null;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */
