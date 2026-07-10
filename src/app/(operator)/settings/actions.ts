@@ -152,6 +152,36 @@ export async function updateBrandingAction(input: unknown): Promise<ActionResult
   return { ok: true };
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const AvailabilityInput = z.object({
+  operatingDays: z.array(z.number().int().min(0).max(6)).min(1, "Pick at least one operating day."),
+  deliveryWindows: z.array(z.string().trim().max(40)).max(12),
+  blackouts: z
+    .array(z.object({ start: z.string().regex(ISO_DATE), end: z.string().regex(ISO_DATE) }))
+    .max(200),
+});
+
+export async function updateAvailabilityAction(input: unknown): Promise<ActionResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  const p = AvailabilityInput.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid availability." };
+  const config = {
+    operatingDays: [...new Set(p.data.operatingDays)].sort(),
+    deliveryWindows: p.data.deliveryWindows.map((w) => w.trim()).filter(Boolean),
+    blackouts: p.data.blackouts.map((b) => (b.end < b.start ? { start: b.end, end: b.start } : b)),
+  };
+  const { error } = await createAdminClient()
+    .from("operators")
+    .update({ availability_config: config })
+    .eq("id", op.id);
+  if (error) return { ok: false, error: "Could not save availability." };
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+  revalidatePath("/calendar");
+  return { ok: true };
+}
+
 const PricingInput = z.object({
   taxPercent: z.number().min(0).max(100),
   deliveryTaxable: z.boolean(),

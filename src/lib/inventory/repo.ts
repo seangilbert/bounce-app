@@ -39,6 +39,7 @@ interface OperatorRow {
   notify_contract_signed: boolean | null;
   tagline: string | null;
   about: string | null;
+  availability_config: unknown;
 }
 
 interface ItemRow {
@@ -96,6 +97,7 @@ function rowToOperator(r: OperatorRow): Operator {
     notifyContractSigned: r.notify_contract_signed ?? true,
     tagline: r.tagline,
     about: r.about,
+    availabilityConfig: r.availability_config ?? {},
   };
 }
 

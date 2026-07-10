@@ -35,6 +35,7 @@ export interface Operator {
   notifyContractSigned: boolean;
   tagline: string | null;
   about: string | null;
+  availabilityConfig: unknown;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

@@ -137,7 +137,7 @@ export async function POST(req: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error.";
     // Client errors (bad item, wrong operator) → 400; anything else → 500.
-    const clientError = /not found|does not belong|not available|Invalid quantity/.test(message);
+    const clientError = /not found|does not belong|not available|Invalid quantity|pick another/.test(message);
     return NextResponse.json({ error: message }, { status: clientError ? 400 : 500 });
   }
 }

@@ -38,6 +38,7 @@ export default async function SettingsPage() {
         brandColor: op.brandColor,
         tagline: op.tagline,
         about: op.about,
+        availabilityConfig: op.availabilityConfig,
       }}
     />
   );

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDefaultOperator, getOperatorById, listItems } from "@/lib/inventory/repo";
 import { availabilityForOperator } from "@/lib/inventory/availability";
+import { normalizeSchedule } from "@/lib/availability/schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,7 @@ export async function GET(req: Request) {
       deliveryMode: operator.deliveryMode,
       cancellationPolicy: operator.cancellationPolicy,
       damagePolicy: operator.damagePolicy,
+      schedule: normalizeSchedule(operator.availabilityConfig),
     };
 
     // Availability is real-time — never let a browser/CDN serve a stale copy.

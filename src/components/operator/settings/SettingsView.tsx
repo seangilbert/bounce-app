@@ -11,6 +11,7 @@ import {
   ArrowSquareOut,
   Trash,
   Plus,
+  X,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   updateProfileAction,
@@ -20,9 +21,11 @@ import {
   updateCustomerPoliciesAction,
   updateNotificationPrefsAction,
   updateBrandingAction,
+  updateAvailabilityAction,
   type ActionResult,
 } from "@/app/(operator)/settings/actions";
 import { normalizeDeliveryConfig } from "@/lib/delivery/pricing";
+import { normalizeSchedule } from "@/lib/availability/schedule";
 import { ACCENT_COLORS, deriveShades } from "@/lib/branding/palette";
 
 interface OperatorSettings {
@@ -53,6 +56,7 @@ interface OperatorSettings {
   brandColor: string | null;
   tagline: string | null;
   about: string | null;
+  availabilityConfig: unknown;
 }
 
 export function SettingsView({ operator }: { operator: OperatorSettings }) {
@@ -63,6 +67,7 @@ export function SettingsView({ operator }: { operator: OperatorSettings }) {
       <BrandingSection operator={operator} />
       <PricingSection operator={operator} />
       <DeliverySection operator={operator} />
+      <AvailabilitySection operator={operator} />
       <PolicySection operator={operator} />
       <CustomerPoliciesSection operator={operator} />
       <NotificationsSection operator={operator} />
@@ -241,6 +246,127 @@ function PolicySection({ operator }: { operator: OperatorSettings }) {
               minLeadHours: parseInt(lead || "0", 10),
             }),
           )
+        }
+      />
+    </Section>
+  );
+}
+
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function fmtDay(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+function AvailabilitySection({ operator }: { operator: OperatorSettings }) {
+  const { busy, saved, error, save } = useSaver();
+  const seed = normalizeSchedule(operator.availabilityConfig);
+  const [days, setDays] = useState<number[]>(seed.operatingDays);
+  const [windows, setWindows] = useState<string[]>(seed.deliveryWindows);
+  const [blackouts, setBlackouts] = useState(seed.blackouts);
+  const [boStart, setBoStart] = useState("");
+  const [boEnd, setBoEnd] = useState("");
+
+  const toggleDay = (d: number) =>
+    setDays((s) => (s.includes(d) ? s.filter((x) => x !== d) : [...s, d].sort()));
+  const setWindow = (i: number, v: string) => setWindows((w) => w.map((x, j) => (j === i ? v : x)));
+  const removeWindow = (i: number) => setWindows((w) => w.filter((_, j) => j !== i));
+  const addBlackout = () => {
+    if (!boStart) return;
+    const end = boEnd && boEnd >= boStart ? boEnd : boStart;
+    setBlackouts((b) => [...b, { start: boStart, end }].sort((x, y) => x.start.localeCompare(y.start)));
+    setBoStart("");
+    setBoEnd("");
+  };
+  const removeBlackout = (i: number) => setBlackouts((b) => b.filter((_, j) => j !== i));
+
+  return (
+    <Section title="Availability" desc="When you deliver, the windows customers choose, and dates you're closed.">
+      <div className="space-y-5">
+        {/* Operating days */}
+        <div>
+          <span className="mb-1.5 block text-[13px] font-bold text-ink-soft">Operating days</span>
+          <div className="flex flex-wrap gap-1.5">
+            {DOW.map((label, d) => (
+              <button
+                key={d}
+                onClick={() => toggleDay(d)}
+                className={`h-10 w-11 rounded-xl text-[13px] font-bold transition-colors ${
+                  days.includes(d) ? "bg-brand text-white" : "bg-cream text-ink-mute hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {days.length === 0 ? (
+            <p className="mt-1 text-[12px] font-semibold text-coral-deep">Pick at least one day.</p>
+          ) : null}
+        </div>
+
+        {/* Delivery windows */}
+        <div>
+          <span className="mb-1.5 block text-[13px] font-bold text-ink-soft">Delivery windows</span>
+          <p className="mb-2 text-[12px] font-medium text-ink-mute">Customers pick one at checkout. Leave empty to skip.</p>
+          <div className="space-y-2">
+            {windows.map((w, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input value={w} onChange={(e) => setWindow(i, e.target.value)} placeholder="8–10am" className="input flex-1" />
+                <button
+                  onClick={() => removeWindow(i)}
+                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-ink-mute transition-colors hover:bg-coral-tint hover:text-coral-deep"
+                  aria-label="Remove window"
+                >
+                  <Trash size={16} weight="bold" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => setWindows((w) => [...w, ""])}
+            className="mt-2 flex items-center gap-1.5 rounded-full border border-dashed border-sand px-4 py-2 text-[13px] font-bold text-ink-soft transition-colors hover:border-brand hover:text-brand"
+          >
+            <Plus size={14} weight="bold" /> Add window
+          </button>
+        </div>
+
+        {/* Blackout dates */}
+        <div>
+          <span className="mb-1.5 block text-[13px] font-bold text-ink-soft">Blackout dates</span>
+          <p className="mb-2 text-[12px] font-medium text-ink-mute">Dates you can&apos;t take bookings (holidays, days off).</p>
+          {blackouts.length ? (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {blackouts.map((b, i) => (
+                <span key={i} className="flex items-center gap-1.5 rounded-full bg-cream px-3 py-1.5 text-[12.5px] font-bold text-ink-soft">
+                  {b.start === b.end ? fmtDay(b.start) : `${fmtDay(b.start)} → ${fmtDay(b.end)}`}
+                  <button onClick={() => removeBlackout(i)} className="text-ink-mute hover:text-coral-deep" aria-label="Remove">
+                    <X size={13} weight="bold" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="date" value={boStart} onChange={(e) => setBoStart(e.target.value)} className="input w-40" />
+            <span className="text-[13px] font-semibold text-ink-mute">to</span>
+            <input type="date" value={boEnd} min={boStart} onChange={(e) => setBoEnd(e.target.value)} className="input w-40" />
+            <button
+              onClick={addBlackout}
+              disabled={!boStart}
+              className="rounded-full bg-ink px-4 py-2 text-[13px] font-bold text-cream transition-opacity hover:opacity-90 disabled:opacity-30"
+            >
+              Add
+            </button>
+          </div>
+          <p className="mt-1 text-[12px] font-medium text-ink-mute">Leave the second date empty for a single day.</p>
+        </div>
+      </div>
+      <SaveBar
+        busy={busy}
+        saved={saved}
+        error={error}
+        onSave={() =>
+          save(() => updateAvailabilityAction({ operatingDays: days, deliveryWindows: windows.map((w) => w.trim()).filter(Boolean), blackouts }))
         }
       />
     </Section>

@@ -24,6 +24,7 @@ import type { Icon } from "@phosphor-icons/react";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
 import { priceBreakdown } from "@/lib/inventory/pricing";
 import { previewDeliveryFeeAction, type DeliveryFeePreview } from "@/lib/delivery/actions";
+import { assessRange, normalizeSchedule, type Schedule } from "@/lib/availability/schedule";
 import { brandVars } from "@/lib/branding/palette";
 import { StoreSidebar } from "./StoreSidebar";
 import { StoreBottomNav } from "./StoreBottomNav";
@@ -51,6 +52,7 @@ interface ApiResponse {
     deliveryMode?: "flat" | "zones" | "distance";
     cancellationPolicy?: string | null;
     damagePolicy?: string | null;
+    schedule?: Schedule;
   } | null;
   items: ApiItem[];
 }
@@ -271,6 +273,10 @@ export function StoreShell({
   const cartCount = cartLines.reduce((s, l) => s + l.qty, 0);
   const subtotal = cartLines.reduce((s, l) => s + lineTotalOf(l.item, l.qty, days), 0);
 
+  // Is the selected date range within the operator's availability schedule?
+  const schedule = data?.operator?.schedule ?? null;
+  const dateAssessment = schedule ? assessRange(normalizeSchedule(schedule), date, endDate) : { ok: true as const };
+
   const base = `/s/${slug}`;
   const pathname = usePathname();
   const view = pathname.startsWith(`${base}/inventory`)
@@ -295,6 +301,11 @@ export function StoreShell({
         </p>
       </div>
       <DateRange date={date} endDate={endDate} changeStart={changeStart} setEndDate={setEndDate} />
+      {!dateAssessment.ok ? (
+        <div className="mt-2 rounded-xl bg-coral-tint px-3.5 py-2.5 text-[13px] font-semibold text-coral-deep">
+          {dateAssessment.message}
+        </div>
+      ) : null}
     </div>
   );
 
@@ -310,7 +321,9 @@ export function StoreShell({
         subtotal={subtotal}
         cartCount={cartCount}
         range={range}
+        blockedReason={dateAssessment.ok ? null : dateAssessment.message ?? "That date isn't available."}
         onReview={() => {
+          if (!dateAssessment.ok) return;
           setCheckoutInquiryId(null); // catalog booking — not from an inquiry
           setCheckoutOpen(true);
         }}
@@ -490,6 +503,7 @@ export function StoreShell({
           deliveryMode={data?.operator?.deliveryMode ?? "flat"}
           cancellationPolicy={data?.operator?.cancellationPolicy ?? null}
           damagePolicy={data?.operator?.damagePolicy ?? null}
+          deliveryWindows={data?.operator?.schedule?.deliveryWindows ?? []}
           onClose={() => setCheckoutOpen(false)}
         />
       ) : null}
@@ -513,6 +527,7 @@ function CheckoutDrawer({
   deliveryMode,
   cancellationPolicy,
   damagePolicy,
+  deliveryWindows,
   onClose,
 }: {
   date: string;
@@ -529,9 +544,11 @@ function CheckoutDrawer({
   deliveryMode: "flat" | "zones" | "distance";
   cancellationPolicy: string | null;
   damagePolicy: string | null;
+  deliveryWindows: string[];
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
+  const [deliveryWindow, setDeliveryWindow] = useState(deliveryWindows[0] ?? "");
   const [payType, setPayType] = useState<"deposit" | "full">("deposit");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -596,6 +613,7 @@ function CheckoutDrawer({
           inquiryId: inquiryId ?? undefined,
           deliveryAddress: form.address,
           deliveryZip: form.zip || undefined,
+          deliveryWindow: deliveryWindow || undefined,
           operatorId,
         }),
       });
@@ -747,6 +765,20 @@ function CheckoutDrawer({
             <Field label="Phone" value={form.phone} onChange={field("phone")} placeholder="(508) 555-0000" type="tel" />
             <Field label="Delivery address" value={form.address} onChange={field("address")} placeholder="14 Oak St, Plymouth" />
             <Field label="ZIP" value={form.zip} onChange={field("zip")} placeholder="02360" />
+            {deliveryWindows.length > 0 ? (
+              <label className="block">
+                <span className="mb-1 block text-[13px] font-bold text-ink-soft">Delivery window</span>
+                <select
+                  value={deliveryWindow}
+                  onChange={(e) => setDeliveryWindow(e.target.value)}
+                  className="w-full rounded-xl border border-sand bg-white px-3 py-2.5 text-sm font-semibold text-ink outline-none"
+                >
+                  {deliveryWindows.map((w) => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
           </div>
 
           {error ? (
@@ -923,25 +955,35 @@ function CartBar({
   subtotal,
   cartCount,
   range,
+  blockedReason,
   onReview,
 }: {
   subtotal: number;
   cartCount: number;
   range: string;
+  blockedReason?: string | null;
   onReview: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-t border-sand bg-white/95 px-5 py-3.5 backdrop-blur lg:px-8">
-      <div className="text-sm font-semibold text-ink-soft">
-        <span className="font-display text-lg font-extrabold text-ink">{money(subtotal)}</span> ·{" "}
-        {cartCount} {cartCount === 1 ? "item" : "items"} · {range}
+    <div className="border-t border-sand bg-white/95 backdrop-blur">
+      {blockedReason ? (
+        <div className="bg-coral-tint px-5 py-2 text-center text-[12.5px] font-semibold text-coral-deep lg:px-8">
+          {blockedReason}
+        </div>
+      ) : null}
+      <div className="flex items-center justify-between gap-4 px-5 py-3.5 lg:px-8">
+        <div className="text-sm font-semibold text-ink-soft">
+          <span className="font-display text-lg font-extrabold text-ink">{money(subtotal)}</span> ·{" "}
+          {cartCount} {cartCount === 1 ? "item" : "items"} · {range}
+        </div>
+        <button
+          onClick={onReview}
+          disabled={!!blockedReason}
+          className="flex flex-shrink-0 items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
+        >
+          Review &amp; book <ArrowRight size={16} weight="bold" />
+        </button>
       </div>
-      <button
-        onClick={onReview}
-        className="flex flex-shrink-0 items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep"
-      >
-        Review &amp; book <ArrowRight size={16} weight="bold" />
-      </button>
     </div>
   );
 }

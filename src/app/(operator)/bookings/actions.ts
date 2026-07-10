@@ -72,6 +72,7 @@ export async function createOperatorBookingAction(
       deliveryAddress: d.deliveryAddress ?? null,
       deliveryZip: d.deliveryZip ?? null,
       deliveryFeeOverrideCents: d.deliveryFeeOverrideCents ?? null,
+      skipAvailabilityCheck: true, // operators can book their own off-days
     });
 
     if (d.inquiryId) {

@@ -4,6 +4,7 @@ import { checkAvailability } from "@/lib/inventory/availability";
 import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing";
 import { resolveOperatorDeliveryFee } from "@/lib/delivery/resolve";
 import type { DeliveryMode } from "@/lib/delivery/pricing";
+import { assessRange, normalizeSchedule } from "@/lib/availability/schedule";
 import type { PriceUnit } from "@/lib/inventory/types";
 import type { Booking, BookingLineItem, BookingStatus, NewBooking } from "./types";
 
@@ -137,9 +138,22 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
   // Snapshot the operator's tax + delivery fee into the booking total.
   const { data: op } = await supabase
     .from("operators")
-    .select("tax_percent, delivery_fee_cents, delivery_taxable, delivery_mode, delivery_config, latitude, longitude")
+    .select(
+      "tax_percent, delivery_fee_cents, delivery_taxable, delivery_mode, delivery_config, latitude, longitude, availability_config",
+    )
     .eq("id", input.operatorId)
     .single();
+
+  // Enforce the operator's availability schedule (operating days + blackouts).
+  // Operator-created bookings bypass it — they can override their own schedule.
+  if (!input.skipAvailabilityCheck) {
+    const assessment = assessRange(
+      normalizeSchedule(op?.availability_config),
+      input.startDate,
+      input.endDate,
+    );
+    if (!assessment.ok) throw new Error(assessment.message ?? "That date isn't available.");
+  }
 
   // Resolve the delivery fee: an explicit override wins; otherwise price by the
   // operator's model (flat / zones / distance). A null resolve (out of area /

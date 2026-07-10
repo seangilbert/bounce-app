@@ -28,6 +28,8 @@ export interface NewBooking {
   deliveryZip?: string | null;
   /** Explicit delivery fee (cents) that overrides the operator's pricing. */
   deliveryFeeOverrideCents?: number | null;
+  /** Skip the availability-schedule check (operator-created bookings override). */
+  skipAvailabilityCheck?: boolean;
   notes?: string | null;
 }
 

@@ -5,6 +5,7 @@ import { getDefaultOperator, getOperatorById } from "@/lib/inventory/repo";
 import { listItems } from "@/lib/inventory/repo";
 import { availabilityForOperator } from "@/lib/inventory/availability";
 import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing";
+import { assessRange, normalizeSchedule } from "@/lib/availability/schedule";
 import { createInquiry } from "@/lib/inquiries/repo";
 import { notifyOperatorNewInquiry } from "@/lib/email";
 import type { Operator } from "@/lib/inventory/types";
@@ -269,6 +270,20 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
   if (booked) {
     return {
       reply: `Ah — the ${booked.name} is already booked for ${prettyDate(startDate)}. Want me to suggest something similar that's free that day?`,
+      status: "gathering",
+      eventDate: startDate,
+      quote: null,
+      auto: false,
+      unmatchedRequests: out.unmatchedRequests,
+      inquiryId: inquiry.inquiryId ?? null,
+    };
+  }
+
+  // The requested date must be within the operator's availability schedule.
+  const availability = assessRange(normalizeSchedule(operator.availabilityConfig), startDate, endDate);
+  if (!availability.ok) {
+    return {
+      reply: availability.message ?? "We're not available that date — could you pick another?",
       status: "gathering",
       eventDate: startDate,
       quote: null,
