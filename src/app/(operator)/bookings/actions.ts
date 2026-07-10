@@ -38,6 +38,7 @@ const NewBookingInput = z
     message: z.string().trim().max(2000).optional(),
     inquiryId: z.string().uuid().optional(),
     depositCents: z.number().int().min(0).optional(),
+    deliveryFeeOverrideCents: z.number().int().min(0).optional(),
   })
   .refine((d) => d.endDate >= d.startDate, { message: "End date must be on or after the start date." });
 
@@ -70,6 +71,7 @@ export async function createOperatorBookingAction(
       customerPhone: phone,
       deliveryAddress: d.deliveryAddress ?? null,
       deliveryZip: d.deliveryZip ?? null,
+      deliveryFeeOverrideCents: d.deliveryFeeOverrideCents ?? null,
     });
 
     if (d.inquiryId) {

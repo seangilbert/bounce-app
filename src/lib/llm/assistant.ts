@@ -279,7 +279,16 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
   }
 
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  const bd = priceBreakdown(subtotal, operator.deliveryFeeCents, operator.taxPercent, operator.deliveryTaxable);
+  // Zones/distance pricing needs the delivery address, which we don't have in
+  // chat. Quote items + tax now; delivery is added at checkout once the customer
+  // enters an address (createBooking resolves it authoritatively).
+  const deliveryDeferred = operator.deliveryMode !== "flat";
+  const bd = priceBreakdown(
+    subtotal,
+    deliveryDeferred ? 0 : operator.deliveryFeeCents,
+    operator.taxPercent,
+    operator.deliveryTaxable,
+  );
   const suggestedDeposit = Math.round((bd.total * operator.depositPercent) / 100);
 
   // Escalation gate — much lighter now that ambiguity is handled by asking.
@@ -298,7 +307,9 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
   // read like a ready-to-book quote. The model's original reply is still kept as
   // the operator's suggested draft (aiSummary) below.
   const customerReply = auto
-    ? out.reply
+    ? deliveryDeferred
+      ? `${out.reply}\n\nDelivery is added at checkout based on your address.`
+      : out.reply
     : `Thanks! This one's a bit beyond an instant quote — ${operator.name} will put together a custom price for you. Just leave your email below and they'll send it over, usually within a few hours.`;
 
   // Persist to the operator inbox once per conversation (first quote only).

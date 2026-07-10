@@ -29,6 +29,8 @@ interface OperatorRow {
   tax_percent: number | string | null;
   delivery_fee_cents: number | null;
   delivery_taxable: boolean | null;
+  delivery_mode: "flat" | "zones" | "distance" | null;
+  delivery_config: unknown;
 }
 
 interface ItemRow {
@@ -76,6 +78,8 @@ function rowToOperator(r: OperatorRow): Operator {
     taxPercent: Number(r.tax_percent ?? 0),
     deliveryFeeCents: r.delivery_fee_cents ?? 0,
     deliveryTaxable: r.delivery_taxable ?? true,
+    deliveryMode: r.delivery_mode ?? "flat",
+    deliveryConfig: r.delivery_config ?? {},
   };
 }
 

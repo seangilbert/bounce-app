@@ -27,6 +27,8 @@ export default async function SettingsPage() {
         taxPercent: op.taxPercent,
         deliveryFeeCents: op.deliveryFeeCents,
         deliveryTaxable: op.deliveryTaxable,
+        deliveryMode: op.deliveryMode,
+        deliveryConfig: op.deliveryConfig,
       }}
     />
   );

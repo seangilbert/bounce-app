@@ -26,6 +26,8 @@ export interface NewBooking {
   deliveryWindow?: string | null;
   deliveryAddress?: string | null;
   deliveryZip?: string | null;
+  /** Explicit delivery fee (cents) that overrides the operator's pricing. */
+  deliveryFeeOverrideCents?: number | null;
   notes?: string | null;
 }
 

@@ -9,13 +9,17 @@ import {
   Storefront as StorefrontIcon,
   CreditCard,
   ArrowSquareOut,
+  Trash,
+  Plus,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   updateProfileAction,
   updatePolicyAction,
   updatePricingAction,
+  updateDeliveryPricingAction,
   type ActionResult,
 } from "@/app/(operator)/settings/actions";
+import { normalizeDeliveryConfig } from "@/lib/delivery/pricing";
 
 interface OperatorSettings {
   name: string;
@@ -34,6 +38,8 @@ interface OperatorSettings {
   taxPercent: number;
   deliveryFeeCents: number;
   deliveryTaxable: boolean;
+  deliveryMode: "flat" | "zones" | "distance";
+  deliveryConfig: unknown;
 }
 
 export function SettingsView({ operator }: { operator: OperatorSettings }) {
@@ -42,6 +48,7 @@ export function SettingsView({ operator }: { operator: OperatorSettings }) {
       <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">Settings</h1>
       <ProfileSection operator={operator} />
       <PricingSection operator={operator} />
+      <DeliverySection operator={operator} />
       <PolicySection operator={operator} />
       <AccountSection operator={operator} />
     </div>
@@ -227,19 +234,13 @@ function PolicySection({ operator }: { operator: OperatorSettings }) {
 function PricingSection({ operator }: { operator: OperatorSettings }) {
   const { busy, saved, error, save } = useSaver();
   const [tax, setTax] = useState(String(operator.taxPercent));
-  const [delivery, setDelivery] = useState(String(Math.round(operator.deliveryFeeCents / 100)));
   const [deliveryTaxable, setDeliveryTaxable] = useState(operator.deliveryTaxable);
 
   return (
-    <Section title="Pricing" desc="Applied to every quote and checkout. 0 = free delivery / no tax.">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Sales tax %" hint={deliveryTaxable ? "On items + delivery" : "On items only"}>
-          <input type="number" min="0" max="100" step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} className="input" />
-        </Field>
-        <Field label="Delivery fee ($)" hint="Flat fee per booking">
-          <input type="number" min="0" value={delivery} onChange={(e) => setDelivery(e.target.value)} className="input" />
-        </Field>
-      </div>
+    <Section title="Sales tax" desc="Applied to every quote and checkout. 0 = no tax.">
+      <Field label="Sales tax %" hint={deliveryTaxable ? "On items + delivery" : "On items only"}>
+        <input type="number" min="0" max="100" step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} className="input" />
+      </Field>
       <label className="mt-3 flex cursor-pointer items-start gap-3">
         <input
           type="checkbox"
@@ -262,12 +263,214 @@ function PricingSection({ operator }: { operator: OperatorSettings }) {
           save(() =>
             updatePricingAction({
               taxPercent: parseFloat(tax || "0"),
-              deliveryFeeCents: Math.round(parseFloat(delivery || "0") * 100),
               deliveryTaxable,
             }),
           )
         }
       />
+    </Section>
+  );
+}
+
+interface ZoneDraft {
+  id: string;
+  label: string;
+  fee: string; // dollars
+  zips: string; // comma/space separated
+  towns: string; // comma separated
+}
+
+function DeliverySection({ operator }: { operator: OperatorSettings }) {
+  const { busy, saved, error, save } = useSaver();
+  const seed = normalizeDeliveryConfig(operator.deliveryConfig);
+  const [mode, setMode] = useState(operator.deliveryMode);
+  // Flat fee doubles as the distance-mode base fee.
+  const [fee, setFee] = useState(String(Math.round(operator.deliveryFeeCents / 100)));
+  const [zones, setZones] = useState<ZoneDraft[]>(
+    seed.zones.map((z) => ({
+      id: z.id || crypto.randomUUID(),
+      label: z.label,
+      fee: String(z.feeCents / 100),
+      zips: z.zips.join(", "),
+      towns: z.towns.join(", "),
+    })),
+  );
+  const [quoteByHand, setQuoteByHand] = useState(seed.outOfAreaCents === null);
+  const [outOfArea, setOutOfArea] = useState(
+    seed.outOfAreaCents === null ? "" : String(seed.outOfAreaCents / 100),
+  );
+  const [freeMiles, setFreeMiles] = useState(String(seed.distance.freeMiles || ""));
+  const [perMile, setPerMile] = useState(String(seed.distance.perMileCents / 100 || ""));
+  const [maxMiles, setMaxMiles] = useState(seed.distance.maxMiles == null ? "" : String(seed.distance.maxMiles));
+
+  const dollars = (s: string) => Math.max(0, Math.round(parseFloat(s || "0") * 100));
+  const splitTokens = (s: string) =>
+    s.split(/[,\n]/).map((t) => t.trim()).filter(Boolean);
+
+  const addZone = () =>
+    setZones((z) => [...z, { id: crypto.randomUUID(), label: "", fee: "", zips: "", towns: "" }]);
+  const removeZone = (id: string) => setZones((z) => z.filter((x) => x.id !== id));
+  const patchZone = (id: string, patch: Partial<ZoneDraft>) =>
+    setZones((z) => z.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+
+  const TABS: { key: typeof mode; label: string }[] = [
+    { key: "flat", label: "Flat fee" },
+    { key: "zones", label: "Service areas" },
+    { key: "distance", label: "By distance" },
+  ];
+
+  function onSave() {
+    const config = {
+      zones: zones
+        .filter((z) => z.label.trim() || z.zips.trim() || z.towns.trim())
+        .map((z) => ({
+          id: z.id,
+          label: z.label.trim() || "Zone",
+          feeCents: dollars(z.fee),
+          zips: splitTokens(z.zips),
+          towns: splitTokens(z.towns),
+        })),
+      outOfAreaCents: quoteByHand ? null : dollars(outOfArea),
+      distance: {
+        freeMiles: Math.max(0, parseFloat(freeMiles || "0")),
+        perMileCents: dollars(perMile),
+        maxMiles: maxMiles.trim() === "" ? null : Math.max(0, parseFloat(maxMiles)),
+      },
+    };
+    save(() =>
+      updateDeliveryPricingAction({ mode, deliveryFeeCents: dollars(fee), config }),
+    );
+  }
+
+  return (
+    <Section title="Delivery pricing" desc="How the delivery fee is calculated on every quote.">
+      <div className="mb-4 flex gap-1.5 rounded-xl bg-cream p-1">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setMode(t.key)}
+            className={`flex-1 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors ${
+              mode === t.key ? "bg-white text-ink shadow-sm" : "text-ink-mute hover:text-ink"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "flat" ? (
+        <Field label="Delivery fee ($)" hint="One flat fee added to every booking. 0 = free delivery.">
+          <input type="number" min="0" value={fee} onChange={(e) => setFee(e.target.value)} className="input" />
+        </Field>
+      ) : null}
+
+      {mode === "distance" ? (
+        <div className="space-y-3">
+          <p className="text-[12.5px] font-medium text-ink-mute">
+            Distance is measured from your service-area address (set under Business profile) to the customer&apos;s delivery address.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Base fee ($)" hint="Added to every delivery">
+              <input type="number" min="0" value={fee} onChange={(e) => setFee(e.target.value)} className="input" />
+            </Field>
+            <Field label="Free within (mi)" hint="No per-mile charge inside this radius">
+              <input type="number" min="0" value={freeMiles} onChange={(e) => setFreeMiles(e.target.value)} className="input" />
+            </Field>
+            <Field label="Per mile ($)" hint="Charged beyond the free radius">
+              <input type="number" min="0" step="0.01" value={perMile} onChange={(e) => setPerMile(e.target.value)} className="input" />
+            </Field>
+            <Field label="Max radius (mi)" hint="Beyond this = outside service area. Blank = no limit.">
+              <input type="number" min="0" value={maxMiles} onChange={(e) => setMaxMiles(e.target.value)} className="input" />
+            </Field>
+          </div>
+        </div>
+      ) : null}
+
+      {mode === "zones" ? (
+        <div className="space-y-3">
+          <p className="text-[12.5px] font-medium text-ink-mute">
+            Match by ZIP (most reliable) or town. First matching area wins.
+          </p>
+          {zones.map((z) => (
+            <div key={z.id} className="rounded-xl border border-sand-line bg-cream p-3">
+              <div className="flex items-center gap-2">
+                <input
+                  value={z.label}
+                  onChange={(e) => patchZone(z.id, { label: e.target.value })}
+                  placeholder="Area name (e.g. Kingston)"
+                  className="input flex-1"
+                />
+                <div className="flex items-center gap-1">
+                  <span className="text-[13px] font-bold text-ink-mute">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={z.fee}
+                    onChange={(e) => patchZone(z.id, { fee: e.target.value })}
+                    placeholder="Fee"
+                    className="input w-20"
+                  />
+                </div>
+                <button
+                  onClick={() => removeZone(z.id)}
+                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-ink-mute transition-colors hover:bg-coral-tint hover:text-coral-deep"
+                  aria-label="Remove area"
+                >
+                  <Trash size={16} weight="bold" />
+                </button>
+              </div>
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  value={z.zips}
+                  onChange={(e) => patchZone(z.id, { zips: e.target.value })}
+                  placeholder="ZIPs: 02360, 02364"
+                  className="input"
+                />
+                <input
+                  value={z.towns}
+                  onChange={(e) => patchZone(z.id, { towns: e.target.value })}
+                  placeholder="Towns: Kingston, Duxbury"
+                  className="input"
+                />
+              </div>
+            </div>
+          ))}
+          <button
+            onClick={addZone}
+            className="flex items-center gap-1.5 rounded-full border border-dashed border-sand px-4 py-2 text-[13px] font-bold text-ink-soft transition-colors hover:border-brand hover:text-brand"
+          >
+            <Plus size={14} weight="bold" /> Add service area
+          </button>
+
+          <div className="rounded-xl border border-sand-line p-3">
+            <div className="text-[13px] font-bold text-ink-soft">Outside all areas</div>
+            <label className="mt-2 flex cursor-pointer items-center gap-2 text-[13px] font-medium text-ink-soft">
+              <input
+                type="checkbox"
+                checked={quoteByHand}
+                onChange={(e) => setQuoteByHand(e.target.checked)}
+                className="h-4 w-4 accent-brand"
+              />
+              Quote by hand (no automatic fee — you follow up)
+            </label>
+            {!quoteByHand ? (
+              <div className="mt-2 flex items-center gap-1">
+                <span className="text-[13px] font-bold text-ink-mute">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={outOfArea}
+                  onChange={(e) => setOutOfArea(e.target.value)}
+                  placeholder="Fee outside your areas"
+                  className="input w-40"
+                />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      <SaveBar busy={busy} saved={saved} error={error} onSave={onSave} />
     </Section>
   );
 }

@@ -12,6 +12,7 @@ import {
   CalendarBlank,
 } from "@phosphor-icons/react/dist/ssr";
 import { priceBreakdown } from "@/lib/inventory/pricing";
+import { previewDeliveryFeeAction, type DeliveryFeePreview } from "@/lib/delivery/actions";
 import { depositAmount, DEPOSIT_PERCENT } from "@/lib/deposit";
 import { createOperatorBookingAction } from "@/app/(operator)/bookings/actions";
 
@@ -28,6 +29,7 @@ interface OpConfig {
   taxPercent?: number;
   deliveryFeeCents?: number;
   deliveryTaxable?: boolean;
+  deliveryMode?: "flat" | "zones" | "distance";
 }
 export interface BookingPrefill {
   customerName?: string;
@@ -86,6 +88,9 @@ export function BookingBuilder({
   const [message, setMessage] = useState(initial?.message ?? "");
   const [paymentType, setPaymentType] = useState<"deposit" | "full">("deposit");
   const [depositCash, setDepositCash] = useState("");
+  const [feePreview, setFeePreview] = useState<DeliveryFeePreview | null>(null);
+  const [feeLoading, setFeeLoading] = useState(false);
+  const [overrideFee, setOverrideFee] = useState("");
   const [busy, setBusy] = useState<null | "link" | "manual">(null);
   const [error, setError] = useState<string | null>(null);
   const [sentLink, setSentLink] = useState(false);
@@ -119,8 +124,43 @@ export function BookingBuilder({
     .map(([id, qty]) => ({ item: byId.get(id), qty }))
     .filter((l): l is { item: BuilderItem; qty: number } => Boolean(l.item));
   const subtotal = cartLines.reduce((s, l) => s + lineTotalOf(l.item, l.qty, days), 0);
-  const bd = priceBreakdown(subtotal, op?.deliveryFeeCents ?? 0, op?.taxPercent ?? 0, op?.deliveryTaxable ?? true);
+  const mode = op?.deliveryMode ?? "flat";
+  const overrideCents =
+    overrideFee.trim() !== "" ? Math.max(0, Math.round(parseFloat(overrideFee) * 100)) : null;
+  const effectiveDeliveryFee =
+    overrideCents != null
+      ? overrideCents
+      : mode === "flat"
+        ? op?.deliveryFeeCents ?? 0
+        : feePreview?.feeCents ?? 0;
+  const bd = priceBreakdown(subtotal, effectiveDeliveryFee, op?.taxPercent ?? 0, op?.deliveryTaxable ?? true);
   const deposit = depositAmount(bd.total, op?.depositPercent ?? DEPOSIT_PERCENT);
+
+  // Resolve the delivery fee server-side for zones/distance operators once an
+  // address is entered (skipped when the operator typed an explicit override).
+  useEffect(() => {
+    if (mode === "flat" || overrideCents != null) return;
+    const address = form.address.trim();
+    const zip = form.zip.trim();
+    if (!address && !zip) {
+      setFeePreview(null);
+      return;
+    }
+    let cancelled = false;
+    setFeeLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await previewDeliveryFeeAction({ operatorId, zip, address });
+        if (!cancelled) setFeePreview(res);
+      } finally {
+        if (!cancelled) setFeeLoading(false);
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [mode, overrideCents, operatorId, form.address, form.zip]);
   const changeStart = (v: string) => {
     setDate(v);
     if (endDate < v) setEndDate(v);
@@ -143,6 +183,7 @@ export function BookingBuilder({
       customerPhone: form.phone.trim() || undefined,
       deliveryAddress: form.address.trim() || undefined,
       deliveryZip: form.zip.trim() || undefined,
+      deliveryFeeOverrideCents: overrideCents ?? undefined,
       startDate: date,
       endDate,
       items: cartLines.map((l) => ({ itemId: l.item.id, quantity: l.qty })),
@@ -319,6 +360,31 @@ export function BookingBuilder({
                       className="input w-24"
                     />
                   </div>
+                  {mode !== "flat" ? (
+                    <div className="flex items-center gap-2 text-[12.5px] font-medium text-ink-mute">
+                      <span>
+                        Delivery:{" "}
+                        {overrideCents != null
+                          ? "overridden"
+                          : feeLoading
+                            ? "calculating…"
+                            : feePreview?.outOfArea
+                              ? "outside area — set an override"
+                              : feePreview?.needsLocation
+                                ? "enter address"
+                                : feePreview?.feeCents != null
+                                  ? `${money(feePreview.feeCents)}${feePreview.label ? ` · ${feePreview.label}` : ""}`
+                                  : "—"}
+                      </span>
+                      <input
+                        value={overrideFee}
+                        onChange={(e) => setOverrideFee(e.target.value)}
+                        placeholder="Override $"
+                        inputMode="decimal"
+                        className="input ml-auto w-28"
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </Field>
 

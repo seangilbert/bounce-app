@@ -2,6 +2,8 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { upsertCustomer } from "@/lib/customers/repo";
 import { checkAvailability } from "@/lib/inventory/availability";
 import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing";
+import { resolveOperatorDeliveryFee } from "@/lib/delivery/resolve";
+import type { DeliveryMode } from "@/lib/delivery/pricing";
 import type { PriceUnit } from "@/lib/inventory/types";
 import type { Booking, BookingLineItem, BookingStatus, NewBooking } from "./types";
 
@@ -135,12 +137,33 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
   // Snapshot the operator's tax + delivery fee into the booking total.
   const { data: op } = await supabase
     .from("operators")
-    .select("tax_percent, delivery_fee_cents, delivery_taxable")
+    .select("tax_percent, delivery_fee_cents, delivery_taxable, delivery_mode, delivery_config, latitude, longitude")
     .eq("id", input.operatorId)
     .single();
+
+  // Resolve the delivery fee: an explicit override wins; otherwise price by the
+  // operator's model (flat / zones / distance). A null resolve (out of area /
+  // unknown location) falls back to 0 — the operator can override on the booking.
+  let deliveryFeeCents: number;
+  if (input.deliveryFeeOverrideCents != null) {
+    deliveryFeeCents = Math.max(0, Math.round(input.deliveryFeeOverrideCents));
+  } else {
+    const quote = await resolveOperatorDeliveryFee(
+      {
+        mode: (op?.delivery_mode as DeliveryMode) ?? "flat",
+        flatCents: op?.delivery_fee_cents ?? 0,
+        config: op?.delivery_config,
+        lat: op?.latitude ?? null,
+        lon: op?.longitude ?? null,
+      },
+      { zip: input.deliveryZip, address: input.deliveryAddress },
+    );
+    deliveryFeeCents = quote.feeCents ?? 0;
+  }
+
   const bd = priceBreakdown(
     subtotal,
-    op?.delivery_fee_cents ?? 0,
+    deliveryFeeCents,
     Number(op?.tax_percent ?? 0),
     op?.delivery_taxable ?? true,
   );
@@ -175,6 +198,7 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
       notes: input.notes ?? null,
       subtotal,
       delivery_fee: bd.deliveryFee,
+      delivery_fee_override_cents: input.deliveryFeeOverrideCents ?? null,
       tax_amount: bd.tax,
       total: bd.total,
       currency: "usd",

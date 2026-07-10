@@ -78,7 +78,6 @@ export async function updatePolicyAction(input: unknown): Promise<ActionResult> 
 
 const PricingInput = z.object({
   taxPercent: z.number().min(0).max(100),
-  deliveryFeeCents: z.number().int().min(0),
   deliveryTaxable: z.boolean(),
 });
 
@@ -89,13 +88,49 @@ export async function updatePricingAction(input: unknown): Promise<ActionResult>
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
   const { error } = await createAdminClient()
     .from("operators")
-    .update({
-      tax_percent: p.data.taxPercent,
-      delivery_fee_cents: p.data.deliveryFeeCents,
-      delivery_taxable: p.data.deliveryTaxable,
-    })
+    .update({ tax_percent: p.data.taxPercent, delivery_taxable: p.data.deliveryTaxable })
     .eq("id", op.id);
   if (error) return { ok: false, error: "Could not save pricing." };
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+const ZoneInput = z.object({
+  id: z.string(),
+  label: z.string().max(80),
+  feeCents: z.number().int().min(0),
+  zips: z.array(z.string().max(12)).max(200),
+  towns: z.array(z.string().max(80)).max(200),
+});
+const DeliveryPricingInput = z.object({
+  mode: z.enum(["flat", "zones", "distance"]),
+  deliveryFeeCents: z.number().int().min(0),
+  config: z.object({
+    zones: z.array(ZoneInput).max(100),
+    outOfAreaCents: z.number().int().min(0).nullable(),
+    distance: z.object({
+      freeMiles: z.number().min(0).max(10000),
+      perMileCents: z.number().int().min(0),
+      maxMiles: z.number().min(0).max(10000).nullable(),
+    }),
+  }),
+});
+
+export async function updateDeliveryPricingAction(input: unknown): Promise<ActionResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  const p = DeliveryPricingInput.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid delivery pricing." };
+  const { error } = await createAdminClient()
+    .from("operators")
+    .update({
+      delivery_mode: p.data.mode,
+      delivery_fee_cents: p.data.deliveryFeeCents,
+      delivery_config: p.data.config,
+    })
+    .eq("id", op.id);
+  if (error) return { ok: false, error: "Could not save delivery pricing." };
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   return { ok: true };

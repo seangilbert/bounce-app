@@ -23,6 +23,7 @@ import {
 import type { Icon } from "@phosphor-icons/react";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
 import { priceBreakdown } from "@/lib/inventory/pricing";
+import { previewDeliveryFeeAction, type DeliveryFeePreview } from "@/lib/delivery/actions";
 import { brandVars } from "@/lib/branding/palette";
 import { StoreSidebar } from "./StoreSidebar";
 import { StoreBottomNav } from "./StoreBottomNav";
@@ -47,6 +48,7 @@ interface ApiResponse {
     taxPercent?: number;
     deliveryFeeCents?: number;
     deliveryTaxable?: boolean;
+    deliveryMode?: "flat" | "zones" | "distance";
   } | null;
   items: ApiItem[];
 }
@@ -479,6 +481,7 @@ export function StoreShell({
           taxPercent={data?.operator?.taxPercent ?? 0}
           deliveryFeeCents={data?.operator?.deliveryFeeCents ?? 0}
           deliveryTaxable={data?.operator?.deliveryTaxable ?? true}
+          deliveryMode={data?.operator?.deliveryMode ?? "flat"}
           onClose={() => setCheckoutOpen(false)}
         />
       ) : null}
@@ -499,6 +502,7 @@ function CheckoutDrawer({
   taxPercent,
   deliveryFeeCents,
   deliveryTaxable,
+  deliveryMode,
   onClose,
 }: {
   date: string;
@@ -512,19 +516,50 @@ function CheckoutDrawer({
   taxPercent: number;
   deliveryFeeCents: number;
   deliveryTaxable: boolean;
+  deliveryMode: "flat" | "zones" | "distance";
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
   const [payType, setPayType] = useState<"deposit" | "full">("deposit");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Delivery fee for flat mode is fixed; zones/distance resolve server-side once
+  // the customer enters an address (createBooking re-resolves authoritatively).
+  const [feePreview, setFeePreview] = useState<DeliveryFeePreview | null>(null);
+  const [feeLoading, setFeeLoading] = useState(false);
   const valid =
     form.name.trim() &&
     /.+@.+\..+/.test(form.email) &&
     form.phone.replace(/\D/g, "").length >= 10 &&
     form.address.trim();
 
-  const bd = priceBreakdown(subtotal, deliveryFeeCents, taxPercent, deliveryTaxable);
+  useEffect(() => {
+    if (deliveryMode === "flat" || !operatorId) return;
+    const address = form.address.trim();
+    const zip = form.zip.trim();
+    if (!address && !zip) {
+      setFeePreview(null);
+      return;
+    }
+    let cancelled = false;
+    setFeeLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await previewDeliveryFeeAction({ operatorId, zip, address });
+        if (!cancelled) setFeePreview(res);
+      } finally {
+        if (!cancelled) setFeeLoading(false);
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [deliveryMode, operatorId, form.address, form.zip]);
+
+  const effectiveDeliveryFee =
+    deliveryMode === "flat" ? deliveryFeeCents : feePreview?.feeCents ?? 0;
+  const bd = priceBreakdown(subtotal, effectiveDeliveryFee, taxPercent, deliveryTaxable);
   const deposit = depositAmount(bd.total, depositPercent);
   const balance = bd.total - deposit;
   const amountNow = payType === "deposit" ? deposit : bd.total;
@@ -618,9 +653,20 @@ function CheckoutDrawer({
                   <span className="font-semibold text-ink">{money(bd.subtotal)}</span>
                 </div>
               ) : null}
-              {bd.deliveryFee > 0 ? (
+              {deliveryMode !== "flat" && (feeLoading || feePreview?.needsLocation || feePreview?.outOfArea) ? (
                 <div className="flex items-center justify-between text-ink-mute">
                   <span>Delivery</span>
+                  <span className="text-[13px] font-semibold text-ink-soft">
+                    {feeLoading
+                      ? "Calculating…"
+                      : feePreview?.outOfArea
+                        ? "Quoted separately"
+                        : "Enter your address"}
+                  </span>
+                </div>
+              ) : bd.deliveryFee > 0 ? (
+                <div className="flex items-center justify-between text-ink-mute">
+                  <span>Delivery{feePreview?.label ? ` · ${feePreview.label}` : ""}</span>
                   <span className="font-semibold text-ink">{money(bd.deliveryFee)}</span>
                 </div>
               ) : null}

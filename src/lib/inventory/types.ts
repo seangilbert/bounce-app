@@ -25,6 +25,8 @@ export interface Operator {
   taxPercent: number;
   deliveryFeeCents: number;
   deliveryTaxable: boolean;
+  deliveryMode: "flat" | "zones" | "distance";
+  deliveryConfig: unknown;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */
