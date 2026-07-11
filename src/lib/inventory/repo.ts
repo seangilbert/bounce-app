@@ -40,6 +40,9 @@ interface OperatorRow {
   tagline: string | null;
   about: string | null;
   availability_config: unknown;
+  business_address: string | null;
+  esign_signer_name: string | null;
+  esign_signer_email: string | null;
 }
 
 interface ItemRow {
@@ -102,6 +105,9 @@ function rowToOperator(r: OperatorRow): Operator {
     tagline: r.tagline,
     about: r.about,
     availabilityConfig: r.availability_config ?? {},
+    businessAddress: r.business_address,
+    esignSignerName: r.esign_signer_name,
+    esignSignerEmail: r.esign_signer_email,
   };
 }
 

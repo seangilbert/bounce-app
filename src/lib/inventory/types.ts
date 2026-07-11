@@ -36,6 +36,11 @@ export interface Operator {
   tagline: string | null;
   about: string | null;
   availabilityConfig: unknown;
+  /** Contract identity — the operator as counterparty on their rental agreement.
+   *  Signer name/email fall back to name/contactEmail when unset. */
+  businessAddress: string | null;
+  esignSignerName: string | null;
+  esignSignerEmail: string | null;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

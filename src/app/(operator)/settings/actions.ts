@@ -98,6 +98,36 @@ export async function updateCustomerPoliciesAction(input: unknown): Promise<Acti
   return { ok: true };
 }
 
+const ContractIdentityInput = z.object({
+  businessAddress: z.string().trim().max(300).optional().nullable(),
+  esignSignerName: z.string().trim().max(120).optional().nullable(),
+  esignSignerEmail: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .nullable()
+    .refine((v) => !v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), "Enter a valid signer email."),
+});
+
+export async function updateContractIdentityAction(input: unknown): Promise<ActionResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  const p = ContractIdentityInput.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
+  const { error } = await createAdminClient()
+    .from("operators")
+    .update({
+      business_address: p.data.businessAddress?.trim() || null,
+      esign_signer_name: p.data.esignSignerName?.trim() || null,
+      esign_signer_email: p.data.esignSignerEmail?.trim() || null,
+    })
+    .eq("id", op.id);
+  if (error) return { ok: false, error: "Could not save contract details." };
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
 const NotificationPrefsInput = z.object({
   notifyNewInquiry: z.boolean(),
   notifyNewBooking: z.boolean(),

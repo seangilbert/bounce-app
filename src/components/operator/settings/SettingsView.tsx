@@ -21,6 +21,7 @@ import {
   updatePricingAction,
   updateDeliveryPricingAction,
   updateCustomerPoliciesAction,
+  updateContractIdentityAction,
   updateNotificationPrefsAction,
   updateBrandingAction,
   updateAvailabilityAction,
@@ -54,6 +55,9 @@ interface OperatorSettings {
   deliveryConfig: unknown;
   cancellationPolicy: string | null;
   damagePolicy: string | null;
+  businessAddress: string | null;
+  esignSignerName: string | null;
+  esignSignerEmail: string | null;
   notifyNewInquiry: boolean;
   notifyNewBooking: boolean;
   notifyBalancePaid: boolean;
@@ -76,6 +80,7 @@ export function SettingsView({ operator }: { operator: OperatorSettings }) {
       <AvailabilitySection operator={operator} />
       <PolicySection operator={operator} />
       <CustomerPoliciesSection operator={operator} />
+      <ContractSection operator={operator} />
       <NotificationsSection operator={operator} />
       <AccountSection operator={operator} />
     </div>
@@ -609,6 +614,63 @@ function CustomerPoliciesSection({ operator }: { operator: OperatorSettings }) {
             updateCustomerPoliciesAction({
               cancellationPolicy: cancellation,
               damagePolicy: damage,
+            }),
+          )
+        }
+      />
+    </Section>
+  );
+}
+
+function ContractSection({ operator }: { operator: OperatorSettings }) {
+  const { busy, saved, error, save } = useSaver();
+  const [address, setAddress] = useState(operator.businessAddress ?? "");
+  const [signerName, setSignerName] = useState(operator.esignSignerName ?? "");
+  const [signerEmail, setSignerEmail] = useState(operator.esignSignerEmail ?? "");
+
+  return (
+    <Section
+      title="Rental agreement"
+      desc="Your business identity on the e-signed rental contract — so customers sign paperwork from you, not the platform."
+    >
+      <div className="space-y-3">
+        <Field label="Business address" hint="Printed on the contract as your legal/mailing address.">
+          <textarea
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            rows={2}
+            placeholder="123 Main St, Springfield, MA 01000"
+            className="input resize-none"
+          />
+        </Field>
+        <Field label="Signer name" hint="Who countersigns on your behalf. Blank = your business name.">
+          <input
+            value={signerName}
+            onChange={(e) => setSignerName(e.target.value)}
+            placeholder={operator.name}
+            className="input"
+          />
+        </Field>
+        <Field label="Signer email" hint="Where the countersigning request goes. Blank = your contact email.">
+          <input
+            type="email"
+            value={signerEmail}
+            onChange={(e) => setSignerEmail(e.target.value)}
+            placeholder={operator.contactEmail ?? "you@yourbusiness.com"}
+            className="input"
+          />
+        </Field>
+      </div>
+      <SaveBar
+        busy={busy}
+        saved={saved}
+        error={error}
+        onSave={() =>
+          save(() =>
+            updateContractIdentityAction({
+              businessAddress: address,
+              esignSignerName: signerName,
+              esignSignerEmail: signerEmail,
             }),
           )
         }
