@@ -15,9 +15,11 @@ import {
   Tag,
   ArrowsClockwise,
   ArrowRight,
+  Warning,
 } from "@phosphor-icons/react/dist/ssr";
 import { getSessionOperator } from "@/lib/operator/session";
-import { timeGreeting } from "@/lib/operator/time";
+import { timeGreeting, operatorToday } from "@/lib/operator/time";
+import { getExpiringDocuments, docTypeLabel, type ExpiringDocument } from "@/lib/documents/repo";
 import type { Operator } from "@/lib/inventory/types";
 import {
   getDashboard,
@@ -52,17 +54,20 @@ export default async function DashboardPage({
   const scope = parseScope(searchParams.view);
   const data = await getDashboard(op.id, op.timezone, scope);
   const weather = await getWeatherAdvisory(op, data.todayStops);
-  return <DashboardBody data={data} operator={op} weather={weather} />;
+  const expiringDocs = await getExpiringDocuments(op.id, operatorToday(op.timezone));
+  return <DashboardBody data={data} operator={op} weather={weather} expiringDocs={expiringDocs} />;
 }
 
 function DashboardBody({
   data,
   operator,
   weather,
+  expiringDocs,
 }: {
   data: DashboardData;
   operator: Operator;
   weather: WeatherAdvisory | null;
+  expiringDocs: ExpiringDocument[];
 }) {
   const firstName = operator.ownerName?.split(/\s+/)[0] ?? operator.name;
   const greeting = timeGreeting(operator.timezone);
@@ -86,6 +91,12 @@ function DashboardBody({
       {!operator.connectChargesEnabled ? (
         <div className="px-5 pt-5 lg:px-8 lg:pt-6">
           <ConnectBanner />
+        </div>
+      ) : null}
+
+      {expiringDocs.length > 0 ? (
+        <div className="px-5 pt-5 lg:px-8 lg:pt-6">
+          <DocExpiryBanner docs={expiringDocs} />
         </div>
       ) : null}
 
@@ -113,6 +124,39 @@ function DashboardBody({
         )}
       </div>
     </div>
+  );
+}
+
+function DocExpiryBanner({ docs }: { docs: ExpiringDocument[] }) {
+  const expired = docs.filter((d) => d.daysLeft < 0);
+  const soonest = docs[0];
+  const name = soonest.label?.trim() || docTypeLabel(soonest.type);
+  const lead =
+    expired.length > 0
+      ? `${expired.length} document${expired.length === 1 ? " has" : "s have"} expired`
+      : soonest.daysLeft === 0
+        ? `${name} expires today`
+        : `${name} expires in ${soonest.daysLeft} day${soonest.daysLeft === 1 ? "" : "s"}`;
+  const extra = docs.length > 1 ? ` · ${docs.length} need attention` : "";
+  return (
+    <Link
+      href="/documents"
+      className="flex items-center gap-3 rounded-2xl border border-amber-line bg-amber-tint px-4 py-3 transition-colors hover:bg-amber-tint/70"
+    >
+      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-amber/20 text-amber-deep">
+        <Warning size={18} weight="fill" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14px] font-bold text-amber-deep">
+          {lead}
+          {extra}
+        </span>
+        <span className="block text-[12.5px] font-medium text-ink-mute">
+          Keep your insurance, licenses, and permits current — review in Documents.
+        </span>
+      </span>
+      <ArrowRight size={16} weight="bold" className="flex-shrink-0 text-amber-deep" />
+    </Link>
   );
 }
 
