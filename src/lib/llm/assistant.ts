@@ -8,6 +8,8 @@ import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing
 import { assessRange, normalizeSchedule } from "@/lib/availability/schedule";
 import { createInquiry } from "@/lib/inquiries/repo";
 import { notifyOperatorNewInquiry } from "@/lib/email";
+import { getQuoteQuota, incrementAiQuoteUsage } from "@/lib/usage/ai-quotes";
+import { planCapabilities } from "@/lib/plans";
 import type { Operator } from "@/lib/inventory/types";
 
 /** Model for the quote assistant. Haiku is a valid cost swap (spec 7.2). */
@@ -172,6 +174,17 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
     ? await getOperatorById(inquiry.operatorId)
     : await getDefaultOperator();
   if (!operator) throw new Error("No operator configured.");
+
+  // Free-tier AI-quote cap. Gate a *new* conversation (no inquiryId yet) BEFORE
+  // any model call, so a capped operator never spends against our Anthropic bill;
+  // an in-progress thread continues so we don't abandon a customer mid-chat. The
+  // count is bumped once below, when the inbox inquiry is first persisted. Paid
+  // plans are unlimited and getQuoteQuota short-circuits without a DB read.
+  const metered = Number.isFinite(planCapabilities(operator).aiQuotesPerMonth);
+  if (!inquiry.inquiryId) {
+    const quota = await getQuoteQuota(operator);
+    if (quota.atLimit) return cappedInquiry(operator, inquiry);
+  }
 
   const today = new Date().toISOString().slice(0, 10);
   const hintStart = inquiry.startDate ?? null;
@@ -348,6 +361,16 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
         quote: { lineItems: lines, subtotal, deliveryFee: bd.deliveryFee, tax: bd.tax, total: bd.total, suggestedDeposit, currency: "usd" },
       });
       inquiryId = created.id;
+      // Count this conversation once against the operator's monthly AI-quote
+      // cap (metered plans only). Best-effort — a metering miss shouldn't fail
+      // a quote the customer already received.
+      if (metered) {
+        try {
+          await incrementAiQuoteUsage(operator.id);
+        } catch (err) {
+          console.error("[usage] AI-quote increment failed:", err);
+        }
+      }
     } catch (err) {
       console.error("[inquiries] failed to persist inquiry:", err);
     }
@@ -376,6 +399,68 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
     quote: { lineItems: lines, subtotal, deliveryFee: bd.deliveryFee, tax: bd.tax, total: bd.total, suggestedDeposit, currency: "usd" },
     auto,
     unmatchedRequests: out.unmatchedRequests,
+    inquiryId,
+  };
+}
+
+/**
+ * Over the monthly AI-quote cap: skip the model entirely, but still capture the
+ * lead so the operator doesn't lose the customer — persist a needs-review
+ * inquiry (no AI draft, no quote), alert the operator, and ask the customer for
+ * an email so a human can follow up. The customer never sees plan/billing
+ * language; the operator learns they hit the cap via the inbox + this lead.
+ */
+async function cappedInquiry(operator: Operator, inquiry: Inquiry): Promise<ConversationResult> {
+  const firstUser = inquiry.messages.find((m) => m.role === "user")?.content ?? "";
+  const today = new Date().toISOString().slice(0, 10);
+  const start = inquiry.startDate ?? today;
+  const end = inquiry.endDate && inquiry.endDate >= start ? inquiry.endDate : start;
+
+  let inquiryId: string | null = null;
+  try {
+    const created = await createInquiry({
+      operatorId: operator.id,
+      bookingId: null,
+      customerName: inquiry.customerName ?? null,
+      customerEmail: inquiry.customerEmail ?? null,
+      inboundMessage: firstUser,
+      startDate: start,
+      endDate: end,
+      auto: false,
+      confidence: "low",
+      aiSummary:
+        "Instant quoting is paused — this month's AI-quote limit was reached. Follow up with this customer directly (consider upgrading to keep auto-quoting).",
+      escalationReasons: ["ai_quote_cap_reached"],
+      unmatchedRequests: [],
+      quote: null,
+    });
+    inquiryId = created.id;
+  } catch (err) {
+    console.error("[inquiries] failed to persist capped lead:", err);
+  }
+
+  if (operator.contactEmail && operator.notifyNewInquiry) {
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://bounce-app.vercel.app";
+    try {
+      await notifyOperatorNewInquiry({
+        to: operator.contactEmail,
+        businessName: operator.name,
+        customer: inquiry.customerName ?? "A customer",
+        message: firstUser,
+        link: `${base}/inquiries`,
+      });
+    } catch (err) {
+      console.error("[inquiries] capped-lead alert failed:", err);
+    }
+  }
+
+  return {
+    reply: `Thanks for reaching out! I can't put together an instant quote right this second — leave your email below and ${operator.name} will follow up with a custom quote, usually within a few hours.`,
+    status: "review",
+    eventDate: inquiry.startDate ?? null,
+    quote: null,
+    auto: false,
+    unmatchedRequests: [],
     inquiryId,
   };
 }

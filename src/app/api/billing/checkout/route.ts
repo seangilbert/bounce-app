@@ -17,9 +17,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const plan = PLANS[operator.plan as PlanId];
+  // An existing operator can upgrade by naming a target plan (e.g. a Free
+  // operator who hit the AI-quote cap picks Solo); signup omits it and checks
+  // out the plan chosen at account creation. The webhook reconciles the plan
+  // from the subscription on `subscription.created`, but we also persist it now
+  // so the operator's entitlement flips as soon as the trial subscription lands.
+  let targetPlanId = operator.plan as PlanId;
+  try {
+    const body = (await req.json()) as { plan?: string } | null;
+    if (body?.plan && body.plan in PLANS) targetPlanId = body.plan as PlanId;
+  } catch {
+    // No/invalid JSON body — fall back to the operator's current plan.
+  }
+
+  const plan = PLANS[targetPlanId];
   if (!plan || !isPaidPlan(plan.id) || !plan.stripeLookupKey) {
     return NextResponse.json({ error: "This plan doesn't require billing." }, { status: 400 });
+  }
+  if (targetPlanId !== operator.plan) {
+    await createAdminClient().from("operators").update({ plan: targetPlanId }).eq("id", operator.id);
   }
 
   const origin = req.headers.get("origin") ?? new URL(req.url).origin;

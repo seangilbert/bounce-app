@@ -13,6 +13,7 @@ import {
   Plus,
   X,
   Confetti,
+  Sparkle,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   updateProfileAction,
@@ -39,6 +40,9 @@ interface OperatorSettings {
   slug: string | null;
   plan: string;
   subscriptionStatus: string | null;
+  aiQuotaUsed: number;
+  /** Monthly AI-quote cap; null = unlimited (paid plan). */
+  aiQuotaLimit: number | null;
   connectChargesEnabled: boolean;
   depositPercent: number;
   autoQuoteCapCents: number;
@@ -859,6 +863,23 @@ function DeliverySection({ operator }: { operator: OperatorSettings }) {
 
 function AccountSection({ operator }: { operator: OperatorSettings }) {
   const [connecting, setConnecting] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+
+  async function upgrade() {
+    setUpgrading(true);
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ plan: "solo" }),
+      });
+      const json = await res.json();
+      if (res.ok && json.url) window.location.href = json.url;
+      else setUpgrading(false);
+    } catch {
+      setUpgrading(false);
+    }
+  }
   const planLabel = operator.plan
     ? `${operator.plan[0].toUpperCase()}${operator.plan.slice(1)}`
     : "Free";
@@ -902,6 +923,32 @@ function AccountSection({ operator }: { operator: OperatorSettings }) {
             {planLabel}
             {subLabel}
           </span>
+        </Row>
+
+        <Row icon={<Sparkle size={18} weight="fill" />} label="AI quotes">
+          {operator.aiQuotaLimit == null ? (
+            <span className="font-semibold text-ink">Unlimited</span>
+          ) : (
+            <span className="flex flex-wrap items-center gap-2">
+              <span
+                className={`font-semibold ${
+                  operator.aiQuotaUsed >= operator.aiQuotaLimit ? "text-coral-deep" : "text-ink"
+                }`}
+              >
+                {operator.aiQuotaUsed} / {operator.aiQuotaLimit} this month
+              </span>
+              {operator.aiQuotaUsed >= operator.aiQuotaLimit ? (
+                <button
+                  onClick={upgrade}
+                  disabled={upgrading}
+                  className="flex items-center gap-1.5 rounded-full bg-brand px-3 py-1 text-xs font-bold text-white hover:bg-brand-deep disabled:opacity-60"
+                >
+                  {upgrading ? <CircleNotch size={12} weight="bold" className="animate-spin" /> : null}
+                  Upgrade to keep quoting
+                </button>
+              ) : null}
+            </span>
+          )}
         </Row>
 
         <Row icon={<CreditCard size={18} weight="fill" />} label="Payments">

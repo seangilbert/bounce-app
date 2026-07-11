@@ -35,7 +35,9 @@ export interface CreateInquiryInput {
   aiSummary: string;
   escalationReasons: string[];
   unmatchedRequests: string[];
-  quote: InquiryQuote;
+  /** Null when no AI quote was generated (e.g. a lead captured while the
+   *  operator is over their monthly AI-quote cap). */
+  quote: InquiryQuote | null;
 }
 
 export type InquirySender = "customer" | "operator" | "ai";

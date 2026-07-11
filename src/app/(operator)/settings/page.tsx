@@ -1,4 +1,5 @@
 import { getSessionOperator } from "@/lib/operator/session";
+import { getQuoteQuota } from "@/lib/usage/ai-quotes";
 import { SettingsView } from "@/components/operator/settings/SettingsView";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +9,13 @@ export default async function SettingsPage() {
   if (!op) {
     return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
   }
+  const quota = await getQuoteQuota(op);
   return (
     <SettingsView
       operator={{
+        aiQuotaUsed: quota.used,
+        // `Infinity` isn't JSON-serializable across the RSC boundary — send null.
+        aiQuotaLimit: Number.isFinite(quota.limit) ? quota.limit : null,
         name: op.name,
         ownerName: op.ownerName,
         phone: op.phone,
