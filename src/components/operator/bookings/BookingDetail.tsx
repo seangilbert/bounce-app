@@ -23,6 +23,8 @@ import {
   markBalancePaidAction,
   type ActionResult,
 } from "@/app/(operator)/bookings/actions";
+import { DocumentsPanel } from "@/components/operator/documents/DocumentsPanel";
+import type { OperatorDocument } from "@/lib/documents/repo";
 
 const money = (c: number) => `$${(c / 100).toLocaleString("en-US")}`;
 
@@ -52,9 +54,11 @@ const STATUS_META: Record<BookingStatus, { label: string; cls: string }> = {
 export function BookingDetail({
   booking,
   payment,
+  documents,
 }: {
   booking: Booking;
   payment: { status: string; amountTotal: number; esignStatus: string | null } | null;
+  documents: OperatorDocument[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -269,6 +273,8 @@ export function BookingDetail({
           </div>
         )}
       </div>
+
+      <DocumentsPanel bookingId={booking.id} documents={documents} />
     </div>
   );
 }

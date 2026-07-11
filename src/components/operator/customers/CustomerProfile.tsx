@@ -15,6 +15,8 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import type { Customer, CustomerBooking, CustomerInquiry } from "@/lib/customers/repo";
 import { BookingBuilder } from "@/components/operator/bookings/BookingBuilder";
+import { DocumentsPanel } from "@/components/operator/documents/DocumentsPanel";
+import type { OperatorDocument } from "@/lib/documents/repo";
 import { updateCustomerNotesAction } from "@/app/(operator)/customers/actions";
 
 const money = (c: number) => `$${(c / 100).toLocaleString("en-US")}`;
@@ -50,10 +52,12 @@ export function CustomerProfile({
   operatorId,
   customer,
   activity,
+  documents,
 }: {
   operatorId: string;
   customer: Customer;
   activity: { bookings: CustomerBooking[]; inquiries: CustomerInquiry[] };
+  documents: OperatorDocument[];
 }) {
   const router = useRouter();
   const [notes, setNotes] = useState(customer.notes ?? "");
@@ -157,6 +161,11 @@ export function CustomerProfile({
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Documents */}
+      <div className="mt-6">
+        <DocumentsPanel customerId={customer.id} documents={documents} />
       </div>
 
       {/* Bookings */}

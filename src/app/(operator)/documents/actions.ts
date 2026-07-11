@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getSessionOperator } from "@/lib/operator/session";
+import { getBooking } from "@/lib/bookings/repo";
+import { getCustomer } from "@/lib/customers/repo";
 import {
   uploadDocument,
   updateDocument,
@@ -46,13 +48,26 @@ export async function uploadDocumentAction(form: FormData): Promise<ActionResult
 
   const label = typeof form.get("label") === "string" ? (form.get("label") as string).trim() : "";
 
+  // Only attach to a booking/customer that belongs to this operator (a stray or
+  // spoofed id is rejected rather than silently linking across tenants).
+  const bookingId = (form.get("bookingId") as string) || null;
+  const customerId = (form.get("customerId") as string) || null;
+  if (bookingId) {
+    const b = await getBooking(bookingId).catch(() => null);
+    if (!b || b.operatorId !== op.id) return { ok: false, error: "That booking isn't yours." };
+  }
+  if (customerId) {
+    const c = await getCustomer(op.id, customerId);
+    if (!c) return { ok: false, error: "That customer isn't yours." };
+  }
+
   try {
     await uploadDocument(op.id, file, {
       type,
       label: label || null,
       expiresAt: cleanDate(form.get("expiresAt")),
-      bookingId: (form.get("bookingId") as string) || null,
-      customerId: (form.get("customerId") as string) || null,
+      bookingId,
+      customerId,
     });
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Upload failed." };
