@@ -58,6 +58,7 @@ interface OperatorSettings {
   businessAddress: string | null;
   esignSignerName: string | null;
   esignSignerEmail: string | null;
+  signwellTemplateId: string | null;
   notifyNewInquiry: boolean;
   notifyNewBooking: boolean;
   notifyBalancePaid: boolean;
@@ -627,6 +628,7 @@ function ContractSection({ operator }: { operator: OperatorSettings }) {
   const [address, setAddress] = useState(operator.businessAddress ?? "");
   const [signerName, setSignerName] = useState(operator.esignSignerName ?? "");
   const [signerEmail, setSignerEmail] = useState(operator.esignSignerEmail ?? "");
+  const [templateId, setTemplateId] = useState(operator.signwellTemplateId ?? "");
 
   return (
     <Section
@@ -660,6 +662,17 @@ function ContractSection({ operator }: { operator: OperatorSettings }) {
             className="input"
           />
         </Field>
+        <Field
+          label="Custom contract template ID"
+          hint="Advanced: your own SignWell template ID to use instead of the default agreement. Blank = platform default."
+        >
+          <input
+            value={templateId}
+            onChange={(e) => setTemplateId(e.target.value)}
+            placeholder="Leave blank to use the standard agreement"
+            className="input"
+          />
+        </Field>
       </div>
       <SaveBar
         busy={busy}
@@ -671,6 +684,7 @@ function ContractSection({ operator }: { operator: OperatorSettings }) {
               businessAddress: address,
               esignSignerName: signerName,
               esignSignerEmail: signerEmail,
+              signwellTemplateId: templateId,
             }),
           )
         }

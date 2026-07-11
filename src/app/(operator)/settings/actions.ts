@@ -108,6 +108,7 @@ const ContractIdentityInput = z.object({
     .optional()
     .nullable()
     .refine((v) => !v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), "Enter a valid signer email."),
+  signwellTemplateId: z.string().trim().max(120).optional().nullable(),
 });
 
 export async function updateContractIdentityAction(input: unknown): Promise<ActionResult> {
@@ -121,6 +122,7 @@ export async function updateContractIdentityAction(input: unknown): Promise<Acti
       business_address: p.data.businessAddress?.trim() || null,
       esign_signer_name: p.data.esignSignerName?.trim() || null,
       esign_signer_email: p.data.esignSignerEmail?.trim() || null,
+      signwell_template_id: p.data.signwellTemplateId?.trim() || null,
     })
     .eq("id", op.id);
   if (error) return { ok: false, error: "Could not save contract details." };

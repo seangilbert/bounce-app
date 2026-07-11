@@ -43,6 +43,7 @@ interface OperatorRow {
   business_address: string | null;
   esign_signer_name: string | null;
   esign_signer_email: string | null;
+  signwell_template_id: string | null;
 }
 
 interface ItemRow {
@@ -108,6 +109,7 @@ function rowToOperator(r: OperatorRow): Operator {
     businessAddress: r.business_address,
     esignSignerName: r.esign_signer_name,
     esignSignerEmail: r.esign_signer_email,
+    signwellTemplateId: r.signwell_template_id,
   };
 }
 

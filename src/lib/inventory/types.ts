@@ -41,6 +41,8 @@ export interface Operator {
   businessAddress: string | null;
   esignSignerName: string | null;
   esignSignerEmail: string | null;
+  /** The operator's own SignWell template id; null = use the platform default. */
+  signwellTemplateId: string | null;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

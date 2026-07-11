@@ -27,12 +27,10 @@ export function autoSendEnabled(): boolean {
  * customer email to address the agreement to.
  */
 export async function sendAgreementForOrder(order: Order): Promise<void> {
-  const templateId = process.env.SIGNWELL_TEMPLATE_ID;
   // Platform identity — used only as a fallback when we can't resolve the
   // operator (or they haven't set a contact email).
   const fallbackEmail = process.env.SIGNWELL_SENDER_EMAIL;
   const fallbackName = process.env.SIGNWELL_SENDER_NAME ?? "Bounce Party Rentals";
-  if (!templateId) throw new Error("SIGNWELL_TEMPLATE_ID is not set.");
   if (!fallbackEmail) throw new Error("SIGNWELL_SENDER_EMAIL is not set.");
   if (!order.customerEmail) {
     console.warn(`[esign] order ${order.id} has no customer email; skipping agreement.`);
@@ -51,6 +49,12 @@ export async function sendAgreementForOrder(order: Order): Promise<void> {
       console.error("[esign] loading operator for agreement failed; using platform identity:", e);
     }
   }
+
+  // Use the operator's own rental-agreement template when they've set one, else
+  // the platform default. One of the two must exist.
+  const templateId = operator?.signwellTemplateId?.trim() || process.env.SIGNWELL_TEMPLATE_ID;
+  if (!templateId) throw new Error("No SignWell template configured (operator or SIGNWELL_TEMPLATE_ID).");
+
   const companyName = operator?.esignSignerName?.trim() || operator?.name?.trim() || fallbackName;
   const companyEmail =
     operator?.esignSignerEmail?.trim() || operator?.contactEmail?.trim() || fallbackEmail;
