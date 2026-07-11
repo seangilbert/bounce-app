@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import type {
   CreateFromTemplateInput,
+  CreateDraftTemplateInput,
+  DraftTemplate,
   ESignatureProvider,
   ESignDocument,
   ESignEvent,
@@ -89,6 +91,38 @@ export const signwellProvider: ESignatureProvider = {
     const doc = (await res.json()) as { id?: string; status?: string };
     if (!doc.id) throw new Error("SignWell response missing document id.");
     return { id: doc.id, status: doc.status ?? "unknown" };
+  },
+
+  async createDraftTemplate(input: CreateDraftTemplateInput): Promise<DraftTemplate> {
+    // A draft template from the operator's file. `draft: true` keeps it editable;
+    // `api_application_id` makes SignWell return `embedded_edit_url` — the iframe
+    // where the operator places signer/merge fields. Placeholders are pre-seeded
+    // so the roles our send path expects ("Client" / "Document Sender") exist.
+    const body = {
+      name: input.name,
+      draft: true,
+      api_application_id: input.apiApplicationId,
+      files: [{ name: input.fileName, file_base64: input.fileBase64 }],
+      placeholders: input.placeholders.map((p) => ({ id: p.id, name: p.name })),
+      metadata: input.metadata,
+    };
+
+    const res = await fetch(`${API_BASE}/document_templates`, {
+      method: "POST",
+      headers: { "X-Api-Key": apiKey(), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new Error(`SignWell template create failed (${res.status}): ${detail.slice(0, 500)}`);
+    }
+
+    const tmpl = (await res.json()) as { id?: string; embedded_edit_url?: string; status?: string };
+    if (!tmpl.id) throw new Error("SignWell response missing template id.");
+    if (!tmpl.embedded_edit_url)
+      throw new Error("SignWell returned no embedded_edit_url — check the API Application id.");
+    return { id: tmpl.id, embeddedEditUrl: tmpl.embedded_edit_url, status: tmpl.status ?? "draft" };
   },
 
   async verifyWebhook(rawBody: string): Promise<ESignEvent> {

@@ -24,8 +24,15 @@ import {
   deleteDocumentAction,
 } from "@/app/(operator)/documents/actions";
 import { TRACKS_EXPIRY, daysUntil, fmtSize, DocIcon, ExpiryPill } from "./docPresentation";
+import { UseAsAgreement } from "./UseAsAgreement";
 
-export function DocumentsManager({ documents }: { documents: OperatorDocument[] }) {
+export function DocumentsManager({
+  documents,
+  contractEditor,
+}: {
+  documents: OperatorDocument[];
+  contractEditor: boolean;
+}) {
   const [editing, setEditing] = useState<OperatorDocument | "new" | null>(null);
 
   const expiringCount = documents.filter(
@@ -72,7 +79,11 @@ export function DocumentsManager({ documents }: { documents: OperatorDocument[] 
       )}
 
       {editing ? (
-        <DocDrawer doc={editing === "new" ? null : editing} onClose={() => setEditing(null)} />
+        <DocDrawer
+          doc={editing === "new" ? null : editing}
+          contractEditor={contractEditor}
+          onClose={() => setEditing(null)}
+        />
       ) : null}
     </div>
   );
@@ -121,7 +132,15 @@ function DocCard({ doc, onEdit }: { doc: OperatorDocument; onEdit: () => void })
   );
 }
 
-function DocDrawer({ doc, onClose }: { doc: OperatorDocument | null; onClose: () => void }) {
+function DocDrawer({
+  doc,
+  contractEditor,
+  onClose,
+}: {
+  doc: OperatorDocument | null;
+  contractEditor: boolean;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const isNew = doc === null;
   const fileRef = useRef<HTMLInputElement>(null);
@@ -244,6 +263,13 @@ function DocDrawer({ doc, onClose }: { doc: OperatorDocument | null; onClose: ()
               {tracksExpiry ? "You'll get a dashboard warning as it approaches." : "Only insurance/licenses/permits are tracked for expiry."}
             </span>
           </label>
+
+          {!isNew && contractEditor && doc.mimeType === "application/pdf" ? (
+            <div className="rounded-xl border border-sand-line bg-cream p-3">
+              <div className="mb-2 text-[13px] font-bold text-ink-soft">Rental agreement</div>
+              <UseAsAgreement documentId={doc.id} />
+            </div>
+          ) : null}
 
           {error ? (
             <div className="rounded-xl bg-coral-tint px-3 py-2 text-sm font-semibold text-coral-deep">{error}</div>

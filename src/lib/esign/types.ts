@@ -66,11 +66,40 @@ export interface ESignEvent {
   raw: unknown;
 }
 
+export interface CreateDraftTemplateInput {
+  /** Template name shown in the provider dashboard. */
+  name: string;
+  /** Original file name including extension (e.g. "agreement.pdf"). */
+  fileName: string;
+  /** Base64-encoded file bytes (no `data:` prefix). */
+  fileBase64: string;
+  /** Signing roles to pre-seed, e.g. `[{ id: "2", name: "Client" }]`. */
+  placeholders: { id: string; name: string }[];
+  /** Provider API-application id — required to return an embedded editor URL. */
+  apiApplicationId: string;
+  metadata?: Record<string, string>;
+}
+
+export interface DraftTemplate {
+  /** Provider template id — becomes the operator's rental-agreement template. */
+  id: string;
+  /** URL to load in an iframe so the user visually places signer/merge fields. */
+  embeddedEditUrl: string;
+  status: string;
+}
+
 export interface ESignatureProvider {
   readonly name: string;
 
   /** Create (and, unless draft, send) a document from a template. */
   createFromTemplate(input: CreateFromTemplateInput): Promise<ESignDocument>;
+
+  /**
+   * Create a DRAFT reusable template from an uploaded file, returning an
+   * embedded-editor URL where the user places signer/merge fields. Optional —
+   * providers without embedded template editing may omit it.
+   */
+  createDraftTemplate?(input: CreateDraftTemplateInput): Promise<DraftTemplate>;
 
   /**
    * Verify a webhook against its signature and return a normalized event.

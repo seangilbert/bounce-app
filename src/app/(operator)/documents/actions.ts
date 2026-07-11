@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getSessionOperator } from "@/lib/operator/session";
 import { getBooking } from "@/lib/bookings/repo";
 import { getCustomer } from "@/lib/customers/repo";
+import { createAdminClient } from "@/utils/supabase/admin";
+import { createContractTemplateFromDocument } from "@/lib/esign/contract-template";
 import {
   uploadDocument,
   updateDocument,
@@ -114,5 +116,36 @@ export async function deleteDocumentAction(id: string): Promise<ActionResult> {
   }
   revalidatePath("/documents");
   revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+/** Start turning a PDF document into the operator's rental-agreement template.
+ *  Returns the SignWell embedded-editor URL for the client to open. */
+export async function startContractTemplateAction(
+  documentId: string,
+): Promise<{ ok: true; templateId: string; embeddedEditUrl: string } | { ok: false; error: string }> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  try {
+    const { templateId, embeddedEditUrl } = await createContractTemplateFromDocument(op.id, documentId, op.name);
+    return { ok: true, templateId, embeddedEditUrl };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not start the contract editor." };
+  }
+}
+
+/** Persist the finished template as the operator's rental agreement (called once
+ *  the embedded editor emits `completed`). */
+export async function finalizeContractTemplateAction(templateId: string): Promise<ActionResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  if (!templateId) return { ok: false, error: "Missing template id." };
+  const { error } = await createAdminClient()
+    .from("operators")
+    .update({ signwell_template_id: templateId })
+    .eq("id", op.id);
+  if (error) return { ok: false, error: "Could not save your rental agreement." };
+  revalidatePath("/documents");
+  revalidatePath("/settings");
   return { ok: true };
 }
