@@ -129,6 +129,18 @@ export default function SignupPage() {
               "Create account"
             )}
           </button>
+
+          <p className="mt-3 text-center text-[12.5px] font-medium leading-5 text-ink-mute">
+            By creating an account you agree to our{" "}
+            <Link href="/terms" target="_blank" className="font-bold text-brand hover:text-brand-deep">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" target="_blank" className="font-bold text-brand hover:text-brand-deep">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </form>
 
         <p className="mt-4 text-center text-sm font-medium text-ink-mute">

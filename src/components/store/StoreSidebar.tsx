@@ -103,6 +103,15 @@ export function StoreSidebar({
             <SignIn size={17} weight="bold" />
           </button>
         </div>
+        <div className="flex items-center justify-center gap-2 px-2 text-[12px] font-medium text-ink-faint">
+          <Link href="/terms" className="hover:text-ink-mute">
+            Terms
+          </Link>
+          <span aria-hidden>·</span>
+          <Link href="/privacy" className="hover:text-ink-mute">
+            Privacy
+          </Link>
+        </div>
       </div>
     </aside>
   );
