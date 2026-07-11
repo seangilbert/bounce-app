@@ -31,7 +31,7 @@ const SignupSchema = z.object({
  * service role; on partial failure we roll back what we created.
  */
 export async function POST(req: Request) {
-  const rl = checkRateLimit(`signup:${clientIp(req)}`, RATE_LIMIT, RATE_WINDOW_MS);
+  const rl = await checkRateLimit(`signup:${clientIp(req)}`, RATE_LIMIT, RATE_WINDOW_MS);
   if (!rl.allowed) {
     const retryAfter = Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000));
     return NextResponse.json(

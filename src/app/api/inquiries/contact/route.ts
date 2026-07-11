@@ -20,7 +20,7 @@ function clientIp(req: Request): string {
 }
 
 export async function POST(req: Request) {
-  const rl = checkRateLimit(`inq-contact:${clientIp(req)}`, 10, 60_000);
+  const rl = await checkRateLimit(`inq-contact:${clientIp(req)}`, 10, 60_000);
   if (!rl.allowed) return NextResponse.json({ error: "Too many attempts." }, { status: 429 });
 
   let body: unknown;

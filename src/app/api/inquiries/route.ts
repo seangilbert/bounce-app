@@ -19,7 +19,7 @@ function clientIp(req: Request): string {
 }
 
 export async function POST(req: Request) {
-  const rl = checkRateLimit(`inquiries:${clientIp(req)}`, RATE_LIMIT, RATE_WINDOW_MS);
+  const rl = await checkRateLimit(`inquiries:${clientIp(req)}`, RATE_LIMIT, RATE_WINDOW_MS);
   if (!rl.allowed) {
     const retryAfter = Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000));
     return NextResponse.json(
