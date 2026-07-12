@@ -21,7 +21,7 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 - **Single Stripe account, no Connect** — all payments land in one account.
 - **No transactional email** — no receipts/confirmations/operator alerts.
 - **In-memory rate limiting** — per-instance, ineffective across serverless.
-- **No automated tests / CI; hand-applied migrations; shared dev↔prod DB.**
+- ~~No automated tests / CI~~ ✅ **Vitest suite (79 tests) + GitHub Actions CI** (lint/typecheck/test on every push/PR); ~~shared dev↔prod DB~~ ✅ split. _Remaining gap: migrations are CLI-tracked but still hand-applied per deploy._
 
 ---
 
@@ -56,6 +56,9 @@ The single copy-paste list of everything that must be flipped/entered in the rea
 **6. Legal**
 - [ ] Fill the real values in `src/lib/legal/company.ts` (entity, jurisdiction, contact, address, effective date).
 - [ ] **Counsel review** of the Terms + Privacy drafts **and** the rental agreement's soundness. _(See Legal/trust, Tier 0.)_
+
+**7. Error monitoring — Sentry** _(recommended; code is deployed + dormant)_
+- [ ] Create a Sentry project, then set **`NEXT_PUBLIC_SENTRY_DSN`** in Vercel Production (turns on runtime error capture). Optional for readable stack traces: `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT`. _(See Error monitoring, Tier 2.)_
 
 ---
 
@@ -121,8 +124,9 @@ The single copy-paste list of everything that must be flipped/entered in the rea
 
 - [ ] **Performance (infra) follow-ups** — _(app-level nav perf: cached session/operator resolution, parallelized queries, loading skeletons; **now also**: the **redundant per-nav RSC `auth.getUser()` is eliminated** — the middleware forwards the verified user id via a trusted, inbound-stripped header (`x-operator-user-id`) and Server Components read that (falling back to `getUser` when absent); **session→operator is a single join query** instead of two round-trips; and the middleware **skips `getUser` entirely on public routes** (storefront/APIs). ~430ms less session overhead per operator navigation.)_ Remaining (infra, needs setup): (a) **co-locate Supabase + Vercel in the same region** — each DB query is ~130ms; cross-region latency adds up. (b) **local JWT verification** (`getClaims` w/ asymmetric signing keys) to also drop the ~300ms `auth.getUser()` the **middleware** still makes on every operator request — requires enabling asymmetric JWT keys in the Supabase dashboard first.
 - [x] **Overbooking race hardening** — the reserve step (booking → `pending_payment` at checkout) is now atomic. A Postgres `reserve_booking(booking_id)` function (migration `0020`) locks the booking's item rows (`FOR UPDATE`, ordered by id to avoid deadlocks), re-checks **peak** capacity over the rental range excluding this booking, then flips the status — so two simultaneous checkouts for the last unit serialize and the loser raises `OVERSELL`. `/api/checkout` calls it **before** creating the Stripe session and returns a clean 409 "just sold out" (surfaced in the storefront checkout). _Setup: run migration `0020` — **required before deploy** (checkout calls the RPC). Verified with a concurrent-reservation test. Note: the post-paid oversell guard in `markBookingPaid` stays as a logging backstop._
-- [ ] **Error monitoring** (Sentry) + structured logging.
-- [ ] **Automated tests** — none exist; prioritize the availability engine, quote/escalation logic, webhook handlers. Add CI (typecheck/build/test gates) + a staging environment.
+- [~] **Error monitoring** (Sentry) — ✅ **`@sentry/nextjs` wired across server/edge/client** via `src/instrumentation.ts` + `withSentryConfig` + a root `global-error.tsx` boundary. **Dormant until a DSN is set** (guarded on `NEXT_PUBLIC_SENTRY_DSN`/`SENTRY_DSN` → complete no-op, same pattern as our other integrations); source-map upload only runs when `SENTRY_AUTH_TOKEN` exists, so the build stays clean/offline. **Manual capture** added to the Stripe webhook's best-effort catches (balance email, booking emails, agreement send, top-level handler) — money-path failures that were previously console-only/invisible. Build + typecheck verified. _Remaining: structured logging; and the go-live step below._
+  - [ ] **Sentry — go live (your action):** create a Sentry project (Next.js), then set in Vercel Production: **`NEXT_PUBLIC_SENTRY_DSN`** (the DSN — this alone turns on runtime capture). Optional for source maps / readable stack traces: **`SENTRY_AUTH_TOKEN`** + **`SENTRY_ORG`** + **`SENTRY_PROJECT`** (build-time only). Nothing else to change — the code is deployed and waiting on the DSN.
+- [~] **Automated tests + CI** — ✅ **Vitest suite (79 tests)** covering the pure money/availability/access logic a silent bug would corrupt: `priceBreakdown` (tax/discount/rounding), delivery-fee resolution (flat/zones/distance + haversine), the bookable-date engine (`normalizeSchedule`/`isDateBookable`/`assessRange`), plan entitlement (`effectivePlanId` — the paid↔free downgrade belt), promo discount math, deposit, phone E.164, bookable units, roles. ✅ **GitHub Actions CI** (`.github/workflows/ci.yml`) gates every push/PR to `main` on **lint → typecheck → test** (no secrets needed). Scripts: `npm test` / `test:watch` / `test:coverage` / `typecheck`. _Remaining: DB-backed logic still needs a Supabase-mock harness (`applyPromo`/`resolveBookingDiscount`, availability arithmetic, webhook handlers); a **staging environment**; wire `build` into CI (needs dummy env). Config: `vitest.config.mts` (node env, `@/` via `vite-tsconfig-paths`)._
 - [ ] **Accessibility pass** + mobile QA.
 
 ## Tier 3 — Growth & go-to-market
@@ -150,4 +154,4 @@ The single copy-paste list of everything that must be flipped/entered in the rea
 3. ~~**Operator onboarding wizard** + **inventory management UI**~~ ✅ (`/onboarding` checklist: geocoded location → add rentals → connect Stripe; new signups land here).
 4. **Transactional email** + **balance collection** + **delivery fees/tax**.
 5. **Prod DB split** + migration tooling (go-live checklist). ~~durable rate limit~~ ✅ Upstash · ~~AI-quote cap~~ ✅ migration `0038` · legal pages ✅ (drafts — counsel review + placeholders pending).
-6. **Overbooking hardening** ✅ · **tests/CI, monitoring** (remaining).
+6. **Overbooking hardening** ✅ · **tests/CI** ✅ (Vitest 79 tests + GitHub Actions) · **Sentry** ✅ wired (dormant until DSN).
