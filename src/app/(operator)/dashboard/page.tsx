@@ -17,7 +17,7 @@ import {
   ArrowRight,
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
-import { getSessionMembership } from "@/lib/operator/session";
+import { getSessionMembership, userDisplayName } from "@/lib/operator/session";
 import { timeGreeting, operatorToday } from "@/lib/operator/time";
 import { getExpiringDocuments, docTypeLabel, type ExpiringDocument } from "@/lib/documents/repo";
 import type { Operator } from "@/lib/inventory/types";
@@ -57,7 +57,17 @@ export default async function DashboardPage({
   const data = await getDashboard(op.id, op.timezone, scope);
   const weather = await getWeatherAdvisory(op, data.todayStops);
   const expiringDocs = isAdmin ? await getExpiringDocuments(op.id, operatorToday(op.timezone)) : [];
-  return <DashboardBody data={data} operator={op} weather={weather} expiringDocs={expiringDocs} isAdmin={isAdmin} />;
+  const firstName = userDisplayName(membership).split(/\s+/)[0];
+  return (
+    <DashboardBody
+      data={data}
+      operator={op}
+      weather={weather}
+      expiringDocs={expiringDocs}
+      isAdmin={isAdmin}
+      firstName={firstName}
+    />
+  );
 }
 
 function DashboardBody({
@@ -66,14 +76,15 @@ function DashboardBody({
   weather,
   expiringDocs,
   isAdmin,
+  firstName,
 }: {
   data: DashboardData;
   operator: Operator;
   weather: WeatherAdvisory | null;
   expiringDocs: ExpiringDocument[];
   isAdmin: boolean;
+  firstName: string;
 }) {
-  const firstName = operator.ownerName?.split(/\s+/)[0] ?? operator.name;
   const greeting = timeGreeting(operator.timezone);
   const scopeWord = data.scope === "day" ? "today" : data.scope === "month" ? "this month" : "this week";
   return (

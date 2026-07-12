@@ -33,16 +33,19 @@ export async function acceptInviteAction(token: string): Promise<ActionResult> {
 export async function acceptInviteWithSignupAction(input: {
   token: string;
   password: string;
+  name?: string;
 }): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
   const invite = await getInviteByToken(input.token);
   if (!invite) return { ok: false, error: "This invitation is no longer valid." };
   if ((input.password ?? "").length < 8) return { ok: false, error: "Password must be at least 8 characters." };
 
   const admin = createAdminClient();
+  const name = (input.name ?? "").trim();
   const created = await admin.auth.admin.createUser({
     email: invite.email,
     password: input.password,
     email_confirm: true,
+    user_metadata: name ? { name } : undefined,
   });
   if (created.error) {
     const dup = /already|registered|exists/i.test(created.error.message);

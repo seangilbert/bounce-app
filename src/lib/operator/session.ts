@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { headers } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { getMembershipForUser } from "@/lib/inventory/repo";
 import { VERIFIED_USER_HEADER } from "@/utils/supabase/middleware";
 import type { Operator } from "@/lib/inventory/types";
@@ -35,6 +36,16 @@ export interface SessionMembership {
   operator: Operator;
   role: MemberRole;
   userId: string;
+  /** The signed-in USER's own email + display name — not the operator's owner. */
+  userEmail: string | null;
+  userName: string | null;
+}
+
+/** A friendly display name for a user: their set name, else the email's local part. */
+export function userDisplayName(m: { userName: string | null; userEmail: string | null }): string {
+  if (m.userName?.trim()) return m.userName.trim();
+  const local = m.userEmail?.split("@")[0] ?? "";
+  return local ? local.charAt(0).toUpperCase() + local.slice(1) : "there";
 }
 
 /**
@@ -45,7 +56,17 @@ export const getSessionMembership = cache(async (): Promise<SessionMembership | 
   const user = await getSessionUser();
   if (!user) return null;
   const m = await getMembershipForUser(user.id);
-  return m ? { ...m, userId: user.id } : null;
+  if (!m) return null;
+  let userEmail: string | null = null;
+  let userName: string | null = null;
+  try {
+    const { data } = await createAdminClient().auth.admin.getUserById(user.id);
+    userEmail = data?.user?.email ?? null;
+    userName = ((data?.user?.user_metadata?.name as string | undefined) ?? "").trim() || null;
+  } catch {
+    /* best-effort — fall back to email-less display */
+  }
+  return { ...m, userId: user.id, userEmail, userName };
 });
 
 /** Backwards-compatible: the current operator (without the role). Reuses the

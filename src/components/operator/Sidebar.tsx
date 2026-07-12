@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Confetti, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { NAV, navForRole, type NavItem } from "@/lib/operator/nav";
-import type { MemberRole } from "@/lib/operator/roles";
+import { roleLabel, type MemberRole } from "@/lib/operator/roles";
 import { calFilters, type CatFilter } from "@/lib/operator/calendar";
 import { createClient } from "@/utils/supabase/client";
 import type { Operator } from "@/lib/inventory/types";
@@ -42,10 +42,12 @@ function NavLink({ item }: { item: NavItem }) {
 export function Sidebar({
   operator,
   role,
+  userDisplay,
   needsCount,
 }: {
   operator: Operator | null;
   role: MemberRole;
+  userDisplay: string;
   needsCount: number;
 }) {
   const mainNav = navForRole(role).filter((n) => n.href !== "/settings");
@@ -75,10 +77,6 @@ export function Sidebar({
 
   const business = operator?.name ?? "Your business";
   const location = operator?.location ?? "";
-  const ownerName = operator?.ownerName ?? operator?.name ?? "Account";
-  const planLabel = operator?.plan
-    ? `${operator.plan[0].toUpperCase()}${operator.plan.slice(1)} plan`
-    : "";
 
   return (
     <aside className="hidden w-[272px] flex-shrink-0 flex-col overflow-y-auto border-r border-sand bg-cream px-4 py-5 lg:flex lg:h-dvh">
@@ -147,11 +145,11 @@ export function Sidebar({
         <div className="mt-1 flex items-center gap-2 rounded-2xl bg-sand/50 px-3 py-2.5">
           <Link href="/account" className="flex min-w-0 flex-1 items-center gap-2" title="Your account">
             <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold text-white">
-              {initialsOf(ownerName)}
+              {initialsOf(userDisplay)}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[15px] font-bold text-ink">{ownerName}</span>
-              <span className="block truncate text-[13px] font-medium text-ink-mute">{planLabel}</span>
+              <span className="block truncate text-[15px] font-bold text-ink">{userDisplay}</span>
+              <span className="block truncate text-[13px] font-medium text-ink-mute">{roleLabel(role)}</span>
             </span>
           </Link>
           <button

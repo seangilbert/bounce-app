@@ -21,6 +21,7 @@ export function InviteAccept({
   sessionEmail: string | null;
 }) {
   const router = useRouter();
+  const [name, setName] = useState("");
   // Who's viewing this link?
   const isInvitedPerson = !!sessionEmail && sessionEmail.toLowerCase() === email.toLowerCase();
   const wrongAccount = !!sessionEmail && !isInvitedPerson;
@@ -49,7 +50,7 @@ export function InviteAccept({
   async function acceptAndCreate() {
     setBusy(true);
     setError(null);
-    const res = await acceptInviteWithSignupAction({ token, password });
+    const res = await acceptInviteWithSignupAction({ token, password, name });
     if (!res.ok) {
       setError(res.error);
       setBusy(false);
@@ -107,6 +108,15 @@ export function InviteAccept({
           ) : (
             <>
               <label className="mt-5 block">
+                <span className="mb-1 block text-[13px] font-bold text-ink-soft">Your name</span>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="First and last"
+                  className="input"
+                />
+              </label>
+              <label className="mt-3 block">
                 <span className="mb-1 block text-[13px] font-bold text-ink-soft">Create a password</span>
                 <input
                   type="password"

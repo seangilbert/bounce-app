@@ -57,8 +57,14 @@ export async function POST(req: Request) {
   const { businessName, ownerName, email, password, plan } = parsed.data;
   const admin = createAdminClient();
 
-  // 1) Create the auth user (auto-confirmed).
-  const userRes = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+  // 1) Create the auth user (auto-confirmed). Store their name so the app can
+  // greet the actual person (distinct from the operator's owner_name).
+  const userRes = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: ownerName ? { name: ownerName } : undefined,
+  });
   if (userRes.error) {
     const dup = /already|registered|exists/i.test(userRes.error.message);
     return NextResponse.json(
