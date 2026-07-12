@@ -98,6 +98,18 @@ export async function removeMember(operatorId: string, targetUserId: string): Pr
     .eq("operator_id", operatorId)
     .eq("user_id", targetUserId);
   if (error) return { ok: false, error: "Could not remove member." };
+
+  // If they no longer belong to ANY operator, delete their auth account so they
+  // can't still log in. Kept intact if they're a member of another team.
+  const { count: remaining } = await db
+    .from("operator_members")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", targetUserId);
+  if ((remaining ?? 0) === 0) {
+    await db.auth.admin.deleteUser(targetUserId).catch((e) => {
+      console.error("[members] deleteUser after removal failed:", e);
+    });
+  }
   return { ok: true };
 }
 
