@@ -1,5 +1,7 @@
 import { getSessionOperator } from "@/lib/operator/session";
 import { getQuoteQuota } from "@/lib/usage/ai-quotes";
+import { planCapabilities } from "@/lib/plans";
+import { listApiKeys } from "@/lib/api-keys/repo";
 import { SettingsView } from "@/components/operator/settings/SettingsView";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +12,12 @@ export default async function SettingsPage() {
     return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
   }
   const quota = await getQuoteQuota(op);
+  const apiAccess = planCapabilities(op).apiAccess;
+  const apiKeys = apiAccess ? await listApiKeys(op.id) : [];
   return (
     <SettingsView
+      apiAccess={apiAccess}
+      apiKeys={apiKeys}
       operator={{
         aiQuotaUsed: quota.used,
         // `Infinity` isn't JSON-serializable across the RSC boundary — send null.

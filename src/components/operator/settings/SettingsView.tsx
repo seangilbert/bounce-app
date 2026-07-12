@@ -14,6 +14,8 @@ import {
   X,
   Confetti,
   Sparkle,
+  Key,
+  Copy,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   updateProfileAction,
@@ -27,8 +29,13 @@ import {
   updateAvailabilityAction,
   type ActionResult,
 } from "@/app/(operator)/settings/actions";
+import {
+  createApiKeyAction,
+  revokeApiKeyAction,
+} from "@/app/(operator)/settings/developer-actions";
 import { normalizeDeliveryConfig } from "@/lib/delivery/pricing";
 import { normalizeSchedule } from "@/lib/availability/schedule";
+import type { ApiKeyRecord } from "@/lib/api-keys/repo";
 import { ACCENT_COLORS, deriveShades } from "@/lib/branding/palette";
 
 interface OperatorSettings {
@@ -70,7 +77,15 @@ interface OperatorSettings {
   availabilityConfig: unknown;
 }
 
-export function SettingsView({ operator }: { operator: OperatorSettings }) {
+export function SettingsView({
+  operator,
+  apiAccess,
+  apiKeys,
+}: {
+  operator: OperatorSettings;
+  apiAccess: boolean;
+  apiKeys: ApiKeyRecord[];
+}) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 py-6 lg:px-8">
       <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">Settings</h1>
@@ -83,6 +98,7 @@ export function SettingsView({ operator }: { operator: OperatorSettings }) {
       <CustomerPoliciesSection operator={operator} />
       <ContractSection operator={operator} />
       <NotificationsSection operator={operator} />
+      <DeveloperSection apiAccess={apiAccess} apiKeys={apiKeys} operatorSlug={operator.slug} />
       <AccountSection operator={operator} />
     </div>
   );
@@ -933,6 +949,206 @@ function DeliverySection({ operator }: { operator: OperatorSettings }) {
       ) : null}
 
       <SaveBar busy={busy} saved={saved} error={error} onSave={onSave} />
+    </Section>
+  );
+}
+
+function DeveloperSection({
+  apiAccess,
+  apiKeys,
+  operatorSlug,
+}: {
+  apiAccess: boolean;
+  apiKeys: ApiKeyRecord[];
+  operatorSlug: string | null;
+}) {
+  const router = useRouter();
+  const [upgrading, setUpgrading] = useState(false);
+  const [name, setName] = useState("");
+  const [type, setType] = useState<"publishable" | "secret">("publishable");
+  const [origins, setOrigins] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newKey, setNewKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function upgrade() {
+    setUpgrading(true);
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ plan: "growing" }),
+      });
+      const json = await res.json();
+      if (res.ok && json.url) window.location.href = json.url;
+      else setUpgrading(false);
+    } catch {
+      setUpgrading(false);
+    }
+  }
+
+  if (!apiAccess) {
+    return (
+      <Section title="Developers" desc="Embed your AI storefront on your own website.">
+        <div className="rounded-xl bg-brand-tint/50 px-4 py-3 text-[13.5px] font-semibold text-ink-soft">
+          API keys + the embeddable storefront widget are available on the <b>Growing</b> plan — run
+          your catalog, AI quote agent, and checkout on your own domain.
+        </div>
+        <button
+          onClick={upgrade}
+          disabled={upgrading}
+          className="mt-3 flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-white hover:bg-brand-deep disabled:opacity-60"
+        >
+          {upgrading ? <CircleNotch size={14} weight="bold" className="animate-spin" /> : null} Upgrade to Growing
+        </button>
+      </Section>
+    );
+  }
+
+  async function create() {
+    setBusy(true);
+    setError(null);
+    setNewKey(null);
+    const originList = origins.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+    const res = await createApiKeyAction({
+      type,
+      name: name.trim() || undefined,
+      allowedOrigins: type === "publishable" ? originList : [],
+    });
+    if (res.ok) {
+      setNewKey(res.fullKey);
+      setName("");
+      setOrigins("");
+      router.refresh();
+    } else {
+      setError(res.error);
+    }
+    setBusy(false);
+  }
+
+  async function revoke(id: string) {
+    setError(null);
+    const res = await revokeApiKeyAction(id);
+    if (res.ok) router.refresh();
+    else setError(res.error);
+  }
+
+  async function copyKey() {
+    if (!newKey) return;
+    try {
+      await navigator.clipboard.writeText(newKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked — the key is still selectable in the box */
+    }
+  }
+
+  return (
+    <Section title="Developers" desc="API keys to embed your storefront on your own website.">
+      {newKey ? (
+        <div className="mb-4 rounded-xl border border-teal-line bg-teal-tint p-3">
+          <div className="text-[13px] font-bold text-teal-deep">
+            Copy your key now — it won&rsquo;t be shown again.
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <code className="flex-1 truncate rounded-lg bg-white px-3 py-2 font-mono text-[12.5px] text-ink">
+              {newKey}
+            </code>
+            <button
+              onClick={copyKey}
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-ink-mute hover:text-ink"
+              aria-label="Copy key"
+            >
+              {copied ? <CheckCircle size={16} weight="fill" className="text-teal" /> : <Copy size={16} weight="bold" />}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {apiKeys.length === 0 ? (
+        <p className="text-[13.5px] font-medium text-ink-mute">
+          No keys yet. Create a <b>publishable</b> key to embed your storefront.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {apiKeys.map((k) => (
+            <div key={k.id} className="flex items-center gap-3 rounded-xl border border-sand bg-white px-3 py-2.5">
+              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-sand/60 text-ink-mute">
+                <Key size={16} weight="bold" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <code className="font-mono text-[13px] font-bold text-ink">
+                    {k.prefix}_••••{k.last4}
+                  </code>
+                  <span className="rounded-full bg-sand px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-mute">
+                    {k.type === "publishable" ? "publishable" : "secret"}
+                  </span>
+                </div>
+                <div className="truncate text-[12px] font-medium text-ink-mute">
+                  {k.name || "Unnamed"}
+                  {k.type === "publishable" ? ` · ${k.allowedOrigins.length} origin${k.allowedOrigins.length === 1 ? "" : "s"}` : ""}
+                  {k.lastUsedAt ? ` · used ${new Date(k.lastUsedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : " · never used"}
+                </div>
+              </div>
+              <button
+                onClick={() => revoke(k.id)}
+                className="flex-shrink-0 rounded-full border border-sand px-3 py-1.5 text-[12.5px] font-bold text-coral-deep transition-colors hover:bg-coral-tint"
+              >
+                Revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 space-y-2 rounded-xl border border-sand-line bg-cream p-3">
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Key name (e.g. My website)"
+            className="input"
+          />
+          <select value={type} onChange={(e) => setType(e.target.value as "publishable" | "secret")} className="input">
+            <option value="publishable">Publishable (browser)</option>
+            <option value="secret">Secret (server)</option>
+          </select>
+        </div>
+        {type === "publishable" ? (
+          <textarea
+            value={origins}
+            onChange={(e) => setOrigins(e.target.value)}
+            rows={2}
+            placeholder={"Allowed origins, one per line\nhttps://yourdomain.com"}
+            className="input resize-none font-mono text-[12.5px]"
+          />
+        ) : (
+          <p className="text-[12px] font-medium text-ink-mute">
+            Secret keys are for server-to-server calls — keep them on your backend, never in a browser.
+          </p>
+        )}
+        <button
+          onClick={create}
+          disabled={busy}
+          className="flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-white hover:bg-brand-deep disabled:opacity-60"
+        >
+          {busy ? <CircleNotch size={14} weight="bold" className="animate-spin" /> : <Plus size={14} weight="bold" />} Create key
+        </button>
+      </div>
+
+      {error ? (
+        <div className="mt-2 rounded-lg bg-coral-tint px-3 py-2 text-sm font-semibold text-coral-deep">{error}</div>
+      ) : null}
+
+      {operatorSlug ? (
+        <p className="mt-3 text-[12px] font-medium text-ink-mute">
+          The embeddable widget (coming soon) will use a publishable key + your slug{" "}
+          <code className="font-mono text-ink-soft">{operatorSlug}</code>.
+        </p>
+      ) : null}
     </Section>
   );
 }

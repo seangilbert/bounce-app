@@ -59,12 +59,14 @@ export interface PlanCapabilities {
   aiQuotesPerMonth: number;
   /** Can invite additional operator_members. */
   teamMembers: boolean;
+  /** API keys + embeddable widget (bring-your-own-website). */
+  apiAccess: boolean;
 }
 
 export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
-  free: { maxItems: 5, aiQuotesPerMonth: 20, teamMembers: false },
-  solo: { maxItems: Infinity, aiQuotesPerMonth: Infinity, teamMembers: false },
-  growing: { maxItems: Infinity, aiQuotesPerMonth: Infinity, teamMembers: true },
+  free: { maxItems: 5, aiQuotesPerMonth: 20, teamMembers: false, apiAccess: false },
+  solo: { maxItems: Infinity, aiQuotesPerMonth: Infinity, teamMembers: false, apiAccess: false },
+  growing: { maxItems: Infinity, aiQuotesPerMonth: Infinity, teamMembers: true, apiAccess: true },
 };
 
 /** Subscription statuses that still entitle a paid plan (incl. past_due grace). */
