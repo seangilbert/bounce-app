@@ -13,6 +13,7 @@ export default async function AccountPage() {
   if (!membership) redirect("/login");
   const { data } = await createAdminClient().auth.admin.getUserById(membership.userId);
   const email = data?.user?.email ?? "";
+  const name = ((data?.user?.user_metadata?.name as string | undefined) ?? "").trim();
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 py-6 lg:px-8">
@@ -22,7 +23,7 @@ export default async function AccountPage() {
           {membership.operator.name} · {roleLabel(membership.role)}
         </p>
       </div>
-      <AccountManager currentEmail={email} />
+      <AccountManager currentEmail={email} currentName={name} />
     </div>
   );
 }

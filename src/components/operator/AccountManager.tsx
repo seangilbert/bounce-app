@@ -15,8 +15,19 @@ function Card({ title, desc, children }: { title: string; desc?: string; childre
   );
 }
 
-export function AccountManager({ currentEmail }: { currentEmail: string }) {
+export function AccountManager({
+  currentEmail,
+  currentName,
+}: {
+  currentEmail: string;
+  currentName: string;
+}) {
   const router = useRouter();
+  const [name, setName] = useState(currentName);
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameDone, setNameDone] = useState(false);
+  const [nameErr, setNameErr] = useState<string | null>(null);
+
   const [email, setEmail] = useState(currentEmail);
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
@@ -26,6 +37,19 @@ export function AccountManager({ currentEmail }: { currentEmail: string }) {
   const [pwBusy, setPwBusy] = useState(false);
   const [pwDone, setPwDone] = useState(false);
   const [pwErr, setPwErr] = useState<string | null>(null);
+
+  async function changeName() {
+    setNameBusy(true);
+    setNameErr(null);
+    setNameDone(false);
+    const { error } = await createClient().auth.updateUser({ data: { name: name.trim() } });
+    if (error) setNameErr(error.message);
+    else {
+      setNameDone(true);
+      router.refresh(); // update the sidebar + greeting immediately
+    }
+    setNameBusy(false);
+  }
 
   async function changeEmail() {
     setEmailBusy(true);
@@ -58,6 +82,31 @@ export function AccountManager({ currentEmail }: { currentEmail: string }) {
 
   return (
     <>
+      <Card title="Display name" desc="Shown in your greeting, the sidebar, and to your team.">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="First and last"
+            className="input flex-1"
+            autoComplete="name"
+          />
+          <button
+            onClick={changeName}
+            disabled={nameBusy || name.trim().length < 2 || name.trim() === currentName}
+            className="flex items-center justify-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-deep disabled:bg-sand disabled:text-ink-mute"
+          >
+            {nameBusy ? <CircleNotch size={15} weight="bold" className="animate-spin" /> : null} Save name
+          </button>
+        </div>
+        {nameDone ? (
+          <div className="mt-2 flex items-center gap-1.5 text-sm font-bold text-teal">
+            <CheckCircle size={16} weight="fill" /> Saved.
+          </div>
+        ) : null}
+        {nameErr ? <div className="mt-2 text-sm font-semibold text-coral-deep">{nameErr}</div> : null}
+      </Card>
+
       <Card title="Login email" desc="You'll confirm the change from a link sent to the new address.">
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
