@@ -128,7 +128,7 @@ export function InviteAccept({
               </label>
               <button
                 onClick={acceptAndCreate}
-                disabled={busy || password.length < 8}
+                disabled={busy || password.length < 8 || name.trim().length < 2}
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:bg-sand disabled:text-ink-mute"
               >
                 {busy ? <CircleNotch size={18} weight="bold" className="animate-spin" /> : null} Accept &amp; create account

@@ -37,10 +37,11 @@ export async function acceptInviteWithSignupAction(input: {
 }): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
   const invite = await getInviteByToken(input.token);
   if (!invite) return { ok: false, error: "This invitation is no longer valid." };
+  const name = (input.name ?? "").trim();
+  if (name.length < 2) return { ok: false, error: "Enter your name." };
   if ((input.password ?? "").length < 8) return { ok: false, error: "Password must be at least 8 characters." };
 
   const admin = createAdminClient();
-  const name = (input.name ?? "").trim();
   const created = await admin.auth.admin.createUser({
     email: invite.email,
     password: input.password,
