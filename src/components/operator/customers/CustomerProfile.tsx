@@ -53,11 +53,13 @@ export function CustomerProfile({
   customer,
   activity,
   documents,
+  isAdmin,
 }: {
   operatorId: string;
   customer: Customer;
   activity: { bookings: CustomerBooking[]; inquiries: CustomerInquiry[] };
   documents: OperatorDocument[];
+  isAdmin: boolean;
 }) {
   const router = useRouter();
   const [notes, setNotes] = useState(customer.notes ?? "");
@@ -123,14 +125,16 @@ export function CustomerProfile({
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats — money aggregates (Collected/Total booked) are admin-only. */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Collected", value: money(collected) },
-          { label: "Total booked", value: money(totalBooked) },
+          { label: "Collected", value: money(collected), financial: true },
+          { label: "Total booked", value: money(totalBooked), financial: true },
           { label: "Bookings", value: String(active.length) },
           { label: "Upcoming", value: String(upcoming) },
-        ].map((s) => (
+        ]
+          .filter((s) => isAdmin || !s.financial)
+          .map((s) => (
           <div key={s.label} className="rounded-2xl border border-sand bg-white px-4 py-3">
             <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">{s.label}</div>
             <div className="mt-1 font-display text-lg font-bold text-ink tabular-nums">{s.value}</div>
@@ -163,10 +167,12 @@ export function CustomerProfile({
         </div>
       </div>
 
-      {/* Documents */}
-      <div className="mt-6">
-        <DocumentsPanel customerId={customer.id} documents={documents} />
-      </div>
+      {/* Documents (admin-only) */}
+      {isAdmin ? (
+        <div className="mt-6">
+          <DocumentsPanel customerId={customer.id} documents={documents} />
+        </div>
+      ) : null}
 
       {/* Bookings */}
       <div className="mt-7">

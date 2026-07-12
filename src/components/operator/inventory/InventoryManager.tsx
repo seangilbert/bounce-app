@@ -106,7 +106,7 @@ async function resizeImage(file: File, maxDim = 1600, quality = 0.82): Promise<B
   );
 }
 
-export function InventoryManager({ items }: { items: Item[] }) {
+export function InventoryManager({ items, isAdmin }: { items: Item[]; isAdmin: boolean }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Item | null>(null);
   const [creating, setCreating] = useState(false);
@@ -127,13 +127,15 @@ export function InventoryManager({ items }: { items: Item[] }) {
             {items.length} {items.length === 1 ? "item" : "items"} in your catalog
           </p>
         </div>
-        <button
-          onClick={() => setCreating(true)}
-          className="flex flex-shrink-0 items-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep"
-        >
-          <Plus size={16} weight="bold" /> <span className="hidden sm:inline">Add item</span>
-          <span className="sm:hidden">Add</span>
-        </button>
+        {isAdmin ? (
+          <button
+            onClick={() => setCreating(true)}
+            className="flex flex-shrink-0 items-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep"
+          >
+            <Plus size={16} weight="bold" /> <span className="hidden sm:inline">Add item</span>
+            <span className="sm:hidden">Add</span>
+          </button>
+        ) : null}
       </div>
 
       <div className="px-5 py-5 lg:px-8 lg:py-6">
@@ -146,12 +148,14 @@ export function InventoryManager({ items }: { items: Item[] }) {
             <p className="max-w-sm text-sm font-medium text-ink-mute">
               Add your first rental item so customers can browse and book it on your storefront.
             </p>
-            <button
-              onClick={() => setCreating(true)}
-              className="mt-2 flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-deep"
-            >
-              <Plus size={15} weight="bold" /> Add your first item
-            </button>
+            {isAdmin ? (
+              <button
+                onClick={() => setCreating(true)}
+                className="mt-2 flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-deep"
+              >
+                <Plus size={15} weight="bold" /> Add your first item
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -160,8 +164,9 @@ export function InventoryManager({ items }: { items: Item[] }) {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setEditing(item)}
-                  className="flex items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 text-left transition-colors hover:border-sand"
+                  onClick={() => isAdmin && setEditing(item)}
+                  disabled={!isAdmin}
+                  className={`flex items-center gap-4 rounded-2xl border border-sand-line bg-white p-4 text-left transition-colors ${isAdmin ? "hover:border-sand" : "cursor-default"}`}
                 >
                   <span
                     className={`flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl ${item.images?.[0] ? "" : m.tint}`}

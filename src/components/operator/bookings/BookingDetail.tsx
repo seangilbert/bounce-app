@@ -55,10 +55,12 @@ export function BookingDetail({
   booking,
   payment,
   documents,
+  isAdmin,
 }: {
   booking: Booking;
   payment: { status: string; amountTotal: number; esignStatus: string | null } | null;
   documents: OperatorDocument[];
+  isAdmin: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -110,8 +112,9 @@ export function BookingDetail({
   const canCollectBalance =
     balance > 0 && ["paid", "contracted", "confirmed", "delivered"].includes(s);
   const canComplete = s === "delivered";
-  const canCancel = !["completed", "canceled"].includes(s);
-  const canRefund = payment?.status === "paid";
+  // Money OUT (refund) + cancellation are admin-only; collecting balance stays open.
+  const canCancel = isAdmin && !["completed", "canceled"].includes(s);
+  const canRefund = isAdmin && payment?.status === "paid";
   const meta = STATUS_META[s];
 
   return (
@@ -274,7 +277,7 @@ export function BookingDetail({
         )}
       </div>
 
-      <DocumentsPanel bookingId={booking.id} documents={documents} />
+      {isAdmin ? <DocumentsPanel bookingId={booking.id} documents={documents} /> : null}
     </div>
   );
 }

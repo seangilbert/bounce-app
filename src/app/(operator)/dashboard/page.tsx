@@ -17,7 +17,7 @@ import {
   ArrowRight,
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
-import { getSessionOperator } from "@/lib/operator/session";
+import { getSessionMembership } from "@/lib/operator/session";
 import { timeGreeting, operatorToday } from "@/lib/operator/time";
 import { getExpiringDocuments, docTypeLabel, type ExpiringDocument } from "@/lib/documents/repo";
 import type { Operator } from "@/lib/inventory/types";
@@ -49,13 +49,15 @@ export default async function DashboardPage({
 }: {
   searchParams: { view?: string };
 }) {
-  const op = await getSessionOperator();
-  if (!op) return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
+  const membership = await getSessionMembership();
+  if (!membership) return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
+  const op = membership.operator;
+  const isAdmin = membership.role === "admin";
   const scope = parseScope(searchParams.view);
   const data = await getDashboard(op.id, op.timezone, scope);
   const weather = await getWeatherAdvisory(op, data.todayStops);
-  const expiringDocs = await getExpiringDocuments(op.id, operatorToday(op.timezone));
-  return <DashboardBody data={data} operator={op} weather={weather} expiringDocs={expiringDocs} />;
+  const expiringDocs = isAdmin ? await getExpiringDocuments(op.id, operatorToday(op.timezone)) : [];
+  return <DashboardBody data={data} operator={op} weather={weather} expiringDocs={expiringDocs} isAdmin={isAdmin} />;
 }
 
 function DashboardBody({
@@ -63,11 +65,13 @@ function DashboardBody({
   operator,
   weather,
   expiringDocs,
+  isAdmin,
 }: {
   data: DashboardData;
   operator: Operator;
   weather: WeatherAdvisory | null;
   expiringDocs: ExpiringDocument[];
+  isAdmin: boolean;
 }) {
   const firstName = operator.ownerName?.split(/\s+/)[0] ?? operator.name;
   const greeting = timeGreeting(operator.timezone);
@@ -112,7 +116,7 @@ function DashboardBody({
 
         {/* Scope-specific content */}
         {data.scope === "month" ? (
-          <MonthInsightsCard data={data} />
+          <MonthInsightsCard data={data} isAdmin={isAdmin} />
         ) : (
           <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-6">
             <AttentionCard items={data.attention} scope={data.scope} />
@@ -294,15 +298,17 @@ function AttentionCard({ items, scope }: { items: AttentionItem[]; scope: Dashbo
 
 // ---- Month insights -------------------------------------------------------
 
-function MonthInsightsCard({ data }: { data: DashboardData }) {
+function MonthInsightsCard({ data, isAdmin }: { data: DashboardData; isAdmin: boolean }) {
   const m = data.month;
+  // Revenue + discounts are aggregate business financials — admins only.
+  const FINANCIAL = new Set(["Revenue booked", "Discounts given"]);
   const tiles = [
     { label: "Quotes → bookings", value: `${m.conversionPct}%`, sub: `${m.fullBookings} of ${m.quotes} quotes`, icon: <TrendUp size={18} weight="bold" />, tint: "text-brand" },
     { label: "Revenue booked", value: m.revenueBooked, sub: "paid bookings this month", icon: <CurrencyDollar size={18} weight="fill" />, tint: "text-teal" },
     { label: "Lost quotes", value: String(m.lostQuotes), sub: "expired or past-event", icon: <ArrowDown size={18} weight="bold" />, tint: "text-coral-deep" },
     { label: "Repeat customers", value: String(m.repeatCustomers), sub: "2+ bookings", icon: <ArrowsClockwise size={18} weight="bold" />, tint: "text-amber-deep" },
     { label: "Discounts given", value: m.discountsGiven, sub: "promo codes redeemed", icon: <Tag size={18} weight="fill" />, tint: "text-brand-deep" },
-  ];
+  ].filter((t) => isAdmin || !FINANCIAL.has(t.label));
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">

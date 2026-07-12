@@ -21,9 +21,11 @@ function fmtDate(iso: string | null): string {
 export function CustomersView({
   customers,
   initialQuery = "",
+  isAdmin,
 }: {
   customers: CustomerListItem[];
   initialQuery?: string;
+  isAdmin: boolean;
 }) {
   const [q, setQ] = useState(initialQuery);
   const [itemFilter, setItemFilter] = useState("");
@@ -159,7 +161,9 @@ export function CustomersView({
                 </div>
               </div>
               <div className="hidden flex-shrink-0 text-right sm:block">
-                <div className="font-display text-sm font-bold text-ink tabular-nums">{money(c.stats.totalSpentCents)}</div>
+                {isAdmin ? (
+                  <div className="font-display text-sm font-bold text-ink tabular-nums">{money(c.stats.totalSpentCents)}</div>
+                ) : null}
                 <div className="text-[12px] font-medium text-ink-mute tabular-nums">
                   {c.stats.bookingCount} {c.stats.bookingCount === 1 ? "booking" : "bookings"}
                   {c.stats.upcomingCount > 0 ? ` · ${c.stats.upcomingCount} upcoming` : ""}
