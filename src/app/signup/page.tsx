@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Confetti, CircleNotch } from "@phosphor-icons/react/dist/ssr";
@@ -18,6 +18,13 @@ export default function SignupPage() {
   }>({ businessName: "", ownerName: "", email: "", password: "", plan: "solo" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Preselect the plan the visitor clicked on the marketing/pricing pages
+  // (e.g. /signup?plan=growing). Ignored if the param isn't a real plan.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("plan");
+    if (p && p in PLANS) setForm((f) => ({ ...f, plan: p as PlanId }));
+  }, []);
 
   const field =
     (k: "businessName" | "ownerName" | "email" | "password") =>

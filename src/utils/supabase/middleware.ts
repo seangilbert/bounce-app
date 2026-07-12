@@ -31,8 +31,9 @@ const OPERATOR_PREFIXES = [
  */
 export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  const isOperatorRoute =
-    path === "/" || OPERATOR_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
+  // "/" is now the public marketing homepage — not gated. Operator surfaces are
+  // the prefixes below (the app redirects unauthenticated visitors to /login).
+  const isOperatorRoute = OPERATOR_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
   const isAuthPage = path === "/login" || path === "/signup";
 
   // Strip our internal header from anything inbound — only this function sets it.
