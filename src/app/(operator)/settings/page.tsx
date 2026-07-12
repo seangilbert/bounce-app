@@ -1,21 +1,31 @@
-import { getSessionOperator } from "@/lib/operator/session";
+import { getSessionMembership } from "@/lib/operator/session";
 import { getQuoteQuota } from "@/lib/usage/ai-quotes";
 import { planCapabilities } from "@/lib/plans";
 import { listApiKeys } from "@/lib/api-keys/repo";
+import { listMembers, listPendingInvites } from "@/lib/operator/members";
 import { SettingsView } from "@/components/operator/settings/SettingsView";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const op = await getSessionOperator();
-  if (!op) {
+  const membership = await getSessionMembership();
+  if (!membership) {
     return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
   }
+  const op = membership.operator;
   const quota = await getQuoteQuota(op);
   const apiAccess = planCapabilities(op).apiAccess;
   const apiKeys = apiAccess ? await listApiKeys(op.id) : [];
+  const teamEnabled = planCapabilities(op).teamMembers;
+  const members = await listMembers(op.id);
+  const invites = await listPendingInvites(op.id);
   return (
     <SettingsView
+      role={membership.role}
+      currentUserId={membership.userId}
+      teamEnabled={teamEnabled}
+      members={members}
+      invites={invites}
       apiAccess={apiAccess}
       apiKeys={apiKeys}
       operator={{

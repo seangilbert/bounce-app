@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { normalizeEquipment, type EquipmentItem, type Item, type NewItem, type Operator, type PriceUnit } from "./types";
+import type { MemberRole } from "@/lib/operator/roles";
 
 const OPERATORS = "operators";
 const ITEMS = "items";
@@ -177,6 +178,24 @@ export async function getOperatorForUser(userId: string): Promise<Operator | nul
   if (error) throw new Error(`getOperatorForUser failed: ${error.message}`);
   const op = (data as { operators: OperatorRow | null } | null)?.operators ?? null;
   return op ? rowToOperator(op) : null;
+}
+
+/** The signed-in user's operator + their role on it (for RBAC). */
+export async function getMembershipForUser(
+  userId: string,
+): Promise<{ operator: Operator; role: MemberRole } | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("operator_members")
+    .select("role, operators(*)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getMembershipForUser failed: ${error.message}`);
+  const row = data as { role: MemberRole; operators: OperatorRow | null } | null;
+  if (!row?.operators) return null;
+  return { operator: rowToOperator(row.operators), role: row.role };
 }
 
 /** Load an operator by their public storefront slug. */

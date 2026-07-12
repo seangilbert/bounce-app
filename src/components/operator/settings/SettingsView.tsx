@@ -36,6 +36,9 @@ import {
 import { normalizeDeliveryConfig } from "@/lib/delivery/pricing";
 import { normalizeSchedule } from "@/lib/availability/schedule";
 import type { ApiKeyRecord } from "@/lib/api-keys/repo";
+import type { MemberRole } from "@/lib/operator/roles";
+import type { TeamMember, TeamInvite } from "@/lib/operator/members";
+import { TeamSection } from "./TeamSection";
 import { ACCENT_COLORS, deriveShades } from "@/lib/branding/palette";
 
 interface OperatorSettings {
@@ -81,10 +84,20 @@ export function SettingsView({
   operator,
   apiAccess,
   apiKeys,
+  role,
+  currentUserId,
+  teamEnabled,
+  members,
+  invites,
 }: {
   operator: OperatorSettings;
   apiAccess: boolean;
   apiKeys: ApiKeyRecord[];
+  role: MemberRole;
+  currentUserId: string;
+  teamEnabled: boolean;
+  members: TeamMember[];
+  invites: TeamInvite[];
 }) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 py-6 lg:px-8">
@@ -98,6 +111,12 @@ export function SettingsView({
       <CustomerPoliciesSection operator={operator} />
       <ContractSection operator={operator} />
       <NotificationsSection operator={operator} />
+      <TeamSection
+        teamEnabled={teamEnabled}
+        members={members}
+        invites={invites}
+        currentUserId={currentUserId}
+      />
       <DeveloperSection apiAccess={apiAccess} apiKeys={apiKeys} operatorSlug={operator.slug} />
       <AccountSection operator={operator} />
     </div>
