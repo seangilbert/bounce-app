@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { getSessionOperator } from "@/lib/operator/session";
+import { requireAdmin } from "@/lib/operator/session";
 import { createItem, updateItem, deleteItem, countItems } from "@/lib/inventory/repo";
 import { getItemImages, removeItemPhotos } from "@/lib/inventory/photos";
 import { planCapabilities, effectivePlanId } from "@/lib/plans";
@@ -29,8 +29,9 @@ const ItemInput = z.object({
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export async function createItemAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = ItemInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid item." };
   // Plan limit: cap on *create* (existing items are grandfathered on downgrade).
@@ -60,8 +61,9 @@ export async function createItemAction(input: unknown): Promise<ActionResult> {
 }
 
 export async function updateItemAction(id: string, input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = ItemInput.partial().safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid item." };
   try {
@@ -85,8 +87,9 @@ export async function updateItemAction(id: string, input: unknown): Promise<Acti
 }
 
 export async function deleteItemAction(id: string): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const images = await getItemImages(op.id, id); // capture before delete for cleanup
   const res = await deleteItem(op.id, id);
   if (!res.ok) return { ok: false, error: res.reason ?? "Could not delete item." };

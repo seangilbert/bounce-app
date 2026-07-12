@@ -1,6 +1,6 @@
 import { BottomNav } from "@/components/operator/BottomNav";
 import { Sidebar } from "@/components/operator/Sidebar";
-import { getSessionOperator } from "@/lib/operator/session";
+import { getSessionMembership } from "@/lib/operator/session";
 import { countNeedsReview } from "@/lib/inquiries/repo";
 import { brandVars } from "@/lib/branding/palette";
 
@@ -20,14 +20,16 @@ export const dynamic = "force-dynamic";
 export default async function OperatorLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const operator = await getSessionOperator();
+  const membership = await getSessionMembership();
+  const operator = membership?.operator ?? null;
+  const role = membership?.role ?? "employee";
   const needsCount = operator ? await countNeedsReview(operator.id) : 0;
   return (
     <div
       className="flex min-h-dvh w-full bg-cream lg:h-dvh lg:overflow-hidden"
       style={brandVars(operator?.brandColor)}
     >
-      <Sidebar operator={operator} needsCount={needsCount} />
+      <Sidebar operator={operator} role={role} needsCount={needsCount} />
       <div className="flex min-h-dvh w-full min-w-0 flex-col overflow-x-hidden bg-cream lg:h-dvh lg:min-h-0 lg:overflow-y-auto">
         <main className="flex flex-1 flex-col pb-20 lg:pb-0">{children}</main>
       </div>

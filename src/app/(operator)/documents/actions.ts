@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSessionOperator } from "@/lib/operator/session";
+import { requireAdmin } from "@/lib/operator/session";
 import { getBooking } from "@/lib/bookings/repo";
 import { getCustomer } from "@/lib/customers/repo";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -36,8 +36,9 @@ function cleanDate(v: FormDataEntryValue | null): string | null {
 
 /** Upload a document (multipart: file, type, label?, expiresAt?, bookingId?, customerId?). */
 export async function uploadDocumentAction(form: FormData): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
 
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose a file to upload." };
@@ -86,8 +87,9 @@ export async function updateDocumentAction(input: {
   label?: string | null;
   expiresAt?: string | null;
 }): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   if (!input?.id) return { ok: false, error: "Missing document." };
   if (input.type && !VALID_TYPES.has(input.type)) return { ok: false, error: "Invalid document type." };
   if (input.expiresAt && !ISO_DATE.test(input.expiresAt)) return { ok: false, error: "Invalid date." };
@@ -107,8 +109,9 @@ export async function updateDocumentAction(input: {
 }
 
 export async function deleteDocumentAction(id: string): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   try {
     await deleteDocument(op.id, id);
   } catch (e) {
@@ -124,8 +127,9 @@ export async function deleteDocumentAction(id: string): Promise<ActionResult> {
 export async function startContractTemplateAction(
   documentId: string,
 ): Promise<{ ok: true; templateId: string; embeddedEditUrl: string } | { ok: false; error: string }> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   try {
     const { templateId, embeddedEditUrl } = await createContractTemplateFromDocument(op.id, documentId, op.name);
     return { ok: true, templateId, embeddedEditUrl };
@@ -137,8 +141,9 @@ export async function startContractTemplateAction(
 /** Persist the finished template as the operator's rental agreement (called once
  *  the embedded editor emits `completed`). */
 export async function finalizeContractTemplateAction(templateId: string): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   if (!templateId) return { ok: false, error: "Missing template id." };
   const { error } = await createAdminClient()
     .from("operators")

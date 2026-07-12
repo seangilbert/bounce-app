@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { getSessionOperator } from "@/lib/operator/session";
+import { requireAdmin } from "@/lib/operator/session";
 import { createPromo, updatePromo, deletePromo, type PromoInput } from "@/lib/promos/repo";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -26,8 +26,9 @@ const PromoSchema = z
   .refine((d) => d.trigger !== "weekday" || d.weekdays.length > 0, { message: "Pick at least one weekday.", path: ["weekdays"] });
 
 export async function createPromoAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = PromoSchema.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid code." };
   try {
@@ -40,8 +41,9 @@ export async function createPromoAction(input: unknown): Promise<ActionResult> {
 }
 
 export async function updatePromoAction(id: string, input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = PromoSchema.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid code." };
   try {
@@ -54,8 +56,9 @@ export async function updatePromoAction(id: string, input: unknown): Promise<Act
 }
 
 export async function deletePromoAction(id: string): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   try {
     await deletePromo(op.id, id);
     revalidatePath("/promos");

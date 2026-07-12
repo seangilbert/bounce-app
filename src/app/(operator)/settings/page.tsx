@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getSessionMembership } from "@/lib/operator/session";
 import { getQuoteQuota } from "@/lib/usage/ai-quotes";
 import { planCapabilities } from "@/lib/plans";
@@ -12,6 +13,7 @@ export default async function SettingsPage() {
   if (!membership) {
     return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
   }
+  if (membership.role !== "admin") redirect("/dashboard"); // employees: no settings
   const op = membership.operator;
   const quota = await getQuoteQuota(op);
   const apiAccess = planCapabilities(op).apiAccess;

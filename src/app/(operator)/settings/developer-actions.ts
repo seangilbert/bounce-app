@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSessionOperator } from "@/lib/operator/session";
+import { requireAdmin } from "@/lib/operator/session";
 import { planCapabilities } from "@/lib/plans";
 import {
   createApiKey,
@@ -13,10 +13,11 @@ import type { Operator } from "@/lib/inventory/types";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-/** Resolve the signed-in operator and gate on the Growing (apiAccess) plan. */
+/** Admin-only + gated on the Growing (apiAccess) plan. */
 async function gate(): Promise<{ ok: true; op: Operator } | { ok: false; error: string }> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   if (!planCapabilities(op).apiAccess) return { ok: false, error: "API access requires the Growing plan." };
   return { ok: true, op };
 }

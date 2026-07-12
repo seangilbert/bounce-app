@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { getSessionOperator } from "@/lib/operator/session";
+import { requireAdmin } from "@/lib/operator/session";
 import { geocodeLocation } from "@/lib/operator/geocode";
 import { isValidTimeZone } from "@/lib/operator/time";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -18,8 +18,9 @@ const ProfileInput = z.object({
 });
 
 export async function updateProfileAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = ProfileInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
 
@@ -57,8 +58,9 @@ const PolicyInput = z.object({
 });
 
 export async function updatePolicyAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = PolicyInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
 
@@ -82,8 +84,9 @@ const CustomerPoliciesInput = z.object({
 });
 
 export async function updateCustomerPoliciesAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = CustomerPoliciesInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
   const { error } = await createAdminClient()
@@ -112,8 +115,9 @@ const ContractIdentityInput = z.object({
 });
 
 export async function updateContractIdentityAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = ContractIdentityInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
   const { error } = await createAdminClient()
@@ -138,8 +142,9 @@ const NotificationPrefsInput = z.object({
 });
 
 export async function updateNotificationPrefsAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = NotificationPrefsInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
   const { error } = await createAdminClient()
@@ -166,8 +171,9 @@ const BrandingInput = z.object({
 });
 
 export async function updateBrandingAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = BrandingInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
   const { error } = await createAdminClient()
@@ -194,8 +200,9 @@ const AvailabilityInput = z.object({
 });
 
 export async function updateAvailabilityAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = AvailabilityInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid availability." };
   const config = {
@@ -220,8 +227,9 @@ const PricingInput = z.object({
 });
 
 export async function updatePricingAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = PricingInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
   const { error } = await createAdminClient()
@@ -256,8 +264,9 @@ const DeliveryPricingInput = z.object({
 });
 
 export async function updateDeliveryPricingAction(input: unknown): Promise<ActionResult> {
-  const op = await getSessionOperator();
-  if (!op) return { ok: false, error: "Not signed in." };
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
   const p = DeliveryPricingInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid delivery pricing." };
   const { error } = await createAdminClient()

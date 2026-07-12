@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Confetti, SignOut } from "@phosphor-icons/react/dist/ssr";
-import { NAV, type NavItem } from "@/lib/operator/nav";
+import { NAV, navForRole, type NavItem } from "@/lib/operator/nav";
+import type { MemberRole } from "@/lib/operator/roles";
 import { calFilters, type CatFilter } from "@/lib/operator/calendar";
 import { createClient } from "@/utils/supabase/client";
 import type { Operator } from "@/lib/inventory/types";
@@ -12,7 +13,6 @@ function initialsOf(name: string): string {
   return name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
-const MAIN_NAV = NAV.filter((n) => n.href !== "/settings");
 const SETTINGS = NAV.find((n) => n.href === "/settings");
 
 function NavLink({ item }: { item: NavItem }) {
@@ -41,11 +41,14 @@ function NavLink({ item }: { item: NavItem }) {
 /** Desktop-only persistent sidebar (hidden on mobile, where the bottom bar takes over). */
 export function Sidebar({
   operator,
+  role,
   needsCount,
 }: {
   operator: Operator | null;
+  role: MemberRole;
   needsCount: number;
 }) {
+  const mainNav = navForRole(role).filter((n) => n.href !== "/settings");
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -99,7 +102,7 @@ export function Sidebar({
 
       {/* Primary nav */}
       <nav className="flex flex-col gap-1" aria-label="Primary">
-        {MAIN_NAV.map((item) => (
+        {mainNav.map((item) => (
           <NavLink
             key={item.href}
             item={item.href === "/inquiries" ? { ...item, badge: needsCount || undefined } : item}
@@ -140,7 +143,7 @@ export function Sidebar({
 
       {/* Settings + account, pinned to the bottom */}
       <div className="mt-auto flex flex-col gap-1 pt-4">
-        {SETTINGS ? <NavLink item={SETTINGS} /> : null}
+        {SETTINGS && role === "admin" ? <NavLink item={SETTINGS} /> : null}
         <div className="mt-1 flex items-center gap-2 rounded-2xl bg-sand/50 px-3 py-2.5">
           <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold text-white">
             {initialsOf(ownerName)}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripeClient } from "@/lib/payments/stripe";
-import { getSessionOperator } from "@/lib/operator/session";
+import { requireAdmin } from "@/lib/operator/session";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +11,9 @@ export const dynamic = "force-dynamic";
  * hosted onboarding Account Link. On return, /connect/return refreshes status.
  */
 export async function POST(req: Request) {
-  const operator = await getSessionOperator();
-  if (!operator) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const g = await requireAdmin();
+  if (!g.ok) return NextResponse.json({ error: g.error }, { status: 403 });
+  const operator = g.membership.operator;
 
   const origin = req.headers.get("origin") ?? new URL(req.url).origin;
   const stripe = getStripeClient();

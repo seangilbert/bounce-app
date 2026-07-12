@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionOperator } from "@/lib/operator/session";
+import { requireAdmin } from "@/lib/operator/session";
 import { uploadItemPhoto } from "@/lib/inventory/photos";
 
 export const dynamic = "force-dynamic";
@@ -7,8 +7,9 @@ export const dynamic = "force-dynamic";
 /** Upload one inventory item photo (multipart `file`). Operator-scoped; the
  *  image is resized client-side before it gets here. Returns { url }. */
 export async function POST(req: Request) {
-  const op = await getSessionOperator();
-  if (!op) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const g = await requireAdmin();
+  if (!g.ok) return NextResponse.json({ error: g.error }, { status: 403 });
+  const op = g.membership.operator;
 
   let form: FormData;
   try {

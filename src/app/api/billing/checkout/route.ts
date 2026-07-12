@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripeClient } from "@/lib/payments/stripe";
-import { getSessionOperator } from "@/lib/operator/session";
+import { requireAdmin } from "@/lib/operator/session";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { PLANS, TRIAL_DAYS, isPaidPlan, type PlanId } from "@/lib/plans";
 
@@ -12,10 +12,11 @@ export const dynamic = "force-dynamic";
  * customer if one exists. Returns the hosted checkout URL.
  */
 export async function POST(req: Request) {
-  const operator = await getSessionOperator();
-  if (!operator) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const g = await requireAdmin();
+  if (!g.ok) {
+    return NextResponse.json({ error: g.error }, { status: 403 });
   }
+  const operator = g.membership.operator;
 
   // An existing operator can upgrade by naming a target plan (e.g. a Free
   // operator who hit the AI-quote cap picks Solo); signup omits it and checks

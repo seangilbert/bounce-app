@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getSessionOperator } from "@/lib/operator/session";
+import { requireAdmin } from "@/lib/operator/session";
 import { uploadLogo, removeLogo } from "@/lib/operator/logo";
 
 export const dynamic = "force-dynamic";
 
 /** Upload the operator's storefront logo (multipart `file`). Returns { url }. */
 export async function POST(req: Request) {
-  const op = await getSessionOperator();
-  if (!op) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const g = await requireAdmin();
+  if (!g.ok) return NextResponse.json({ error: g.error }, { status: 403 });
+  const op = g.membership.operator;
 
   let form: FormData;
   try {
@@ -33,8 +34,9 @@ export async function POST(req: Request) {
 
 /** Remove the operator's logo. */
 export async function DELETE() {
-  const op = await getSessionOperator();
-  if (!op) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const g = await requireAdmin();
+  if (!g.ok) return NextResponse.json({ error: g.error }, { status: 403 });
+  const op = g.membership.operator;
   try {
     await removeLogo(op.id);
     revalidatePath("/settings");

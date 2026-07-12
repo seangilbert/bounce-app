@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { getSessionOperator } from "@/lib/operator/session";
+import { getSessionOperator, requireAdmin } from "@/lib/operator/session";
 import {
   getBooking,
   setBookingStatus,
@@ -217,6 +217,8 @@ export async function markCleanedAction(id: string): Promise<ActionResult> {
 }
 
 export async function cancelBookingAction(id: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: admin.error };
   const a = await authorize(id);
   if ("error" in a) return { ok: false, error: a.error };
   await setBookingStatus(id, "canceled"); // frees inventory (canceled doesn't reserve)
@@ -226,6 +228,8 @@ export async function cancelBookingAction(id: string): Promise<ActionResult> {
 
 /** Record the remaining balance as collected (e.g. cash on delivery). */
 export async function markBalancePaidAction(id: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: admin.error };
   const a = await authorize(id);
   if ("error" in a) return { ok: false, error: a.error };
   const balance = a.booking.total - (a.booking.deposit ?? 0);
@@ -248,6 +252,8 @@ export async function markBalancePaidAction(id: string): Promise<ActionResult> {
 
 /** Refund the captured payment (deposit or full) and cancel the booking. */
 export async function refundBookingAction(id: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: admin.error };
   const a = await authorize(id);
   if ("error" in a) return { ok: false, error: a.error };
   const order = await getOrderByBookingId(id);
