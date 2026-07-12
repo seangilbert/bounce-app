@@ -1,7 +1,16 @@
-import { type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/utils/supabase/middleware";
+import { frameAncestorsForKey } from "@/lib/api/embed-csp";
 
 export async function middleware(request: NextRequest) {
+  // The embeddable storefront: restrict who can frame it to the key's registered
+  // origins (defense against a third party embedding an operator's storefront).
+  if (request.nextUrl.pathname === "/embed") {
+    const res = NextResponse.next();
+    const csp = await frameAncestorsForKey(request.nextUrl.searchParams.get("key"));
+    res.headers.set("Content-Security-Policy", csp);
+    return res;
+  }
   return await updateSession(request);
 }
 

@@ -102,6 +102,11 @@ const CAT_META: Record<Category, { label: string; tint: string; ink: string; Ico
 
 const money = (cents: number) => `$${(cents / 100).toLocaleString("en-US")}`;
 
+/** Append a `key=value` query param to a URL, respecting an existing query. */
+function appendQuery(url: string, param: string): string {
+  return url + (url.includes("?") ? "&" : "?") + param;
+}
+
 function nextSaturday(): string {
   const d = new Date();
   d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
@@ -142,6 +147,7 @@ export function StoreShell({
   tagline,
   about,
   embed = false,
+  returnUrl = null,
 }: {
   operatorId?: string;
   slug: string;
@@ -153,6 +159,8 @@ export function StoreShell({
   /** Rendered inside an iframe on an operator's own site: drop the app nav,
    *  show just the chat storefront, and bridge resize + checkout to the parent. */
   embed?: boolean;
+  /** Host-page URL (validated) to return to after checkout, in embed mode. */
+  returnUrl?: string | null;
 }) {
   const opParam = operatorId ? `&operator=${operatorId}` : "";
   const [date, setDate] = useState(nextSaturday);
@@ -310,6 +318,21 @@ export function StoreShell({
     return () => ro.disconnect();
   }, [embed]);
 
+  // Embed bridge: the parent (embed.js) relays the Stripe checkout outcome after
+  // the customer returns to the host page — show a confirmation banner.
+  const [checkoutResult, setCheckoutResult] = useState<"success" | "cancel" | null>(null);
+  useEffect(() => {
+    if (!embed || typeof window === "undefined") return;
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; result?: string } | null;
+      if (d?.type === "bounce:checkout-result" && (d.result === "success" || d.result === "cancel")) {
+        setCheckoutResult(d.result);
+      }
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [embed]);
+
   const opName = operatorName ?? data?.operator?.name ?? "Bounce USA";
   const range = rangeLabel(date, endDate);
 
@@ -368,6 +391,22 @@ export function StoreShell({
       ) : null}
 
       <div className={embed ? "flex min-w-0 flex-1 flex-col" : "flex min-w-0 flex-1 flex-col lg:h-dvh lg:min-h-0"}>
+        {embed && checkoutResult ? (
+          <div
+            className={`flex items-center justify-between gap-3 px-5 py-3 text-[13.5px] font-bold ${
+              checkoutResult === "success" ? "bg-teal-tint text-teal-deep" : "bg-amber-tint text-amber-deep"
+            }`}
+          >
+            <span>
+              {checkoutResult === "success"
+                ? "Payment received — thank you! A confirmation is on its way to your email."
+                : "Checkout canceled — your cart is still here whenever you're ready."}
+            </span>
+            <button onClick={() => setCheckoutResult(null)} aria-label="Dismiss" className="opacity-70 hover:opacity-100">
+              <X size={16} weight="bold" />
+            </button>
+          </div>
+        ) : null}
         {/* Mobile-only top bar — the rail carries the brand on desktop. Hidden in embed. */}
         <header className={`flex flex-shrink-0 items-center justify-between border-b border-sand bg-cream/90 px-5 py-3.5 backdrop-blur ${embed ? "hidden" : "lg:hidden"}`}>
           <div className="flex items-center gap-2.5">
@@ -529,6 +568,7 @@ export function StoreShell({
           lines={cartLines}
           subtotal={subtotal}
           embed={embed}
+          returnUrl={returnUrl}
           operatorId={operatorId}
           inquiryId={checkoutInquiryId}
           depositPercent={data?.operator?.depositPercent ?? DEPOSIT_PERCENT}
@@ -564,6 +604,7 @@ function CheckoutDrawer({
   damagePolicy,
   deliveryWindows,
   embed = false,
+  returnUrl = null,
   onClose,
 }: {
   date: string;
@@ -582,6 +623,7 @@ function CheckoutDrawer({
   damagePolicy: string | null;
   deliveryWindows: string[];
   embed?: boolean;
+  returnUrl?: string | null;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
@@ -695,14 +737,22 @@ function CheckoutDrawer({
       const bJson = await bRes.json();
       if (!bRes.ok) throw new Error(bJson.error ?? "Could not create your booking.");
 
+      // In an embed with a validated host URL, return the customer to the
+      // operator's own page (with a result marker) instead of our success page.
+      const successUrl = returnUrl
+        ? appendQuery(returnUrl, "bounce_checkout=success")
+        : `${location.origin}/book/success`;
+      const cancelUrl = returnUrl
+        ? appendQuery(returnUrl, "bounce_checkout=cancel")
+        : `${location.origin}/book`;
       const cRes = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bookingId: bJson.booking.id,
           paymentType: payType,
-          successUrl: `${location.origin}/book/success`,
-          cancelUrl: `${location.origin}/book`,
+          successUrl,
+          cancelUrl,
         }),
       });
       const cJson = await cRes.json();

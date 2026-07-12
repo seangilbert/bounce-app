@@ -10,7 +10,11 @@ export const dynamic = "force-dynamic";
  * gated to the Growing plan. Rendered in `embed` mode: no app nav, just the
  * conversational storefront, with resize + checkout bridged to the parent page.
  */
-export default async function EmbedPage({ searchParams }: { searchParams: { key?: string } }) {
+export default async function EmbedPage({
+  searchParams,
+}: {
+  searchParams: { key?: string; return?: string };
+}) {
   const resolved = await resolveOperatorByKey(searchParams.key ?? null);
   const ok =
     resolved && resolved.key.type === "publishable" && planCapabilities(resolved.operator).apiAccess;
@@ -23,10 +27,24 @@ export default async function EmbedPage({ searchParams }: { searchParams: { key?
     );
   }
 
+  // Only honor a return URL whose origin the operator registered — never an
+  // arbitrary one (open-redirect / checkout-return safety).
+  let returnUrl: string | null = null;
+  if (searchParams.return) {
+    try {
+      if (resolved.key.allowedOrigins.includes(new URL(searchParams.return).origin)) {
+        returnUrl = searchParams.return;
+      }
+    } catch {
+      /* malformed return — ignore */
+    }
+  }
+
   const op = resolved.operator;
   return (
     <StoreShell
       embed
+      returnUrl={returnUrl}
       operatorId={op.id}
       slug={op.slug ?? ""}
       brandColor={op.brandColor}

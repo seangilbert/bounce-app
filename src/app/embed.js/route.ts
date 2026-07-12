@@ -17,7 +17,9 @@ const SCRIPT = `(function () {
   var base = new URL(script.src, location.href).origin;
 
   var iframe = document.createElement('iframe');
-  iframe.src = base + '/embed?key=' + encodeURIComponent(key);
+  // Pass the host page URL so checkout can return the customer here (validated
+  // server-side against the key's allowed origins).
+  iframe.src = base + '/embed?key=' + encodeURIComponent(key) + '&return=' + encodeURIComponent(location.href);
   iframe.title = 'Rentals';
   iframe.loading = 'lazy';
   iframe.setAttribute('scrolling', 'no');
@@ -31,6 +33,18 @@ const SCRIPT = `(function () {
   var target = targetId ? document.getElementById(targetId) : null;
   if (target) target.appendChild(iframe);
   else script.parentNode.insertBefore(iframe, script.nextSibling);
+
+  // Stripe returns the top page here with ?bounce_checkout=success|cancel — relay
+  // it into the iframe so the storefront can confirm, then clean the URL.
+  var params = new URLSearchParams(location.search);
+  var checkoutResult = params.get('bounce_checkout');
+  if (checkoutResult) {
+    iframe.addEventListener('load', function () {
+      iframe.contentWindow.postMessage({ type: 'bounce:checkout-result', result: checkoutResult }, base);
+    });
+    params.delete('bounce_checkout');
+    history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params.toString() : '') + location.hash);
+  }
 
   window.addEventListener('message', function (e) {
     if (e.origin !== base || !e.data || typeof e.data !== 'object') return;
