@@ -227,9 +227,9 @@ export async function cancelBookingAction(id: string): Promise<ActionResult> {
 }
 
 /** Record the remaining balance as collected (e.g. cash on delivery). */
+// Collecting the balance owed (cash on delivery) is operational — employees do
+// this in the field. Refunds/cancellations (money OUT) stay admin-only.
 export async function markBalancePaidAction(id: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
-  if (!admin.ok) return { ok: false, error: admin.error };
   const a = await authorize(id);
   if ("error" in a) return { ok: false, error: a.error };
   const balance = a.booking.total - (a.booking.deposit ?? 0);
