@@ -17,6 +17,8 @@ export interface ApiKeyRecord {
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  /** The full key, for publishable keys only (retrievable, Stripe-style). Null for secret. */
+  plaintext: string | null;
 }
 
 interface ApiKeyRow {
@@ -31,6 +33,7 @@ interface ApiKeyRow {
   created_at: string;
   last_used_at: string | null;
   revoked_at: string | null;
+  plaintext: string | null;
 }
 
 function rowToKey(r: ApiKeyRow): ApiKeyRecord {
@@ -46,6 +49,7 @@ function rowToKey(r: ApiKeyRow): ApiKeyRecord {
     createdAt: r.created_at,
     lastUsedAt: r.last_used_at,
     revokedAt: r.revoked_at,
+    plaintext: r.plaintext,
   };
 }
 
@@ -110,6 +114,8 @@ export async function createApiKey(
       prefix: gen.prefix,
       last4: gen.last4,
       key_hash: gen.hash,
+      // Publishable keys stay retrievable (they're browser-safe); secret keys never.
+      plaintext: input.type === "publishable" ? gen.fullKey : null,
       allowed_origins: normalizeOrigins(input.allowedOrigins),
       test_mode: input.testMode ?? false,
     })

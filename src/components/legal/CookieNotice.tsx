@@ -18,6 +18,9 @@ export function CookieNotice() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
+    // Never show inside an embedded iframe (the operator's own site handles its
+    // own cookie notice; our storefront only sets essential cookies there).
+    if (typeof window !== "undefined" && window.self !== window.top) return;
     try {
       if (localStorage.getItem(STORAGE_KEY) !== "dismissed") setShow(true);
     } catch {

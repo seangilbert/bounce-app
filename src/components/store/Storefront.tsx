@@ -141,6 +141,7 @@ export function StoreShell({
   logoUrl,
   tagline,
   about,
+  embed = false,
 }: {
   operatorId?: string;
   slug: string;
@@ -149,6 +150,9 @@ export function StoreShell({
   logoUrl?: string | null;
   tagline?: string | null;
   about?: string | null;
+  /** Rendered inside an iframe on an operator's own site: drop the app nav,
+   *  show just the chat storefront, and bridge resize + checkout to the parent. */
+  embed?: boolean;
 }) {
   const opParam = operatorId ? `&operator=${operatorId}` : "";
   const [date, setDate] = useState(nextSaturday);
@@ -282,13 +286,29 @@ export function StoreShell({
 
   const base = `/s/${slug}`;
   const pathname = usePathname();
-  const view = pathname.startsWith(`${base}/inventory`)
-    ? "inventory"
-    : pathname.startsWith(`${base}/saved`)
-      ? "saved"
-      : pathname.startsWith(`${base}/inspiration`)
-        ? "inspiration"
-        : "chat";
+  const view = embed
+    ? "chat"
+    : pathname.startsWith(`${base}/inventory`)
+      ? "inventory"
+      : pathname.startsWith(`${base}/saved`)
+        ? "saved"
+        : pathname.startsWith(`${base}/inspiration`)
+          ? "inspiration"
+          : "chat";
+
+  // Embed bridge: post our height to the parent page so the iframe can auto-size.
+  useEffect(() => {
+    if (!embed || typeof window === "undefined" || window.parent === window) return;
+    const post = () =>
+      window.parent.postMessage(
+        { type: "bounce:resize", height: document.documentElement.scrollHeight },
+        "*",
+      );
+    post();
+    const ro = new ResizeObserver(post);
+    ro.observe(document.documentElement);
+    return () => ro.disconnect();
+  }, [embed]);
 
   const opName = operatorName ?? data?.operator?.name ?? "Bounce USA";
   const range = rangeLabel(date, endDate);
@@ -336,14 +356,20 @@ export function StoreShell({
   return (
     <LightboxProvider>
     <div
-      className={`flex min-h-dvh w-full bg-cream ${cartCount > 0 ? "pb-36" : "pb-20"} lg:h-dvh lg:overflow-hidden lg:pb-0`}
+      className={
+        embed
+          ? `flex min-h-dvh w-full flex-col bg-cream ${cartCount > 0 ? "pb-36" : "pb-4"}`
+          : `flex min-h-dvh w-full bg-cream ${cartCount > 0 ? "pb-36" : "pb-20"} lg:h-dvh lg:overflow-hidden lg:pb-0`
+      }
       style={brandVars(brandColor)}
     >
-      <StoreSidebar base={base} operatorName={opName} logoUrl={logoUrl} phone="(508) 555-1234" />
+      {!embed ? (
+        <StoreSidebar base={base} operatorName={opName} logoUrl={logoUrl} phone="(508) 555-1234" />
+      ) : null}
 
-      <div className="flex min-w-0 flex-1 flex-col lg:h-dvh lg:min-h-0">
-        {/* Mobile-only top bar — the rail carries the brand on desktop. */}
-        <header className="flex flex-shrink-0 items-center justify-between border-b border-sand bg-cream/90 px-5 py-3.5 backdrop-blur lg:hidden">
+      <div className={embed ? "flex min-w-0 flex-1 flex-col" : "flex min-w-0 flex-1 flex-col lg:h-dvh lg:min-h-0"}>
+        {/* Mobile-only top bar — the rail carries the brand on desktop. Hidden in embed. */}
+        <header className={`flex flex-shrink-0 items-center justify-between border-b border-sand bg-cream/90 px-5 py-3.5 backdrop-blur ${embed ? "hidden" : "lg:hidden"}`}>
           <div className="flex items-center gap-2.5">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -492,7 +518,7 @@ export function StoreShell({
       {/* Mobile bottom stack — cart bar (when present) sits above the tab bar. */}
       <div className="fixed inset-x-0 bottom-0 z-30 lg:hidden">
         {cartBar}
-        <StoreBottomNav base={base} />
+        {!embed ? <StoreBottomNav base={base} /> : null}
       </div>
 
       {checkoutOpen ? (
@@ -502,6 +528,7 @@ export function StoreShell({
           days={days}
           lines={cartLines}
           subtotal={subtotal}
+          embed={embed}
           operatorId={operatorId}
           inquiryId={checkoutInquiryId}
           depositPercent={data?.operator?.depositPercent ?? DEPOSIT_PERCENT}
@@ -536,6 +563,7 @@ function CheckoutDrawer({
   cancellationPolicy,
   damagePolicy,
   deliveryWindows,
+  embed = false,
   onClose,
 }: {
   date: string;
@@ -553,6 +581,7 @@ function CheckoutDrawer({
   cancellationPolicy: string | null;
   damagePolicy: string | null;
   deliveryWindows: string[];
+  embed?: boolean;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", zip: "" });
@@ -678,7 +707,13 @@ function CheckoutDrawer({
       });
       const cJson = await cRes.json();
       if (!cRes.ok || !cJson.url) throw new Error(cJson.error ?? "Could not start checkout.");
-      location.href = cJson.url;
+      // In an embed, Stripe's hosted checkout can't render inside the iframe —
+      // hand the URL to the parent page to open at the top level.
+      if (embed && typeof window !== "undefined" && window.parent !== window) {
+        window.parent.postMessage({ type: "bounce:checkout", url: cJson.url }, "*");
+      } else {
+        location.href = cJson.url;
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
       setSubmitting(false);

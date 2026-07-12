@@ -971,6 +971,11 @@ function DeveloperSection({
   const [error, setError] = useState<string | null>(null);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [snippetCopied, setSnippetCopied] = useState(false);
+
+  const pubKey = apiKeys.find((k) => k.type === "publishable" && k.plaintext);
+  const base = typeof window !== "undefined" ? window.location.origin : "https://bounce-app.vercel.app";
+  const snippet = pubKey ? `<script src="${base}/embed.js" data-key="${pubKey.plaintext}" async></script>` : "";
 
   async function upgrade() {
     setUpgrading(true);
@@ -985,6 +990,17 @@ function DeveloperSection({
       else setUpgrading(false);
     } catch {
       setUpgrading(false);
+    }
+  }
+
+  async function copySnippet() {
+    if (!snippet) return;
+    try {
+      await navigator.clipboard.writeText(snippet);
+      setSnippetCopied(true);
+      setTimeout(() => setSnippetCopied(false), 2000);
+    } catch {
+      /* clipboard blocked */
     }
   }
 
@@ -1143,12 +1159,35 @@ function DeveloperSection({
         <div className="mt-2 rounded-lg bg-coral-tint px-3 py-2 text-sm font-semibold text-coral-deep">{error}</div>
       ) : null}
 
-      {operatorSlug ? (
-        <p className="mt-3 text-[12px] font-medium text-ink-mute">
-          The embeddable widget (coming soon) will use a publishable key + your slug{" "}
-          <code className="font-mono text-ink-soft">{operatorSlug}</code>.
-        </p>
-      ) : null}
+      <div className="mt-4 rounded-xl border border-sand-line bg-cream p-3">
+        <div className="text-[13px] font-bold text-ink-soft">Embed on your website</div>
+        {pubKey ? (
+          <>
+            <p className="mt-0.5 text-[12px] font-medium text-ink-mute">
+              Paste this where you want your storefront to appear.
+            </p>
+            <div className="mt-2 flex items-start gap-2">
+              <code className="flex-1 overflow-x-auto whitespace-pre rounded-lg bg-white px-3 py-2 font-mono text-[11.5px] leading-relaxed text-ink">
+                {snippet}
+              </code>
+              <button
+                onClick={copySnippet}
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-ink-mute hover:text-ink"
+                aria-label="Copy embed snippet"
+              >
+                {snippetCopied ? <CheckCircle size={16} weight="fill" className="text-teal" /> : <Copy size={16} weight="bold" />}
+              </button>
+            </div>
+            <p className="mt-2 text-[11.5px] font-medium text-ink-mute">
+              Add your site&rsquo;s domain to this key&rsquo;s <b>Allowed origins</b> so the embed can load there.
+            </p>
+          </>
+        ) : (
+          <p className="mt-0.5 text-[12px] font-medium text-ink-mute">
+            Create a <b>publishable</b> key above to get your copy-paste embed snippet.
+          </p>
+        )}
+      </div>
     </Section>
   );
 }
