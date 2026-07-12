@@ -2,7 +2,7 @@
 
 Path from the current working demo to a production-ready, **multi-tenant** SaaS that can take real customers and pay real operators.
 
-_Last updated: 2026-07-12._
+_Last updated: 2026-07-13._
 
 ## Where we are
 
@@ -41,6 +41,9 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
   - [ ] **Counsel review (your action)** — have a qualified lawyer review the Terms + Privacy drafts before you rely on them (they're general-purpose templates, not legal advice, and the pages say so on-screen). Confirm they fit your entity, jurisdiction, plan/billing terms, and data practices; incorporate any edits. Also confirm the **rental agreement** in SignWell is legally sound.
 
 ## Tier 1 — Operator product completeness
+
+- [~] **User management — multi-user accounts + roles** — an operator account can have multiple users with **Admin / Employee** roles (migrations `0044` role remap owner/staff→admin/employee, `0045` `operator_invites`). **Shipped:** RBAC via `getSessionMembership()` → `{operator, role}` + `requireAdmin()` guard on every admin-only action/route (settings, billing, connect, API keys, documents, promos, inventory CRUD, refund/cancel); employees redirected from admin pages + admin nav hidden; **aggregate financials hidden** from employees (dashboard revenue, Month insights, CRM Collected) while per-booking totals/balances stay. **Money line:** employees CAN take money **in** (collect balance card + cash) but not **out** (refund/cancel = admin). **Team UI** (Settings → Team, admin-only, **Growing-plan-gated**): invite by email+role, change role, remove — with a **last-admin guard** (can't demote/remove the only admin) and **auth-account deletion** on removal when the user is on no other team. **Invite flow** (`/invite/[token]`): invitee sets name + password (or accepts as themselves if already signed in as the invited email; a *different* signed-in user is told to sign out — no accidental consumption). **Identity:** greeting + sidebar show the signed-in user's own name/role (stored in `user_metadata`), not the operator's owner; **/account** self-service for name / email / password (all roles). Verified end-to-end (invite→accept→role→guards→removal→login) + shipped to prod. _Remaining/later: RLS on the new tables; multi-operator switcher (a user on several teams currently resolves to their earliest); per-page audit of any remaining employee-visible $ if you tighten further; the mobile `/more` page is still a placeholder._
+
 
 - [x] **Inventory management UI** — `/inventory` lists the operator's catalog; add/edit/delete items (name, category, price, rate, quantity, description, visibility, power) via a drawer + server actions (operator-scoped). (Item photos: separate item below.)
 - [x] **Inventory item photos (image upload)** — operators upload **multiple photos per item** in the inventory drawer (client-side resize → `POST /api/inventory/photo` uploads via the service role to a public `item-photos` bucket at `{operatorId}/{uuid}`), **choose a primary** (first) + remove; stored in the existing `items.images` column. Rendered on the **storefront item cards + operator inventory list** (icon fallback when none). Orphaned files cleaned up on edit-remove + item delete. Verified end-to-end (bucket → upload → public URL → card render) via the service role, since the upload UI itself is behind operator login. _Setup: migration `0017` creates the bucket (already applied to the shared DB during verification). Follow-ups: photo lightbox/carousel (own item below); `next/image` optimization (remotePatterns) instead of plain `<img>`; sweep for photos uploaded-then-abandoned before save._
