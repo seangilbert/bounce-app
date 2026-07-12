@@ -11,6 +11,7 @@ import { confirmBookingPaid, getBooking, setBookingDeposit } from "@/lib/booking
 import { getOperatorById } from "@/lib/inventory/repo";
 import { notifyBookingConfirmed, notifyOperatorNewBooking, notifyOperatorBalancePaid } from "@/lib/email";
 import { isBillingEvent, handleBillingEvent } from "@/lib/billing/webhook";
+import * as Sentry from "@sentry/nextjs";
 import type Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -86,6 +87,7 @@ export async function POST(req: Request) {
               }
             } catch (e) {
               console.error("[webhook] balance-paid email failed:", e);
+              Sentry.captureException(e, { tags: { webhook: "stripe", step: "balance_paid_email" } });
             }
             break;
           }
@@ -110,6 +112,7 @@ export async function POST(req: Request) {
               }
             } catch (e) {
               console.error("[webhook] booking emails failed:", e);
+              Sentry.captureException(e, { tags: { webhook: "stripe", step: "booking_emails" } });
             }
           }
 
@@ -124,6 +127,7 @@ export async function POST(req: Request) {
               await sendAgreementForOrder(order);
             } catch (e) {
               console.error("[webhook] agreement send failed (e-sign is best-effort):", e);
+              Sentry.captureException(e, { tags: { webhook: "stripe", step: "agreement_send" } });
             }
           }
         }
@@ -153,6 +157,7 @@ export async function POST(req: Request) {
     // Processing failed after we claimed the event — release the claim so the
     // provider's retry re-processes instead of being skipped as a duplicate.
     await releaseWebhookEvent(provider.name, event.id).catch(() => {});
+    Sentry.captureException(err, { tags: { webhook: "stripe", step: "handler" }, extra: { eventType: event.type } });
     const message = err instanceof Error ? err.message : "handler error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
