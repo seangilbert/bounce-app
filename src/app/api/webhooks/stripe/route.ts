@@ -115,9 +115,16 @@ export async function POST(req: Request) {
 
           // Send the signing agreement for the freshly-paid order (also moves
           // the booking to `contracted`). Guarded by esignDocumentId so a
-          // webhook retry never double-sends.
+          // webhook retry never double-sends. Best-effort: the booking is
+          // already paid + confirmed above, so an e-sign provider failure
+          // (expired plan, downtime) must NOT fail the webhook or trigger
+          // Stripe retries — log and move on.
           if (autoSendEnabled() && !order.esignDocumentId) {
-            await sendAgreementForOrder(order);
+            try {
+              await sendAgreementForOrder(order);
+            } catch (e) {
+              console.error("[webhook] agreement send failed (e-sign is best-effort):", e);
+            }
           }
         }
         break;
