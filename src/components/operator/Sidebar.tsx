@@ -145,13 +145,15 @@ export function Sidebar({
       <div className="mt-auto flex flex-col gap-1 pt-4">
         {SETTINGS && role === "admin" ? <NavLink item={SETTINGS} /> : null}
         <div className="mt-1 flex items-center gap-2 rounded-2xl bg-sand/50 px-3 py-2.5">
-          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold text-white">
-            {initialsOf(ownerName)}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-bold text-ink">{ownerName}</span>
-            <span className="block truncate text-[13px] font-medium text-ink-mute">{planLabel}</span>
-          </span>
+          <Link href="/account" className="flex min-w-0 flex-1 items-center gap-2" title="Your account">
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold text-white">
+              {initialsOf(ownerName)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px] font-bold text-ink">{ownerName}</span>
+              <span className="block truncate text-[13px] font-medium text-ink-mute">{planLabel}</span>
+            </span>
+          </Link>
           <button
             onClick={signOut}
             className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-ink-mute transition-colors hover:bg-sand hover:text-ink"
