@@ -6,10 +6,22 @@ import { createAdminClient } from "@/utils/supabase/admin";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-/** Accept an invite as the already-signed-in user. */
+/** Accept an invite as the already-signed-in user — only if they ARE the invited
+ *  person (their login email matches the invite). Prevents an admin who opens the
+ *  link in their own session from accidentally consuming it. */
 export async function acceptInviteAction(token: string): Promise<ActionResult> {
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "Please sign in first." };
+  const invite = await getInviteByToken(token);
+  if (!invite) return { ok: false, error: "This invitation is no longer valid." };
+  const { data } = await createAdminClient().auth.admin.getUserById(user.id);
+  const email = data?.user?.email?.toLowerCase();
+  if (email !== invite.email.toLowerCase()) {
+    return {
+      ok: false,
+      error: `This invite is for ${invite.email}. Sign out and open the link again to accept it.`,
+    };
+  }
   return acceptInvite(token, user.id);
 }
 

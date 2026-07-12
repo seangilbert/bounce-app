@@ -1,5 +1,6 @@
 import { getInviteByToken } from "@/lib/operator/members";
 import { getSessionUser } from "@/lib/operator/session";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { InviteAccept } from "@/components/operator/InviteAccept";
 
 export const dynamic = "force-dynamic";
@@ -21,13 +22,18 @@ export default async function InvitePage({ params }: { params: { token: string }
   }
 
   const user = await getSessionUser();
+  let sessionEmail: string | null = null;
+  if (user) {
+    const { data } = await createAdminClient().auth.admin.getUserById(user.id);
+    sessionEmail = data?.user?.email ?? null;
+  }
   return (
     <InviteAccept
       token={params.token}
       operatorName={invite.operatorName}
       email={invite.email}
       role={invite.role}
-      loggedIn={Boolean(user)}
+      sessionEmail={sessionEmail}
     />
   );
 }

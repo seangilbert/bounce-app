@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Confetti, CircleNotch } from "@phosphor-icons/react/dist/ssr";
 import { createClient } from "@/utils/supabase/client";
@@ -13,15 +12,23 @@ export function InviteAccept({
   operatorName,
   email,
   role,
-  loggedIn,
+  sessionEmail,
 }: {
   token: string;
   operatorName: string;
   email: string;
   role: MemberRole;
-  loggedIn: boolean;
+  sessionEmail: string | null;
 }) {
   const router = useRouter();
+  // Who's viewing this link?
+  const isInvitedPerson = !!sessionEmail && sessionEmail.toLowerCase() === email.toLowerCase();
+  const wrongAccount = !!sessionEmail && !isInvitedPerson;
+
+  async function signOutAndReload() {
+    await createClient().auth.signOut();
+    router.refresh();
+  }
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +82,21 @@ export function InviteAccept({
             You&rsquo;ve been invited as <b>{roleLabel(role)}</b> ({email}).
           </p>
 
-          {loggedIn ? (
+          {wrongAccount ? (
+            // Someone else (e.g. the admin) is signed in — don't consume the invite.
+            <>
+              <div className="mt-5 rounded-xl bg-amber-tint px-4 py-3 text-[13.5px] font-semibold text-amber-deep">
+                You&rsquo;re signed in as <b>{sessionEmail}</b>, but this invite is for <b>{email}</b>.
+                Sign out to accept it as {email}.
+              </div>
+              <button
+                onClick={signOutAndReload}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep"
+              >
+                Sign out to continue
+              </button>
+            </>
+          ) : isInvitedPerson ? (
             <button
               onClick={acceptAsMe}
               disabled={busy}
@@ -103,11 +124,7 @@ export function InviteAccept({
                 {busy ? <CircleNotch size={18} weight="bold" className="animate-spin" /> : null} Accept &amp; create account
               </button>
               <p className="mt-3 text-center text-[13px] font-medium text-ink-mute">
-                Already have an account?{" "}
-                <Link href="/login" className="font-bold text-brand hover:text-brand-deep">
-                  Sign in
-                </Link>{" "}
-                first, then reopen this link.
+                This creates your login for <b>{email}</b>.
               </p>
             </>
           )}
