@@ -22,6 +22,8 @@ export function InviteAccept({
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
+  // Logged-out view: create a new account vs sign in to an existing one.
+  const [mode, setMode] = useState<"create" | "signin">("create");
   // Who's viewing this link?
   const isInvitedPerson = !!sessionEmail && sessionEmail.toLowerCase() === email.toLowerCase();
   const wrongAccount = !!sessionEmail && !isInvitedPerson;
@@ -52,6 +54,13 @@ export function InviteAccept({
     setError(null);
     const res = await acceptInviteWithSignupAction({ token, password, name });
     if (!res.ok) {
+      // The email already has an account — pivot to sign-in instead of erroring.
+      if (/already have an account/i.test(res.error)) {
+        setMode("signin");
+        setError(null);
+        setBusy(false);
+        return;
+      }
       setError(res.error);
       setBusy(false);
       return;
@@ -60,6 +69,26 @@ export function InviteAccept({
     const { error: signInErr } = await createClient().auth.signInWithPassword({ email: res.email, password });
     if (signInErr) {
       setError("Account created — please sign in.");
+      setBusy(false);
+      return;
+    }
+    router.push("/dashboard");
+    router.refresh();
+  }
+
+  // Existing account for the invited email: sign in, then accept as themselves.
+  async function signInAndAccept() {
+    setBusy(true);
+    setError(null);
+    const { error: signInErr } = await createClient().auth.signInWithPassword({ email, password });
+    if (signInErr) {
+      setError("That password doesn't match the account for this email.");
+      setBusy(false);
+      return;
+    }
+    const res = await acceptInviteAction(token);
+    if (!res.ok) {
+      setError(res.error);
       setBusy(false);
       return;
     }
@@ -105,6 +134,40 @@ export function InviteAccept({
             >
               {busy ? <CircleNotch size={18} weight="bold" className="animate-spin" /> : null} Accept invitation
             </button>
+          ) : mode === "signin" ? (
+            // The invited email already has an account — sign in to join.
+            <>
+              <div className="mt-5 rounded-xl bg-brand-tint px-4 py-3 text-[13.5px] font-semibold text-ink-soft">
+                <b>{email}</b> already has a Bounce account. Sign in to join {operatorName}.
+              </div>
+              <label className="mt-4 block">
+                <span className="mb-1 block text-[13px] font-bold text-ink-soft">Password</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Your password"
+                  className="input"
+                  autoComplete="current-password"
+                />
+              </label>
+              <button
+                onClick={signInAndAccept}
+                disabled={busy || !password}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:bg-sand disabled:text-ink-mute"
+              >
+                {busy ? <CircleNotch size={18} weight="bold" className="animate-spin" /> : null} Sign in &amp; join {operatorName}
+              </button>
+              <p className="mt-3 text-center text-[13px] font-medium text-ink-mute">
+                Need a new account?{" "}
+                <button
+                  onClick={() => { setMode("create"); setError(null); }}
+                  className="font-bold text-brand hover:text-brand-deep"
+                >
+                  Create one
+                </button>
+              </p>
+            </>
           ) : (
             <>
               <label className="mt-5 block">
@@ -124,6 +187,7 @@ export function InviteAccept({
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 8 characters"
                   className="input"
+                  autoComplete="new-password"
                 />
               </label>
               <button
@@ -134,7 +198,13 @@ export function InviteAccept({
                 {busy ? <CircleNotch size={18} weight="bold" className="animate-spin" /> : null} Accept &amp; create account
               </button>
               <p className="mt-3 text-center text-[13px] font-medium text-ink-mute">
-                This creates your login for <b>{email}</b>.
+                Already have an account?{" "}
+                <button
+                  onClick={() => { setMode("signin"); setError(null); }}
+                  className="font-bold text-brand hover:text-brand-deep"
+                >
+                  Sign in
+                </button>
               </p>
             </>
           )}
