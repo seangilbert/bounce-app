@@ -98,10 +98,11 @@ export async function POST(req: Request) {
   }
   const operatorId = opRes.data.id as string;
 
-  // 3) Link the user as owner.
+  // 3) Link the user as the workspace admin (full access — the role migration
+  // 0044 replaced the old "owner" role with "admin"/"employee").
   const memRes = await admin
     .from("operator_members")
-    .insert({ operator_id: operatorId, user_id: userId, role: "owner" });
+    .insert({ operator_id: operatorId, user_id: userId, role: "admin" });
   if (memRes.error) {
     await admin.from("operators").delete().eq("id", operatorId);
     await admin.auth.admin.deleteUser(userId).catch(() => {});
