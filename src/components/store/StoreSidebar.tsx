@@ -24,8 +24,11 @@ function NavLink({ href, item, active }: { href: string; item: StoreNavItem; act
 /**
  * Storefront left rail (desktop only; the bottom bar takes over on mobile).
  * Same shape as the operator sidebar: brand → nav → account pinned to the
- * bottom. The account block is a guest placeholder — there's no customer auth
- * yet, so "Sign in" is inert.
+ * bottom, where "Sign in" hands off to the renter portal (/my).
+ *
+ * The portal is platform-level, not per-operator: a renter's bookings span
+ * every operator they've used, so it deliberately leaves the storefront rather
+ * than opening in place.
  */
 export function StoreSidebar({
   base,
@@ -86,23 +89,21 @@ export function StoreSidebar({
             <span className="flex-1">{phone}</span>
           </a>
         ) : null}
-        <div className="flex items-center gap-2 rounded-2xl bg-sand/50 px-3 py-2.5">
+        <Link
+          href="/my"
+          className="flex items-center gap-2 rounded-2xl bg-sand/50 px-3 py-2.5 transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-ring"
+        >
           <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold text-white">
             G
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-bold text-ink">Guest</span>
-            <span className="block truncate text-[13px] font-medium text-ink-mute">Not signed in</span>
+            <span className="block truncate text-[15px] font-bold text-ink">My bookings</span>
+            <span className="block truncate text-[13px] font-medium text-ink-mute">Sign in to view</span>
           </span>
-          <button
-            type="button"
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-ink-mute transition-colors hover:bg-sand hover:text-ink"
-            aria-label="Sign in"
-            title="Sign in"
-          >
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-ink-mute">
             <SignIn size={17} weight="bold" />
-          </button>
-        </div>
+          </span>
+        </Link>
         <div className="flex items-center justify-center gap-2 px-2 text-[12px] font-medium text-ink-faint">
           <Link href="/terms" className="hover:text-ink-mute">
             Terms

@@ -23,7 +23,12 @@ export function makeSupabaseMock(responses: QueuedResponse[]) {
 
   const builder: Record<string, unknown> = {};
   const chain = () => builder;
-  for (const m of ["select", "eq", "neq", "ilike", "in", "order", "gte", "lte", "lt", "gt", "is", "not", "limit", "range", "contains"]) {
+  for (const m of [
+    "select", "eq", "neq", "ilike", "in", "order", "gte", "lte", "lt", "gt", "is", "not",
+    "limit", "range", "contains",
+    // Writes chain the same way: `update(patch).eq(...).is(...).select()`.
+    "update", "insert", "upsert", "delete",
+  ]) {
     builder[m] = vi.fn(chain);
   }
   builder.maybeSingle = vi.fn(() => Promise.resolve(next()));
@@ -35,5 +40,12 @@ export function makeSupabaseMock(responses: QueuedResponse[]) {
   return {
     from: vi.fn(() => builder),
     rpc: vi.fn(() => Promise.resolve(next())),
+    /**
+     * The (shared) query builder, exposed so a test can assert on the FILTERS a
+     * query applied — `expect(db.builder.in).toHaveBeenCalledWith("customer_id",
+     * [...])`. For tenant-scoped reads the filter *is* the security control, so
+     * asserting only on the returned rows would miss the thing that matters.
+     */
+    builder: builder as Record<string, ReturnType<typeof vi.fn>>,
   };
 }

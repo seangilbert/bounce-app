@@ -19,6 +19,13 @@ const OPERATOR_PREFIXES = [
   "/onboarding",
 ];
 
+/** The renter's self-service portal — a *different* principal to the operator
+ *  app (see lib/customers/session.ts), so it gets its own gate and its own
+ *  sign-in page. `/my/login` is carved out below: it must stay reachable while
+ *  signed out, or there'd be no way in. */
+const CUSTOMER_PREFIXES = ["/my"];
+const CUSTOMER_LOGIN = "/my/login";
+
 /**
  * Refreshes the Supabase auth session and gates the operator app.
  *
@@ -35,6 +42,14 @@ export async function updateSession(request: NextRequest) {
   // the prefixes below (the app redirects unauthenticated visitors to /login).
   const isOperatorRoute = OPERATOR_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
   const isAuthPage = path === "/login" || path === "/signup";
+  // The portal, minus its own sign-in page.
+  const isCustomerRoute =
+    path !== CUSTOMER_LOGIN &&
+    CUSTOMER_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
+  // /my/login needs the session *refreshed* (so an already-signed-in renter is
+  // recognised and bounced onward) but must never be *gated* — hence it's in the
+  // "touch auth" set below while staying out of isCustomerRoute.
+  const touchesAuth = isOperatorRoute || isAuthPage || isCustomerRoute || path === CUSTOMER_LOGIN;
 
   // Strip our internal header from anything inbound — only this function sets it.
   const requestHeaders = new Headers(request.headers);
@@ -46,7 +61,7 @@ export async function updateSession(request: NextRequest) {
   // Public routes don't need auth — skip the getUser round-trip and the session
   // refresh. (Operator-scoped API routes not matched here verify for real via
   // getSessionOperator's fallback.)
-  if (!supabaseUrl || !supabaseAnonKey || (!isOperatorRoute && !isAuthPage)) {
+  if (!supabaseUrl || !supabaseAnonKey || !touchesAuth) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
@@ -75,11 +90,30 @@ export async function updateSession(request: NextRequest) {
     if (path !== "/") url.searchParams.set("next", path);
     return NextResponse.redirect(url);
   }
+  if (!user && isCustomerRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = CUSTOMER_LOGIN;
+    url.searchParams.set("next", path);
+    return NextResponse.redirect(url);
+  }
   if (user && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
+
+  // Note what we deliberately DON'T do: bounce an authenticated visitor away
+  // from /my/login. Telling the two principals apart needs a DB read, and this
+  // runs at the edge on every request — so both "signed-in" checks are pushed
+  // into the pages, which can afford the lookup:
+  //
+  //   /my/login  → if the session is a renter, the page redirects to /my.
+  //   (operator) → if the session is a renter with no membership, the operator
+  //                layout redirects to /my.
+  //
+  // Doing either one HERE by guessing would loop: an operator sent from
+  // /my/login → /my would be gated back to /my/login forever, since a session
+  // alone doesn't make them a renter.
 
   // Hand the verified id to Server Components; attach any rotated cookies.
   if (user) requestHeaders.set(VERIFIED_USER_HEADER, user.id);

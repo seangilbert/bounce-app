@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/operator/BottomNav";
 import { Sidebar } from "@/components/operator/Sidebar";
 import { getSessionMembership, getSessionOperatorOptions, userDisplayName } from "@/lib/operator/session";
+import { getSessionCustomer } from "@/lib/customers/session";
 import { countNeedsReview } from "@/lib/inquiries/repo";
 import { brandVars } from "@/lib/branding/palette";
 
@@ -21,6 +23,18 @@ export default async function OperatorLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const membership = await getSessionMembership();
+
+  // A signed-in user with no operator membership reached the operator app. The
+  // likeliest cause is now a RENTER: the middleware sends any authenticated
+  // visitor from /login to /dashboard, and it can't tell the two principals
+  // apart at the edge (see the note there). Send them to their own portal
+  // rather than showing them an empty operator shell.
+  //
+  // Users with neither membership nor a customer account fall through to the
+  // existing "No operator linked to your account." empty state — that's an
+  // orphaned operator login, a genuinely different problem.
+  if (!membership && (await getSessionCustomer())) redirect("/my");
+
   const operator = membership?.operator ?? null;
   const role = membership?.role ?? "employee";
   const userDisplay = membership ? userDisplayName(membership) : "Account";
