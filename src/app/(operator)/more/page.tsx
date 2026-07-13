@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr";
-import { getSessionMembership, userDisplayName } from "@/lib/operator/session";
+import { getSessionMembership, getSessionOperatorOptions, userDisplayName } from "@/lib/operator/session";
 import { roleLabel } from "@/lib/operator/roles";
 import { MORE_ITEMS } from "@/lib/operator/nav";
 import { SignOutButton } from "@/components/operator/SignOutButton";
+import { OperatorSwitcher } from "@/components/operator/OperatorSwitcher";
 
 function initialsOf(name: string): string {
   return name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
@@ -16,11 +17,18 @@ export default async function MorePage() {
   const membership = await getSessionMembership();
   const role = membership?.role ?? "employee";
   const userDisplay = membership ? userDisplayName(membership) : "Account";
+  const operatorOptions = await getSessionOperatorOptions();
   const items = MORE_ITEMS.filter((n) => role === "admin" || !n.adminOnly);
 
   return (
     <div className="mx-auto max-w-lg px-4 py-5">
       <h1 className="font-display text-2xl font-bold text-ink">More</h1>
+
+      {operatorOptions.length > 1 ? (
+        <div className="mt-4">
+          <OperatorSwitcher options={operatorOptions} />
+        </div>
+      ) : null}
 
       {/* Account */}
       <Link

@@ -1,8 +1,9 @@
 import { cache } from "react";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { getMembershipForUser } from "@/lib/inventory/repo";
+import { listMembershipsForUser } from "@/lib/inventory/repo";
+import { ACTIVE_OPERATOR_COOKIE, pickActiveMembership, type Membership } from "@/lib/operator/active-operator";
 import { VERIFIED_USER_HEADER } from "@/utils/supabase/middleware";
 import type { Operator } from "@/lib/inventory/types";
 import type { MemberRole } from "@/lib/operator/roles";
@@ -48,14 +49,26 @@ export function userDisplayName(m: { userName: string | null; userEmail: string 
   return local ? local.charAt(0).toUpperCase() + local.slice(1) : "there";
 }
 
+/** Every operator the signed-in user belongs to (with role), oldest first.
+ *  `cache()`d so the switcher + session resolution share one query. */
+export const listSessionMemberships = cache(async (): Promise<Membership[]> => {
+  const user = await getSessionUser();
+  if (!user) return [];
+  return listMembershipsForUser(user.id);
+});
+
 /**
- * The signed-in user's operator + their role on it — the basis for RBAC.
- * `cache()`d so the layout, pages, and permission checks share one resolution.
+ * The signed-in user's *active* operator + their role on it — the basis for RBAC.
+ * Honors the active-operator cookie when the user is a member of several teams
+ * (else falls back to their earliest). `cache()`d so the layout, pages, and
+ * permission checks share one resolution.
  */
 export const getSessionMembership = cache(async (): Promise<SessionMembership | null> => {
   const user = await getSessionUser();
   if (!user) return null;
-  const m = await getMembershipForUser(user.id);
+  const memberships = await listSessionMemberships();
+  const activeId = cookies().get(ACTIVE_OPERATOR_COOKIE)?.value ?? null;
+  const m = pickActiveMembership(memberships, activeId);
   if (!m) return null;
   let userEmail: string | null = null;
   let userName: string | null = null;
@@ -92,3 +105,24 @@ export async function requireAdmin(): Promise<
   if (m.role !== "admin") return { ok: false, error: "Only admins can do that." };
   return { ok: true, membership: m };
 }
+
+export interface OperatorOption {
+  id: string;
+  name: string;
+  role: MemberRole;
+  active: boolean;
+}
+
+/** Operators to show in the switcher — empty unless the user is on more than one
+ *  team (no switcher needed for a single-operator user). `cache()`d. */
+export const getSessionOperatorOptions = cache(async (): Promise<OperatorOption[]> => {
+  const memberships = await listSessionMemberships();
+  if (memberships.length <= 1) return [];
+  const active = await getSessionMembership();
+  return memberships.map((m) => ({
+    id: m.operator.id,
+    name: m.operator.name,
+    role: m.role,
+    active: m.operator.id === active?.operator.id,
+  }));
+});

@@ -198,6 +198,25 @@ export async function getMembershipForUser(
   return { operator: rowToOperator(row.operators), role: row.role };
 }
 
+/** ALL operators a user belongs to (with their role on each), oldest first.
+ *  Basis for the multi-operator switcher — a user invited to several teams. */
+export async function listMembershipsForUser(
+  userId: string,
+): Promise<{ operator: Operator; role: MemberRole }[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("operator_members")
+    .select("role, operators(*)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`listMembershipsForUser failed: ${error.message}`);
+  // Supabase types the to-one join loosely; mirror getMembershipForUser's cast.
+  const rows = (data ?? []) as unknown as { role: MemberRole; operators: OperatorRow | null }[];
+  return rows
+    .filter((r): r is { role: MemberRole; operators: OperatorRow } => !!r.operators)
+    .map((r) => ({ operator: rowToOperator(r.operators), role: r.role }));
+}
+
 /** Load an operator by their public storefront slug. */
 export async function getOperatorBySlug(slug: string): Promise<Operator | null> {
   const supabase = createAdminClient();

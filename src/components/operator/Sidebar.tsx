@@ -5,6 +5,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Confetti, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { NAV, navForRole, type NavItem } from "@/lib/operator/nav";
 import { roleLabel, type MemberRole } from "@/lib/operator/roles";
+import { OperatorSwitcher } from "./OperatorSwitcher";
+import type { OperatorOption } from "@/lib/operator/session";
 import { calFilters, type CatFilter } from "@/lib/operator/calendar";
 import { createClient } from "@/utils/supabase/client";
 import type { Operator } from "@/lib/inventory/types";
@@ -44,11 +46,13 @@ export function Sidebar({
   role,
   userDisplay,
   needsCount,
+  operatorOptions = [],
 }: {
   operator: Operator | null;
   role: MemberRole;
   userDisplay: string;
   needsCount: number;
+  operatorOptions?: OperatorOption[];
 }) {
   const mainNav = navForRole(role).filter((n) => n.href !== "/settings");
   const pathname = usePathname();
@@ -97,6 +101,13 @@ export function Sidebar({
           <div className="text-[12.5px] font-semibold text-ink-mute">{location}</div>
         </div>
       </div>
+
+      {/* Operator switcher — only when the user belongs to more than one team */}
+      {operatorOptions.length > 1 ? (
+        <div className="-mt-3 mb-5 px-1">
+          <OperatorSwitcher options={operatorOptions} />
+        </div>
+      ) : null}
 
       {/* Primary nav */}
       <nav className="flex flex-col gap-1" aria-label="Primary">
