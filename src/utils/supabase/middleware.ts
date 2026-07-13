@@ -46,10 +46,29 @@ export async function updateSession(request: NextRequest) {
   const isCustomerRoute =
     path !== CUSTOMER_LOGIN &&
     CUSTOMER_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
+
+  // The storefront is PUBLIC but session-AWARE: a signed-in renter sees their
+  // saved items, their conversation, and their name in the rail. It therefore
+  // needs its access token refreshed like any other authenticated surface —
+  // Server Components can't set cookies, so if the middleware doesn't rotate it
+  // here, the token silently expires and the customer appears logged out.
+  //
+  // But the storefront is also the public funnel, and most visitors are guests.
+  // Paying a getUser() round-trip on every guest page view to serve the minority
+  // who are signed in would be backwards — so we only opt in when the request
+  // actually carries a Supabase auth cookie. Guests cost exactly nothing.
+  const isStorefront = path.startsWith("/s/") || path === "/book";
+  const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
+
   // /my/login needs the session *refreshed* (so an already-signed-in renter is
   // recognised and bounced onward) but must never be *gated* — hence it's in the
-  // "touch auth" set below while staying out of isCustomerRoute.
-  const touchesAuth = isOperatorRoute || isAuthPage || isCustomerRoute || path === CUSTOMER_LOGIN;
+  // "touch auth" set while staying out of isCustomerRoute.
+  const touchesAuth =
+    isOperatorRoute ||
+    isAuthPage ||
+    isCustomerRoute ||
+    path === CUSTOMER_LOGIN ||
+    (isStorefront && hasAuthCookie);
 
   // Strip our internal header from anything inbound — only this function sets it.
   const requestHeaders = new Headers(request.headers);

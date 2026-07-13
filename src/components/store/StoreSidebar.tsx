@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Confetti, Phone, SignIn } from "@phosphor-icons/react/dist/ssr";
+import { CaretRight, Confetti, Phone, SignIn } from "@phosphor-icons/react/dist/ssr";
 import { STORE_NAV, isStoreNavActive, type StoreNavItem } from "@/lib/store/nav";
 
 function NavLink({ href, item, active }: { href: string; item: StoreNavItem; active: boolean }) {
@@ -35,11 +35,14 @@ export function StoreSidebar({
   operatorName,
   logoUrl,
   phone,
+  customer = null,
 }: {
   base: string;
   operatorName: string;
   logoUrl?: string | null;
   phone?: string;
+  /** The signed-in renter, or null for a guest. */
+  customer?: { name: string | null; email: string } | null;
 }) {
   const pathname = usePathname();
 
@@ -90,18 +93,22 @@ export function StoreSidebar({
           </a>
         ) : null}
         <Link
-          href="/my"
+          href={customer ? "/my" : `/my/login?next=${encodeURIComponent(base)}`}
           className="flex items-center gap-2 rounded-2xl bg-sand/50 px-3 py-2.5 transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-ring"
         >
-          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold text-white">
-            G
+          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-sm font-extrabold uppercase text-white">
+            {customer ? (customer.name?.trim()?.[0] ?? customer.email[0]) : "G"}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-bold text-ink">My bookings</span>
-            <span className="block truncate text-[13px] font-medium text-ink-mute">Sign in to view</span>
+            <span className="block truncate text-[15px] font-bold text-ink">
+              {customer ? (customer.name?.trim() || "My bookings") : "My bookings"}
+            </span>
+            <span className="block truncate text-[13px] font-medium text-ink-mute">
+              {customer ? customer.email : "Sign in to view"}
+            </span>
           </span>
           <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-ink-mute">
-            <SignIn size={17} weight="bold" />
+            {customer ? <CaretRight size={16} weight="bold" /> : <SignIn size={17} weight="bold" />}
           </span>
         </Link>
         <div className="flex items-center justify-center gap-2 px-2 text-[12px] font-medium text-ink-faint">

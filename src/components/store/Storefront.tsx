@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Confetti,
@@ -19,6 +20,7 @@ import {
   Sparkle,
   Heart,
   PaperPlaneTilt,
+  ChatCircleDots,
 } from "@phosphor-icons/react/dist/ssr";
 import type { Icon } from "@phosphor-icons/react";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
@@ -66,6 +68,21 @@ interface QuoteLine {
   lineTotal: number;
 }
 type ChatMsg = { role: "user" | "assistant"; content: string };
+
+/** The signed-in renter, as the storefront needs to know them. Deliberately
+ *  minimal — the storefront shows who you are and lets you save/resume; the
+ *  full account lives at /my. */
+export interface StoreCustomer {
+  name: string | null;
+  email: string;
+}
+/** A past chat thread with this operator, offered for the customer to pick up.
+ *  Mirrors lib/customers/conversations.ts. */
+export interface ResumableConversation {
+  inquiryId: string;
+  updatedAt: string;
+  messages: { id: string; sender: "customer" | "operator" | "ai"; body: string; createdAt: string }[];
+}
 interface QuoteBreakdown {
   lineItems: QuoteLine[];
   subtotal: number;
@@ -148,6 +165,9 @@ export function StoreShell({
   about,
   embed = false,
   returnUrl = null,
+  customer = null,
+  savedItemIds = [],
+  resumable = null,
 }: {
   operatorId?: string;
   slug: string;
@@ -161,6 +181,13 @@ export function StoreShell({
   embed?: boolean;
   /** Host-page URL (validated) to return to after checkout, in embed mode. */
   returnUrl?: string | null;
+  /** The signed-in renter, or null for a guest. Resolved server-side in the
+   *  storefront layout — the storefront is public but session-aware. */
+  customer?: StoreCustomer | null;
+  /** This operator's items that the renter has already saved. */
+  savedItemIds?: string[];
+  /** Their most recent conversation with this operator, offered (not forced). */
+  resumable?: ResumableConversation | null;
 }) {
   const opParam = operatorId ? `&operator=${operatorId}` : "";
   const [date, setDate] = useState(nextSaturday);
@@ -188,6 +215,67 @@ export function StoreShell({
   const [chatInquiryId, setChatInquiryId] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const [chatStatus, setChatStatus] = useState<ConversationResult["status"] | null>(null);
+
+  // --- Signed-in renter: saved items + conversation resume ---------------------
+  // Saves are optimistic: the heart flips instantly and rolls back if the write
+  // fails. A wishlist toggle isn't worth a spinner.
+  const [saved, setSaved] = useState<Set<string>>(() => new Set(savedItemIds));
+  const [savePrompt, setSavePrompt] = useState(false); // guest tapped a heart
+  // The resume banner is dismissed once the thread is loaded (or waved off), and
+  // never shown at all if they've already started typing.
+  const [resumeDismissed, setResumeDismissed] = useState(false);
+
+  async function toggleSave(itemId: string) {
+    if (!customer) {
+      // Guests can browse and book freely — only SAVING needs an identity to
+      // hang the wishlist on. Nudge rather than block.
+      setSavePrompt(true);
+      return;
+    }
+    if (!operatorId) return;
+
+    const wasSaved = saved.has(itemId);
+    setSaved((prev) => {
+      const next = new Set(prev);
+      if (wasSaved) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+
+    const res = await fetch("/api/customer/saved", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId, operatorId }),
+    });
+    if (!res.ok) {
+      // Roll back — the heart must never lie about what's on the server.
+      setSaved((prev) => {
+        const next = new Set(prev);
+        if (wasSaved) next.add(itemId);
+        else next.delete(itemId);
+        return next;
+      });
+    }
+  }
+
+  /** Load a past thread into the chat, so the customer can carry on from it. */
+  function resumeConversation() {
+    if (!resumable) return;
+    setChat(
+      resumable.messages
+        // `operator` messages were sent from the inbox, not the chat; they're
+        // still part of the conversation the customer saw, so they read as the
+        // assistant's side here.
+        .map((m) => ({
+          role: m.sender === "customer" ? ("user" as const) : ("assistant" as const),
+          content: m.body,
+        })),
+    );
+    setChatInquiryId(resumable.inquiryId);
+    setResumeDismissed(true);
+  }
+
+  const showResume = !!resumable && !resumeDismissed && chat.length === 0 && !embed;
   // Contact capture when the AI escalates ("review") so the operator can reply back.
   const [contactEmail, setContactEmail] = useState("");
   const [contactSaved, setContactSaved] = useState(false);
@@ -357,9 +445,21 @@ export function StoreShell({
 
   const inventoryScroller = (
     <div className="flex-1 overflow-y-auto px-5 pb-8 lg:min-h-0 lg:px-8">
-      <InventoryGrid items={items} loading={loading} cart={cart} setQty={setQty} />
+      <InventoryGrid
+        items={items}
+        loading={loading}
+        cart={cart}
+        setQty={setQty}
+        saved={saved}
+        onToggleSave={toggleSave}
+      />
     </div>
   );
+
+  // The Saved view is the same catalog, filtered to what they've hearted — so a
+  // saved item stays fully bookable (live availability, quantity picker, cart)
+  // instead of being an inert bookmark.
+  const savedItems = items.filter((i) => saved.has(i.id));
 
   const cartBar =
     cartCount > 0 ? (
@@ -387,7 +487,13 @@ export function StoreShell({
       style={brandVars(brandColor)}
     >
       {!embed ? (
-        <StoreSidebar base={base} operatorName={opName} logoUrl={logoUrl} phone="(508) 555-1234" />
+        <StoreSidebar
+          base={base}
+          operatorName={opName}
+          logoUrl={logoUrl}
+          phone="(508) 555-1234"
+          customer={customer}
+        />
       ) : null}
 
       <div className={embed ? "flex min-w-0 flex-1 flex-col" : "flex min-w-0 flex-1 flex-col lg:h-dvh lg:min-h-0"}>
@@ -451,6 +557,43 @@ export function StoreShell({
                     <span className="text-xs font-semibold text-ink-mute">· answers in seconds, 24/7</span>
                   </div>
                 </div>
+
+                {/* A returning customer's last thread — OFFERED, not auto-loaded.
+                    Someone back after a few weeks is usually planning a different
+                    party, so dropping them mid-old-conversation would confuse more
+                    than it helps. Disappears once they start typing. */}
+                {showResume ? (
+                  <div className="mx-5 mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-brand-ring bg-brand-tint px-4 py-3 lg:mx-7">
+                    <ChatCircleDots size={18} weight="fill" className="shrink-0 text-brand-deep" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-ink">Pick up where you left off?</p>
+                      <p className="text-xs font-medium text-ink-soft">
+                        You have a conversation with {operatorName ?? "this operator"} from{" "}
+                        {new Date(resumable!.updatedAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                        .
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={resumeConversation}
+                        className="rounded-xl bg-brand px-3 py-1.5 text-xs font-bold text-white transition hover:bg-brand-deep"
+                      >
+                        Resume
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setResumeDismissed(true)}
+                        className="rounded-xl px-2.5 py-1.5 text-xs font-bold text-ink-mute transition hover:text-ink"
+                      >
+                        Start fresh
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {/* Transcript — capped + scrolls on mobile, fills the column on desktop. */}
                 <div className="mt-4 flex max-h-[24rem] flex-1 flex-col gap-3 overflow-y-auto px-5 lg:max-h-none lg:min-h-0 lg:px-7">
@@ -536,11 +679,35 @@ export function StoreShell({
               {inventoryScroller}
             </section>
           ) : view === "saved" ? (
-            <EmptyState
-              icon={Heart}
-              title="Nothing saved yet"
-              body="Save rentals you love and they'll show up here, ready to add to your next event."
-            />
+            !customer ? (
+              <EmptyState
+                icon={Heart}
+                title="Sign in to save rentals"
+                body="Tap the heart on any rental to keep it here, ready to add to your next event."
+                action={{ label: "Sign in", href: `/my/login?next=${encodeURIComponent(`${base}/saved`)}` }}
+              />
+            ) : savedItems.length === 0 ? (
+              <EmptyState
+                icon={Heart}
+                title="Nothing saved yet"
+                body="Tap the heart on any rental and it'll show up here, ready to add to your next event."
+                action={{ label: "Browse rentals", href: `${base}/inventory` }}
+              />
+            ) : (
+              <section className="flex flex-1 flex-col bg-cream lg:min-h-0">
+                {catalogHeader}
+                <div className="flex-1 overflow-y-auto px-5 pb-8 lg:min-h-0 lg:px-8">
+                  <InventoryGrid
+                    items={savedItems}
+                    loading={loading}
+                    cart={cart}
+                    setQty={setQty}
+                    saved={saved}
+                    onToggleSave={toggleSave}
+                  />
+                </div>
+              </section>
+            )
           ) : (
             <EmptyState
               icon={Sparkle}
@@ -557,8 +724,50 @@ export function StoreShell({
       {/* Mobile bottom stack — cart bar (when present) sits above the tab bar. */}
       <div className="fixed inset-x-0 bottom-0 z-30 lg:hidden">
         {cartBar}
-        {!embed ? <StoreBottomNav base={base} /> : null}
+        {!embed ? <StoreBottomNav base={base} customer={customer} /> : null}
       </div>
+
+      {/* A guest tapped the heart. Saving is the ONLY thing here that needs an
+          account — browsing, quoting, and checkout all stay guest-first — so this
+          nudges rather than blocks, and never interrupts a booking. */}
+      {savePrompt ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 backdrop-blur-sm sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="save-prompt-title"
+          onClick={() => setSavePrompt(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-coral-tint text-coral">
+              <Heart size={24} weight="fill" />
+            </span>
+            <h2 id="save-prompt-title" className="mt-4 font-display text-xl font-extrabold text-ink">
+              Sign in to save
+            </h2>
+            <p className="mx-auto mt-2 max-w-xs text-sm font-medium leading-relaxed text-ink-soft">
+              Keep your favorite rentals in one place — and see your bookings while you&apos;re there.
+              No password needed.
+            </p>
+            <Link
+              href={`/my/login?next=${encodeURIComponent(`${base}/saved`)}`}
+              className="mt-5 block rounded-2xl bg-brand px-4 py-3 text-sm font-bold text-white transition hover:bg-brand-deep"
+            >
+              Sign in
+            </Link>
+            <button
+              type="button"
+              onClick={() => setSavePrompt(false)}
+              className="mt-2 w-full rounded-2xl px-4 py-2.5 text-sm font-bold text-ink-mute transition hover:text-ink"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {checkoutOpen ? (
         <CheckoutDrawer
@@ -1093,11 +1302,15 @@ function InventoryGrid({
   loading,
   cart,
   setQty,
+  saved,
+  onToggleSave,
 }: {
   items: ApiItem[];
   loading: boolean;
   cart: Record<string, number>;
   setQty: (id: string, q: number) => void;
+  saved: Set<string>;
+  onToggleSave: (itemId: string) => void;
 }) {
   if (loading) {
     return (
@@ -1111,14 +1324,31 @@ function InventoryGrid({
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((item) => (
-        <ItemCard key={item.id} item={item} qty={cart[item.id] ?? 0} onQty={(q) => setQty(item.id, q)} />
+        <ItemCard
+          key={item.id}
+          item={item}
+          qty={cart[item.id] ?? 0}
+          onQty={(q) => setQty(item.id, q)}
+          isSaved={saved.has(item.id)}
+          onToggleSave={() => onToggleSave(item.id)}
+        />
       ))}
     </div>
   );
 }
 
 /** Centered placeholder for views without content yet (Saved, Inspiration). */
-function EmptyState({ icon: Icon, title, body }: { icon: Icon; title: string; body: string }) {
+function EmptyState({
+  icon: Icon,
+  title,
+  body,
+  action,
+}: {
+  icon: Icon;
+  title: string;
+  body: string;
+  action?: { label: string; href: string };
+}) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-20 text-center">
       <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-tint text-brand">
@@ -1126,6 +1356,14 @@ function EmptyState({ icon: Icon, title, body }: { icon: Icon; title: string; bo
       </span>
       <h2 className="font-display text-2xl font-bold text-ink">{title}</h2>
       <p className="mt-2 max-w-sm text-sm font-medium text-ink-soft">{body}</p>
+      {action ? (
+        <Link
+          href={action.href}
+          className="mt-5 rounded-2xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-deep focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-ring"
+        >
+          {action.label}
+        </Link>
+      ) : null}
     </div>
   );
 }
@@ -1355,10 +1593,14 @@ function ItemCard({
   item,
   qty,
   onQty,
+  isSaved,
+  onToggleSave,
 }: {
   item: ApiItem;
   qty: number;
   onQty: (q: number) => void;
+  isSaved: boolean;
+  onToggleSave: () => void;
 }) {
   const { open } = useLightbox();
   const cat = toCategory(item.category);
@@ -1386,6 +1628,23 @@ function ItemCard({
             +{images.length - 1}
           </span>
         ) : null}
+        <button
+          type="button"
+          // stopPropagation: the photo area opens the lightbox, and the heart
+          // sits on top of it — without this, saving also opens the carousel.
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSave();
+          }}
+          aria-pressed={isSaved}
+          aria-label={isSaved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
+          title={isSaved ? "Saved" : "Save"}
+          className={`absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full backdrop-blur transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-ring ${
+            isSaved ? "bg-white text-coral shadow-sm" : "bg-ink/35 text-white hover:bg-ink/55"
+          }`}
+        >
+          <Heart size={17} weight={isSaved ? "fill" : "bold"} />
+        </button>
       </div>
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-start justify-between gap-2">
