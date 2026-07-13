@@ -73,14 +73,15 @@ export default function MarketingHome() {
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-sand-line bg-white px-3 py-1 text-[12.5px] font-bold text-ink-soft">
               <Sparkle size={14} weight="fill" className="text-brand" />
-              For party & equipment rental operators
+              Your AI office manager for party rentals
             </span>
             <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tight text-ink sm:text-5xl lg:text-6xl">
-              Quote every party in seconds.
+              Stop losing bookings to slow replies.
             </h1>
             <p className="mt-5 max-w-lg text-lg font-medium text-ink-soft">
-              Bounce is the all-in-one platform for rental operators — an AI assistant that answers
-              customers instantly, plus booking, payments, contracts, and delivery in one place.
+              Customers book whoever answers first. Bounce replies to every inquiry instantly — with
+              an accurate quote from your real inventory — so you never miss another booking request,
+              even when you&apos;re out on a job.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
@@ -139,9 +140,9 @@ export default function MarketingHome() {
       <section className="border-y border-sand-line bg-cream-2">
         <div className="mx-auto grid max-w-6xl gap-6 px-5 py-8 sm:grid-cols-3 sm:px-8">
           {[
-            "Answer customers 24/7 without lifting a finger",
-            "Stop double-booking with real availability",
-            "Get paid and signed before the truck leaves",
+            "Never miss another booking request",
+            "Reply to every customer instantly — even mid-delivery",
+            "Turn more inquiries into paid bookings",
           ].map((line) => (
             <div key={line} className="flex items-start gap-2 text-sm font-semibold text-ink-soft">
               <Check size={18} weight="bold" className="mt-0.5 shrink-0 text-teal" />
@@ -223,10 +224,10 @@ export default function MarketingHome() {
       <section className="px-5 pb-20 sm:px-8">
         <div className="mx-auto max-w-6xl overflow-hidden rounded-[32px] bg-ink px-8 py-14 text-center sm:py-20">
           <h2 className="mx-auto max-w-2xl font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-            Ready to book more parties?
+            Ready to stop losing bookings?
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-lg font-medium text-cream/70">
-            Set up your storefront in minutes and let the AI assistant do the quoting.
+            Set up in minutes and let your AI office manager handle the inbox — day and night.
           </p>
           <Link
             href="/signup?plan=free"

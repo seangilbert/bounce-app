@@ -4,13 +4,13 @@ import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 
 // Overrides the root layout's operator-app metadata for public marketing pages.
 export const metadata: Metadata = {
-  title: "Bounce — Software for party & equipment rental operators",
+  title: "Bounce — Your AI office manager for party rentals",
   description:
-    "Bounce is the all-in-one platform for rental operators: an AI quote assistant that answers customers instantly, plus booking, payments, e-signed contracts, and delivery routing.",
+    "Stop losing bookings to slow replies. Bounce answers every customer instantly with accurate quotes from your real inventory, plus booking, payments, e-signed contracts, and delivery — all in one place.",
   openGraph: {
-    title: "Bounce — Software for party & equipment rental operators",
+    title: "Bounce — Your AI office manager for party rentals",
     description:
-      "Quote every party in seconds. Booking, payments, contracts, and delivery — one platform, built AI-first.",
+      "Customers book whoever answers first. Bounce replies to every inquiry instantly so you never miss another booking request.",
     type: "website",
   },
 };
