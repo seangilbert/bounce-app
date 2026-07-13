@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TIMEZONES } from "@/lib/operator/time";
+import { POLICY_MAX_CHARS } from "@/lib/operator/policies";
 import {
   CheckCircle,
   CircleNotch,
@@ -611,6 +612,16 @@ function NotificationsSection({ operator }: { operator: OperatorSettings }) {
   );
 }
 
+function PolicyCount({ value }: { value: string }) {
+  const over = value.length > POLICY_MAX_CHARS;
+  return (
+    <div className={`mt-1 text-right text-[12px] font-semibold ${over ? "text-coral-deep" : "text-ink-faint"}`}>
+      {value.length.toLocaleString()} / {POLICY_MAX_CHARS.toLocaleString()}
+      {over ? " — too long, please trim" : ""}
+    </div>
+  );
+}
+
 function CustomerPoliciesSection({ operator }: { operator: OperatorSettings }) {
   const { busy, saved, error, save } = useSaver();
   const [cancellation, setCancellation] = useState(operator.cancellationPolicy ?? "");
@@ -626,19 +637,21 @@ function CustomerPoliciesSection({ operator }: { operator: OperatorSettings }) {
           <textarea
             value={cancellation}
             onChange={(e) => setCancellation(e.target.value)}
-            rows={3}
+            rows={4}
             placeholder="Describe your cancellation & refund terms…"
-            className="input resize-none"
+            className="input resize-y"
           />
+          <PolicyCount value={cancellation} />
         </Field>
         <Field label="Damage & cleaning policy" hint="e.g. Renter is responsible for damage; return clean and dry.">
           <textarea
             value={damage}
             onChange={(e) => setDamage(e.target.value)}
-            rows={3}
+            rows={4}
             placeholder="Describe damage, cleaning, or care terms…"
-            className="input resize-none"
+            className="input resize-y"
           />
+          <PolicyCount value={damage} />
         </Field>
       </div>
       <SaveBar

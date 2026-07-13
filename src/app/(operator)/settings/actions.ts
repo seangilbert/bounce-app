@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/operator/session";
+import { POLICY_MAX_CHARS } from "@/lib/operator/policies";
 import { geocodeLocation } from "@/lib/operator/geocode";
 import { isValidTimeZone } from "@/lib/operator/time";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -79,8 +80,8 @@ export async function updatePolicyAction(input: unknown): Promise<ActionResult> 
 }
 
 const CustomerPoliciesInput = z.object({
-  cancellationPolicy: z.string().trim().max(2000).optional().nullable(),
-  damagePolicy: z.string().trim().max(2000).optional().nullable(),
+  cancellationPolicy: z.string().trim().max(POLICY_MAX_CHARS).optional().nullable(),
+  damagePolicy: z.string().trim().max(POLICY_MAX_CHARS).optional().nullable(),
 });
 
 export async function updateCustomerPoliciesAction(input: unknown): Promise<ActionResult> {
