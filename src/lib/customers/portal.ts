@@ -50,15 +50,6 @@ export interface PortalPayment {
 /** Statuses where the booking is real money owed — a live commitment. */
 const COMMITTED = ["paid", "contracted", "confirmed", "delivered", "completed"];
 
-/** The `customers` row ids this account owns, across every operator. */
-async function ownedCustomerIds(accountId: string): Promise<string[]> {
-  const { data } = await createAdminClient()
-    .from("customers")
-    .select("id")
-    .eq("account_id", accountId);
-  return (data ?? []).map((r) => (r as { id: string }).id);
-}
-
 interface BookingRow {
   id: string;
   status: string;
@@ -70,10 +61,10 @@ interface BookingRow {
   total: number | null;
   operators: { name: string; slug: string; phone: string | null } | null;
   booking_items: { quantity: number; item: { name: string } | null }[] | null;
+  orders: OrderRow[] | null;
 }
 
 interface OrderRow {
-  booking_id: string;
   amount_total: number;
   status: string;
   created_at: string;
@@ -82,27 +73,36 @@ interface OrderRow {
 }
 
 /**
+ * One round-trip, and the ownership check is baked into it.
+ *
+ * `customers!inner(account_id)` + the matching filter is the security control:
+ * a booking is only visible if it hangs off a `customers` row this account owns.
+ * Filtering through the join (rather than pre-fetching the ids and passing them
+ * to `.in()`) is what lets this be a single query — and every Supabase call
+ * crosses a region boundary (~120ms), so query DEPTH is what the page's latency
+ * is made of. Embedding `orders` the same way removes a second hop.
+ *
+ * `booking_items` and `orders` are embedded, not joined-and-flattened, so a
+ * booking with three line items is still one row.
+ */
+const BOOKING_SELECT =
+  "id, status, start_date, end_date, delivery_address, delivery_window, subtotal, total, " +
+  "customers!inner(account_id), operators(name, slug, phone), " +
+  "booking_items(quantity, item:items(name)), " +
+  "orders(amount_total, status, created_at, metadata, esign_status)";
+
+/**
  * Every booking belonging to this account, across all operators, newest event
  * first. Returns [] for an account that has claimed nothing.
  */
 export async function listAccountBookings(accountId: string): Promise<PortalBooking[]> {
-  const customerIds = await ownedCustomerIds(accountId);
-  if (!customerIds.length) return [];
-
-  const { data: rows } = await createAdminClient()
+  const { data } = await createAdminClient()
     .from("bookings")
-    .select(
-      "id, status, start_date, end_date, delivery_address, delivery_window, subtotal, total, " +
-        "operators(name, slug, phone), booking_items(quantity, item:items(name))",
-    )
-    .in("customer_id", customerIds)
+    .select(BOOKING_SELECT)
+    .eq("customers.account_id", accountId)
     .order("start_date", { ascending: false });
 
-  const bookings = (rows ?? []) as unknown as BookingRow[];
-  if (!bookings.length) return [];
-
-  const payments = await paymentsByBooking(bookings.map((b) => b.id));
-  return bookings.map((b) => toPortalBooking(b, payments.get(b.id) ?? emptyPayments()));
+  return ((data ?? []) as unknown as BookingRow[]).map(toPortalBooking);
 }
 
 /**
@@ -115,69 +115,48 @@ export async function getAccountBooking(
   accountId: string,
   bookingId: string,
 ): Promise<PortalBooking | null> {
-  const customerIds = await ownedCustomerIds(accountId);
-  if (!customerIds.length) return null;
-
-  const { data: row } = await createAdminClient()
+  const { data } = await createAdminClient()
     .from("bookings")
-    .select(
-      "id, status, start_date, end_date, delivery_address, delivery_window, subtotal, total, " +
-        "operators(name, slug, phone), booking_items(quantity, item:items(name))",
-    )
+    .select(BOOKING_SELECT)
     .eq("id", bookingId)
-    // The ownership check. Without this the id alone would be enough.
-    .in("customer_id", customerIds)
+    // The ownership check. Without it, the booking id alone would be enough.
+    .eq("customers.account_id", accountId)
     .maybeSingle();
 
-  if (!row) return null;
-  const booking = row as unknown as BookingRow;
-  const payments = await paymentsByBooking([booking.id]);
-  return toPortalBooking(booking, payments.get(booking.id) ?? emptyPayments());
+  return data ? toPortalBooking(data as unknown as BookingRow) : null;
 }
-
-interface BookingPayments {
-  payments: PortalPayment[];
-  contractStatus: string | null;
-}
-
-const emptyPayments = (): BookingPayments => ({ payments: [], contractStatus: null });
 
 /**
- * Payment history + contract status, read from `orders`.
+ * Payment history + contract status, from the booking's embedded `orders`.
  *
  * `orders` has no "kind" column — deposit/balance/full lives in
  * `metadata.payment_type`, and a REFUND is not a new row but the original order
- * flipped to status 'refunded'. So net-paid must exclude refunded orders rather
- * than sum a signed amount. (getOrderByBookingId is no use here: it hides cash
+ * flipped to status 'refunded'. So net-paid must EXCLUDE refunded orders rather
+ * than sum a signed amount. (`getOrderByBookingId` is no use here: it hides cash
  * orders and returns only the newest.)
+ *
+ * Embedded rows come back unordered, so sort before reading "the last esign
+ * status" off them.
  */
-async function paymentsByBooking(bookingIds: string[]): Promise<Map<string, BookingPayments>> {
-  const out = new Map<string, BookingPayments>();
-  if (!bookingIds.length) return out;
-
-  const { data } = await createAdminClient()
-    .from("orders")
-    .select("booking_id, amount_total, status, created_at, metadata, esign_status")
-    .in("booking_id", bookingIds)
-    .order("created_at", { ascending: true });
-
-  for (const o of (data ?? []) as unknown as OrderRow[]) {
-    const entry = out.get(o.booking_id) ?? emptyPayments();
-    entry.payments.push({
+function readOrders(rows: OrderRow[]): { payments: PortalPayment[]; contractStatus: string | null } {
+  const sorted = [...rows].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+  let contractStatus: string | null = null;
+  const payments = sorted.map((o) => {
+    // Latest non-null wins.
+    if (o.esign_status) contractStatus = o.esign_status;
+    return {
       type: o.metadata?.payment_type ?? "payment",
       amountCents: o.amount_total,
       status: o.status,
       date: o.created_at,
       method: o.metadata?.method,
-    });
-    // Last non-null esign status wins (orders are ascending by date).
-    if (o.esign_status) entry.contractStatus = o.esign_status;
-    out.set(o.booking_id, entry);
-  }
-  return out;
+    };
+  });
+  return { payments, contractStatus };
 }
 
-function toPortalBooking(row: BookingRow, pay: BookingPayments): PortalBooking {
+function toPortalBooking(row: BookingRow): PortalBooking {
+  const pay = readOrders(row.orders ?? []);
   const total = row.total ?? row.subtotal; // `total` is nullable in the schema.
   const paidCents = pay.payments
     .filter((p) => p.status === "paid")

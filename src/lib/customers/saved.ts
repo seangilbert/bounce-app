@@ -20,6 +20,29 @@ export async function listSavedItemIds(accountId: string, operatorId: string): P
 }
 
 /**
+ * Same, but resolved by the operator's SLUG — so the storefront doesn't have to
+ * wait on `getOperatorBySlug` before it can start this query.
+ *
+ * Each Supabase round-trip costs ~120ms (app and DB are in different regions),
+ * so a query that *depends* on another query doubles the page's latency for no
+ * reason. Joining through items → operators lets this run in parallel with the
+ * operator lookup instead of after it.
+ *
+ * `accountId` is the auth user id: `customer_accounts.id` is 1:1 with
+ * `auth.users.id` (migration 0046), so the caller can pass the verified user id
+ * straight through without first loading the account row. A non-customer id
+ * simply matches nothing.
+ */
+export async function listSavedItemIdsBySlug(accountId: string, slug: string): Promise<string[]> {
+  const { data } = await createAdminClient()
+    .from("saved_items")
+    .select("item_id, items!inner(operators!inner(slug))")
+    .eq("account_id", accountId)
+    .eq("items.operators.slug", slug);
+  return (data ?? []).map((r) => (r as { item_id: string }).item_id);
+}
+
+/**
  * Toggle a save. Returns the new state, so the caller doesn't have to guess.
  *
  * The item is checked against the operator the caller claims — otherwise a
@@ -33,20 +56,19 @@ export async function toggleSavedItem(
 ): Promise<{ ok: true; saved: boolean } | { ok: false }> {
   const supabase = createAdminClient();
 
-  const { data: item } = await supabase
-    .from("items")
-    .select("id")
-    .eq("id", itemId)
-    .eq("operator_id", operatorId)
-    .maybeSingle();
-  if (!item) return { ok: false };
+  // Independent reads — run them together. Serially this was two ~120ms
+  // round-trips before the write even started.
+  const [{ data: item }, { data: existing }] = await Promise.all([
+    supabase.from("items").select("id").eq("id", itemId).eq("operator_id", operatorId).maybeSingle(),
+    supabase
+      .from("saved_items")
+      .select("id")
+      .eq("account_id", accountId)
+      .eq("item_id", itemId)
+      .maybeSingle(),
+  ]);
 
-  const { data: existing } = await supabase
-    .from("saved_items")
-    .select("id")
-    .eq("account_id", accountId)
-    .eq("item_id", itemId)
-    .maybeSingle();
+  if (!item) return { ok: false };
 
   if (existing) {
     const { error } = await supabase.from("saved_items").delete().eq("id", (existing as { id: string }).id);

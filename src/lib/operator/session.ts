@@ -21,11 +21,16 @@ export const getSessionUser = cache(async (): Promise<{ id: string } | null> => 
   const verifiedId = headers().get(VERIFIED_USER_HEADER);
   if (verifiedId) return { id: verifiedId };
 
+  // No header — an API route the middleware doesn't gate. Verify for real, but
+  // do it LOCALLY: `getClaims()` checks the ES256 signature + expiry against a
+  // cached public key (~1ms) instead of a ~120ms round-trip to the Auth server.
+  // Same guarantee — a forged or expired token is rejected — at a fraction of
+  // the cost. (Not `getSession()`, which verifies nothing.) See the note in
+  // utils/supabase/middleware.ts on the revocation trade-off.
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user ? { id: user.id } : null;
+  const { data } = await supabase.auth.getClaims();
+  const id = data?.claims?.sub;
+  return id ? { id } : null;
 });
 
 /**

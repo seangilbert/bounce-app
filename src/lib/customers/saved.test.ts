@@ -4,7 +4,7 @@ import { makeSupabaseMock, type QueuedResponse } from "@/test/supabase-mock";
 const { adminMock } = vi.hoisted(() => ({ adminMock: vi.fn() }));
 vi.mock("@/utils/supabase/admin", () => ({ createAdminClient: adminMock }));
 
-import { listSavedItemIds, toggleSavedItem } from "./saved";
+import { listSavedItemIds, listSavedItemIdsBySlug, toggleSavedItem } from "./saved";
 
 const ACCOUNT = "acct-1";
 const ITEM = "item-1";
@@ -34,6 +34,27 @@ describe("listSavedItemIds", () => {
   it("is empty for an account that has saved nothing", async () => {
     mockDb([{ data: [] }]);
     expect(await listSavedItemIds(ACCOUNT, OPERATOR)).toEqual([]);
+  });
+});
+
+describe("listSavedItemIdsBySlug", () => {
+  it("scopes by account and operator slug in a single query", async () => {
+    // Keyed off the slug so it can run in PARALLEL with the operator lookup
+    // rather than waiting on it — each round-trip costs ~120ms.
+    const db = mockDb([{ data: [{ item_id: "a" }] }]);
+
+    expect(await listSavedItemIdsBySlug(ACCOUNT, "bounce-usa")).toEqual(["a"]);
+
+    expect(db.from).toHaveBeenCalledTimes(1);
+    expect(db.builder.eq).toHaveBeenCalledWith("account_id", ACCOUNT);
+    expect(db.builder.eq).toHaveBeenCalledWith("items.operators.slug", "bounce-usa");
+  });
+
+  it("is empty for a signed-in user who isn't a customer at all", async () => {
+    // An operator browsing a storefront: their auth id matches no
+    // customer_accounts row, so the join simply finds nothing.
+    mockDb([{ data: [] }]);
+    expect(await listSavedItemIdsBySlug("some-operator-user", "bounce-usa")).toEqual([]);
   });
 });
 

@@ -97,11 +97,30 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // getUser() revalidates the token with the Supabase Auth server. Do not trust
-  // getSession() here — this is the authoritative check the whole app relies on.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verify the token LOCALLY rather than calling out to the Auth server.
+  //
+  // This project signs JWTs with ES256 (asymmetric) and publishes a JWKS
+  // endpoint, so `getClaims()` checks the signature + expiry in-process against
+  // a cached public key: ~1ms, versus ~120-180ms for `getUser()`, which is a
+  // network round-trip on EVERY gated request. That round-trip was the single
+  // biggest cost in a page navigation.
+  //
+  // It is not a weakening of the check — a tampered or expired token is still
+  // rejected (verified against the real key). Do NOT downgrade this to
+  // `getSession()`, which does no verification at all and would trust whatever
+  // is in the cookie.
+  //
+  // The one thing local verification cannot see is REVOCATION: a session signed
+  // out on another device stays valid here until its access token expires (1
+  // hour). That's the documented trade-off of asymmetric verification and
+  // Supabase's own recommended default. If a hard kill-switch is ever needed
+  // (say, for an offboarded employee), that path must call `getUser()`.
+  //
+  // When the token IS expired, getClaims falls through to a refresh via the
+  // client below, and `setAll` captures the rotated cookies — so the slow path
+  // still happens exactly when it must, and only then.
+  const { data: claims } = await supabase.auth.getClaims();
+  const user = claims?.claims?.sub ? { id: claims.claims.sub } : null;
 
   if (!user && isOperatorRoute) {
     const url = request.nextUrl.clone();
