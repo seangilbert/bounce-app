@@ -12,6 +12,7 @@ import {
   CircleNotch,
   CalendarBlank,
   ChatCircleDots,
+  Heart,
 } from "@phosphor-icons/react/dist/ssr";
 import type { Customer, CustomerBooking, CustomerInquiry } from "@/lib/customers/repo";
 import { BookingBuilder } from "@/components/operator/bookings/BookingBuilder";
@@ -21,6 +22,13 @@ import { updateCustomerNotesAction } from "@/app/(operator)/customers/actions";
 
 const money = (c: number) => `$${(c / 100).toLocaleString("en-US")}`;
 const COMMITTED = new Set(["paid", "contracted", "confirmed", "delivered", "completed"]);
+
+/** What a lead did to become one — mirrors the CRM list. */
+const SOURCE_ACTION: Record<string, string> = {
+  saved: "Saved an item",
+  inquiry: "Asked a question",
+  booking: "Booked",
+};
 
 function fmtRange(start: string, end: string): string {
   const f = (iso: string) =>
@@ -69,10 +77,16 @@ export function CustomerProfile({
 
   const { bookings, inquiries } = activity;
   const active = bookings.filter((b) => b.status !== "canceled");
-  const totalBooked = bookings.filter((b) => COMMITTED.has(b.status)).reduce((s, b) => s + b.total, 0);
+  const committed = bookings.filter((b) => COMMITTED.has(b.status));
+  const totalBooked = committed.reduce((s, b) => s + b.total, 0);
   const collected = bookings.reduce((s, b) => s + b.collectedCents, 0);
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = active.filter((b) => b.startDate >= today).length;
+
+  // A lead has shown interest but never committed — no bookings that count.
+  // Same definition as the CRM list (isLead = 0 committed bookings), derived
+  // here rather than from `source`, which is first-touch and never changes.
+  const isLeadRecord = committed.length === 0;
 
   async function saveNotes() {
     setSavingNotes(true);
@@ -100,11 +114,23 @@ export function CustomerProfile({
             {initials(customer.name, customer.email)}
           </span>
           <div className="min-w-0">
-            <h1 className="font-display text-2xl font-bold text-ink">{customer.name ?? customer.email ?? customer.phone ?? "Unknown"}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-display text-2xl font-bold text-ink">{customer.name ?? customer.email ?? customer.phone ?? "Unknown"}</h1>
+              {isLeadRecord ? (
+                <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-amber-tint px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-deep">
+                  {customer.source === "saved" ? <Heart size={9} weight="fill" /> : null}
+                  Lead
+                </span>
+              ) : null}
+            </div>
             <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[13.5px] font-medium text-ink-mute">
               {customer.email ? <span>{customer.email}</span> : null}
               {customer.phone ? <span>{customer.phone}</span> : null}
-              <span className="text-ink-faint">Customer since {fmtDateTime(customer.firstSeen)}</span>
+              <span className="text-ink-faint">
+                {isLeadRecord
+                  ? `${customer.source ? SOURCE_ACTION[customer.source] : "Lead"} · ${fmtDateTime(customer.firstSeen)}`
+                  : `Customer since ${fmtDateTime(customer.firstSeen)}`}
+              </span>
             </div>
           </div>
         </div>
@@ -120,12 +146,15 @@ export function CustomerProfile({
             </a>
           ) : null}
           <button onClick={() => setBuilderOpen(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep">
-            <Plus size={16} weight="bold" /> Book again
+            <Plus size={16} weight="bold" /> {isLeadRecord ? "Create booking" : "Book again"}
           </button>
         </div>
       </div>
 
-      {/* Stats — money aggregates (Collected/Total booked) are admin-only. */}
+      {/* Stats — money aggregates (Collected/Total booked) are admin-only, and
+          hidden entirely for a lead: "$0 collected" reads like a customer who
+          never paid rather than a prospect who hasn't booked yet (same reason
+          the CRM list swaps money for the source label on leads). */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { label: "Collected", value: money(collected), financial: true },
@@ -133,7 +162,7 @@ export function CustomerProfile({
           { label: "Bookings", value: String(active.length) },
           { label: "Upcoming", value: String(upcoming) },
         ]
-          .filter((s) => isAdmin || !s.financial)
+          .filter((s) => !s.financial || (isAdmin && !isLeadRecord))
           .map((s) => (
           <div key={s.label} className="rounded-2xl border border-sand bg-white px-4 py-3">
             <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">{s.label}</div>
