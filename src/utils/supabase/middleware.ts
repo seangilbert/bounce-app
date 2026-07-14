@@ -5,14 +5,32 @@ import { NextResponse, type NextRequest } from "next/server";
  *  Components, so they don't repeat the auth round-trip. Never trusted inbound. */
 export const VERIFIED_USER_HEADER = "x-operator-user-id";
 
-const OPERATOR_PREFIXES = [
+/**
+ * Every operator surface. This is the PRIMARY gate — a route missing from here
+ * is served to anonymous visitors, and its safety then rests entirely on the
+ * page remembering to check membership itself.
+ *
+ * That is exactly what went wrong: `/customers`, `/promos`, `/documents` and
+ * `/account` were added over time and never added here, so they rendered the
+ * operator shell (empty, but reachable) to anyone. No data leaked — each page
+ * did guard — but the defense was one forgotten `getSessionMembership()` away
+ * from a real leak.
+ *
+ * `middleware.test.ts` now reads the `(operator)` route group off disk and fails
+ * if any directory isn't covered here, so this can't drift again.
+ */
+export const OPERATOR_PREFIXES = [
   "/dashboard",
   "/calendar",
   "/bookings",
   "/inquiries",
   "/deliveries",
   "/inventory",
+  "/customers",
+  "/documents",
+  "/promos",
   "/settings",
+  "/account",
   "/more",
   "/billing",
   "/connect",
