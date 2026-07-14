@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { sendEmail } from "@/lib/email/send";
 import { loginCodeEmail } from "@/lib/email/login-code";
-import { ensureCustomerAccount, hasCustomerRecords, normalizeEmail } from "./accounts";
+import { ensureCustomerAccount, normalizeEmail } from "./accounts";
 
 /**
  * Passwordless sign-in for renters: we email a code, they type it back.
@@ -20,19 +20,35 @@ import { ensureCustomerAccount, hasCustomerRecords, normalizeEmail } from "./acc
  * note on the route. It exists so the server can log, alert, and be tested.
  */
 export type LoginCodeOutcome =
-  | "sent" // code minted + emailed
-  | "no_account" // email has never rented — nothing to sign in to
+  | "sent" // code minted + emailed (to a new or an existing account)
   | "mint_failed" // Supabase wouldn't issue an OTP
   | "delivery_failed"; // Resend wouldn't take it
 
+/**
+ * Sign in, or sign up — the same call, deliberately.
+ *
+ * This used to refuse any email that hadn't already rented ("you get an account
+ * by renting, not by asking"), so the portal was sign-in only. It's now open:
+ * anyone can create an account to save items before they ever book. The flow is
+ * identical either way — entering the emailed code both proves the address and
+ * creates the account — so the caller never has to know which it was, and we
+ * never render a "no such account" dead end.
+ *
+ * Two things that gate changed, worth being explicit about:
+ *
+ *  - It was the enumeration guard. That no longer matters: when anyone can
+ *    create an account, "does this email have one?" isn't a secret. The uniform
+ *    200 stays regardless — it costs nothing and keeps the outcome private.
+ *
+ *  - It was also the anti-mailbomb guard: we only ever emailed people who had
+ *    rented. Now any address can be sent a code, so the per-IP AND per-email
+ *    rate limits on the route are the only thing standing between us and being
+ *    used to spam a stranger's inbox. They are load-bearing now — do not relax
+ *    them. (If this is ever abused in the wild, a CAPTCHA on the request form is
+ *    the next lever.)
+ */
 export async function requestLoginCode(rawEmail: string): Promise<LoginCodeOutcome> {
   const email = normalizeEmail(rawEmail);
-
-  // The portal is not a signup surface — you get an account by renting, not by
-  // asking. If no operator has ever recorded this person as a customer, there's
-  // nothing to sign in to, and we mint no auth user for an address someone just
-  // typed into the box.
-  if (!(await hasCustomerRecords(email))) return "no_account";
 
   const account = await ensureCustomerAccount(email);
   if (!account.ok) return "mint_failed";

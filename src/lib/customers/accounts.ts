@@ -30,22 +30,6 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-/**
- * Does this email have anything to log in TO — i.e. has this person ever been
- * recorded as a customer by any operator?
- *
- * The portal is not a signup surface: you get an account by renting, not by
- * asking for one. Gating login-code requests on this means we never mint auth
- * users for arbitrary emails someone types into the box.
- */
-export async function hasCustomerRecords(email: string): Promise<boolean> {
-  const { data } = await createAdminClient()
-    .from("customers")
-    .select("id")
-    .eq("email", normalizeEmail(email))
-    .limit(1);
-  return (data ?? []).length > 0;
-}
 
 export async function getCustomerAccountById(userId: string): Promise<CustomerAccount | null> {
   const { data } = await createAdminClient()
@@ -60,7 +44,8 @@ export async function getCustomerAccountById(userId: string): Promise<CustomerAc
  * Find-or-create the auth user + `customer_accounts` row for a verified-by-us
  * email, returning the auth user id.
  *
- * Only ever called for an email that `hasCustomerRecords` — see above.
+ * Signing up and signing in are the same call now (see lib/customers/otp.ts),
+ * so this is reached for an address nobody has ever seen before.
  *
  * The auth user may already exist for a reason that has nothing to do with the
  * portal: this person could be an OPERATOR who also rents from someone else. In

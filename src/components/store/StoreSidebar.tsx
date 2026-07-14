@@ -104,7 +104,7 @@ export function StoreSidebar({
               {customer ? (customer.name?.trim() || "My bookings") : "My bookings"}
             </span>
             <span className="block truncate text-[13px] font-medium text-ink-mute">
-              {customer ? customer.email : "Sign in to view"}
+              {customer ? customer.email : "Sign in or create an account"}
             </span>
           </span>
           <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-ink-mute">

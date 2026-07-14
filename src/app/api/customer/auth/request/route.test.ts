@@ -28,7 +28,6 @@ describe("POST /api/customer/auth/request — indistinguishable responses", () =
   // endpoint becomes an oracle for "has this person rented?".
   it.each([
     ["a code was sent", "sent"],
-    ["the email has never rented", "no_account"],
     ["the mailer is down", "delivery_failed"],
     ["Supabase wouldn't mint a code", "mint_failed"],
   ])("returns the same 200 {ok:true} when %s", async (_label, outcome) => {
@@ -41,7 +40,7 @@ describe("POST /api/customer/auth/request — indistinguishable responses", () =
   });
 
   it("never echoes the outcome back to the caller", async () => {
-    requestLoginCode.mockResolvedValue("no_account");
+    requestLoginCode.mockResolvedValue("delivery_failed");
     const body = await (await post({ email: "jane@example.com" })).json();
     // No `sent`, no `outcome`, no `exists` — nothing to read the truth from.
     expect(Object.keys(body)).toEqual(["ok"]);

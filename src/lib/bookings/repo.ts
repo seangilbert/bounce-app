@@ -185,11 +185,15 @@ export async function createBooking(input: NewBooking): Promise<Booking> {
   // we can evaluate a repeat-customer promo (best-effort — never blocks a booking).
   let customerId: string | null = null;
   try {
-    customerId = await upsertCustomer(input.operatorId, {
-      email: input.customerEmail,
-      phone: input.customerPhone,
-      name: input.customerName,
-    });
+    customerId = await upsertCustomer(
+      input.operatorId,
+      {
+        email: input.customerEmail,
+        phone: input.customerPhone,
+        name: input.customerName,
+      },
+      { source: "booking" },
+    );
   } catch (e) {
     console.error("[customers] upsert on booking failed:", e);
   }

@@ -9,6 +9,9 @@ export interface Customer {
   notes: string | null;
   firstSeen: string;
   lastSeen: string;
+  /** How this record first came to exist (migration 0048). Null for legacy rows
+   *  the backfill couldn't attribute. First-touch — never rewritten. */
+  source: CustomerSource | null;
 }
 
 export interface CustomerStats {
@@ -35,6 +38,7 @@ interface CustomerRow {
   notes: string | null;
   first_seen: string;
   last_seen: string;
+  source: CustomerSource | null;
 }
 
 const rowToCustomer = (r: CustomerRow): Customer => ({
@@ -46,7 +50,21 @@ const rowToCustomer = (r: CustomerRow): Customer => ({
   notes: r.notes,
   firstSeen: r.first_seen,
   lastSeen: r.last_seen,
+  source: r.source ?? null,
 });
+
+/**
+ * A lead is someone who has shown interest but never committed money — they
+ * saved an item, or asked a question, and haven't booked.
+ *
+ * Derived from the bookings, NOT from `source`: `source` is first-touch and
+ * never changes, so someone who saved an item and then booked is still
+ * source='saved' but is emphatically no longer a lead. Deriving it from actual
+ * bookings is the only definition that stays true over time.
+ */
+export function isLead(stats: CustomerStats): boolean {
+  return stats.bookingCount === 0;
+}
 
 const norm = (s: string | null | undefined) => (s?.trim() ? s.trim() : null);
 const lower = (s: string | null | undefined) => (s?.trim() ? s.trim().toLowerCase() : null);
@@ -54,15 +72,29 @@ const lower = (s: string | null | undefined) => (s?.trim() ? s.trim().toLowerCas
 /** Bookings whose status counts toward spend / "a real booking". */
 const COMMITTED = new Set(["paid", "contracted", "confirmed", "delivered", "completed"]);
 
+/** How a customer record first came to exist (migration 0048). First-touch. */
+export type CustomerSource = "booking" | "inquiry" | "saved";
+
 /**
  * Resolve a customer for this operator by email (primary) then phone, filling any
  * missing fields and bumping last_seen; inserts a new one if none matches.
  * Returns the customer id (or null when there's nothing to key on).
  * Idempotent — safe to call on every booking/inquiry write.
+ *
+ * `opts.source` is written ONLY on insert. It's first-touch: someone who saved
+ * an item and later booked keeps source='saved', because that's where the
+ * relationship actually began. Whether they're a *customer* yet is a different
+ * question, answered by their bookings.
+ *
+ * `opts.accountId` links the record to the renter's platform login. Also
+ * insert-only — never re-pointed at a different account, since that would
+ * silently hand one person's history to another (same rule as
+ * claimCustomerRecords).
  */
 export async function upsertCustomer(
   operatorId: string,
   contact: { email?: string | null; phone?: string | null; name?: string | null },
+  opts: { source?: CustomerSource; accountId?: string } = {},
 ): Promise<string | null> {
   const email = lower(contact.email);
   const phone = norm(contact.phone);
@@ -95,13 +127,22 @@ export async function upsertCustomer(
     if (name && !existing.name) patch.name = name;
     if (email && !existing.email) patch.email = email;
     if (phone && !existing.phone) patch.phone = phone;
+    // Note what is NOT patched: `source` and `account_id`. Both are first-touch
+    // and must never be overwritten on a later interaction — see the doc above.
     await supabase.from("customers").update(patch).eq("id", existing.id);
     return existing.id;
   }
 
   const { data, error } = await supabase
     .from("customers")
-    .insert({ operator_id: operatorId, name, email, phone })
+    .insert({
+      operator_id: operatorId,
+      name,
+      email,
+      phone,
+      source: opts.source ?? null,
+      account_id: opts.accountId ?? null,
+    })
     .select("id")
     .single();
   if (error) {

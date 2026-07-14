@@ -1,17 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { hasCustomerRecords, ensureCustomerAccount, sendEmail, generateLink, captureMessage } =
-  vi.hoisted(() => ({
-    hasCustomerRecords: vi.fn(),
-    ensureCustomerAccount: vi.fn(),
-    sendEmail: vi.fn(),
-    generateLink: vi.fn(),
-    captureMessage: vi.fn(),
-  }));
+const { ensureCustomerAccount, sendEmail, generateLink, captureMessage } = vi.hoisted(() => ({
+  ensureCustomerAccount: vi.fn(),
+  sendEmail: vi.fn(),
+  generateLink: vi.fn(),
+  captureMessage: vi.fn(),
+}));
 
 vi.mock("./accounts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./accounts")>()),
-  hasCustomerRecords,
   ensureCustomerAccount,
 }));
 vi.mock("@/lib/email/send", () => ({ sendEmail }));
@@ -23,7 +20,6 @@ vi.mock("@/utils/supabase/admin", () => ({
 import { requestLoginCode } from "./otp";
 
 const happyPath = () => {
-  hasCustomerRecords.mockResolvedValue(true);
   ensureCustomerAccount.mockResolvedValue({ ok: true, userId: "user-1" });
   generateLink.mockResolvedValue({ data: { properties: { email_otp: "11229799" } }, error: null });
   sendEmail.mockResolvedValue({ ok: true });
@@ -45,7 +41,7 @@ describe("requestLoginCode — the happy path", () => {
   it("lowercases the email before doing anything with it", async () => {
     happyPath();
     await requestLoginCode("  Jane@Example.COM  ");
-    expect(hasCustomerRecords).toHaveBeenCalledWith("jane@example.com");
+    expect(ensureCustomerAccount).toHaveBeenCalledWith("jane@example.com");
     expect(generateLink).toHaveBeenCalledWith({ type: "magiclink", email: "jane@example.com" });
   });
 
@@ -58,16 +54,28 @@ describe("requestLoginCode — the happy path", () => {
   });
 });
 
-describe("requestLoginCode — enumeration resistance", () => {
-  it("sends nothing, and mints no auth user, for an email that has never rented", async () => {
-    hasCustomerRecords.mockResolvedValue(false);
+describe("requestLoginCode — signing up is the same call as signing in", () => {
+  it("creates an account for an email that has never rented", async () => {
+    // The portal used to refuse this outright ("no_account"): you got an account
+    // by renting, not by asking. It's now open, so anyone can sign up to save
+    // items before they ever book.
+    happyPath();
 
-    expect(await requestLoginCode("stranger@example.com")).toBe("no_account");
+    expect(await requestLoginCode("stranger@example.com")).toBe("sent");
 
-    expect(sendEmail).not.toHaveBeenCalled();
-    expect(ensureCustomerAccount).not.toHaveBeenCalled();
+    expect(ensureCustomerAccount).toHaveBeenCalledWith("stranger@example.com");
+    expect(sendEmail).toHaveBeenCalledOnce();
   });
 
+  it("is indistinguishable from signing in — same outcome either way", async () => {
+    happyPath();
+    const newcomer = await requestLoginCode("stranger@example.com");
+    const returning = await requestLoginCode("jane@example.com");
+    expect(newcomer).toBe(returning);
+  });
+});
+
+describe("requestLoginCode — failures stay private", () => {
   // The route maps EVERY outcome below to the same 200. These tests pin the
   // outcomes themselves; the route test pins the flattening.
   it("reports a delivery failure to Sentry rather than to the caller", async () => {

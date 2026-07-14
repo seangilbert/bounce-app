@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getSessionUser } from "@/lib/operator/session";
 import { toggleSavedItem } from "@/lib/customers/saved";
+import { ensureLeadCustomer } from "@/lib/customers/leads";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,10 @@ export async function POST(req: NextRequest) {
 
   const result = await toggleSavedItem(user.id, parsed.data.itemId, parsed.data.operatorId);
   if (!result.ok) return NextResponse.json({ error: "Could not save that item." }, { status: 400 });
+
+  // Saving — not un-saving — is the signal of interest, so it's what makes them
+  // a lead in the operator's CRM. Best-effort: it must never fail the save.
+  if (result.saved) await ensureLeadCustomer(user.id, parsed.data.operatorId);
 
   return NextResponse.json({ ok: true, saved: result.saved });
 }

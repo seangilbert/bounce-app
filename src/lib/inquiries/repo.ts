@@ -81,11 +81,15 @@ export async function createInquiry(input: CreateInquiryInput): Promise<{ id: st
   // Resolve/create the CRM customer first so the inquiry carries customer_id.
   let customerId: string | null = null;
   try {
-    customerId = await upsertCustomer(input.operatorId, {
-      email: input.customerEmail,
-      phone: input.customerPhone,
-      name: input.customerName,
-    });
+    customerId = await upsertCustomer(
+      input.operatorId,
+      {
+        email: input.customerEmail,
+        phone: input.customerPhone,
+        name: input.customerName,
+      },
+      { source: "inquiry" },
+    );
   } catch (e) {
     console.error("[customers] upsert on inquiry failed:", e);
   }
@@ -167,7 +171,7 @@ export async function setInquiryPhoneChannel(
   const supabase = createAdminClient();
   let customerId: string | null = null;
   try {
-    customerId = await upsertCustomer(operatorId, { phone });
+    customerId = await upsertCustomer(operatorId, { phone }, { source: "inquiry" });
   } catch (e) {
     console.error("[customers] upsert on sms bootstrap failed:", e);
   }
@@ -233,7 +237,11 @@ export async function setInquiryContact(
   const supabase = createAdminClient();
   let customerId: string | null = null;
   try {
-    customerId = await upsertCustomer(operatorId, { email: contact.email, name: contact.name });
+    customerId = await upsertCustomer(
+      operatorId,
+      { email: contact.email, name: contact.name },
+      { source: "inquiry" },
+    );
   } catch (e) {
     console.error("[customers] upsert on contact capture failed:", e);
   }
@@ -269,7 +277,7 @@ export async function linkInquiryToBooking(
   if (contact?.name) patch.customer_name = contact.name;
   if (contact && (contact.email || contact.phone)) {
     try {
-      const customerId = await upsertCustomer(operatorId, contact);
+      const customerId = await upsertCustomer(operatorId, contact, { source: "inquiry" });
       if (customerId) patch.customer_id = customerId;
     } catch (e) {
       console.error("[customers] upsert on inquiry link failed:", e);

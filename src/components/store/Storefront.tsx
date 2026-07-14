@@ -682,9 +682,12 @@ export function StoreShell({
             !customer ? (
               <EmptyState
                 icon={Heart}
-                title="Sign in to save rentals"
-                body="Tap the heart on any rental to keep it here, ready to add to your next event."
-                action={{ label: "Sign in", href: `/my/login?next=${encodeURIComponent(`${base}/saved`)}` }}
+                title="Save rentals you love"
+                body="Create a free account and tap the heart on any rental to keep it here, ready for your next event. Just your email — no password."
+                action={{
+                  label: "Create a free account",
+                  href: `/my/login?next=${encodeURIComponent(`${base}/saved`)}`,
+                }}
               />
             ) : savedItems.length === 0 ? (
               <EmptyState
@@ -746,17 +749,17 @@ export function StoreShell({
               <Heart size={24} weight="fill" />
             </span>
             <h2 id="save-prompt-title" className="mt-4 font-display text-xl font-extrabold text-ink">
-              Sign in to save
+              Save your favorites
             </h2>
             <p className="mx-auto mt-2 max-w-xs text-sm font-medium leading-relaxed text-ink-soft">
-              Keep your favorite rentals in one place — and see your bookings while you&apos;re there.
-              No password needed.
+              Create a free account to keep the rentals you love in one place. Just your email — no
+              password to remember, and you can still book as a guest.
             </p>
             <Link
               href={`/my/login?next=${encodeURIComponent(`${base}/saved`)}`}
               className="mt-5 block rounded-2xl bg-brand px-4 py-3 text-sm font-bold text-white transition hover:bg-brand-deep"
             >
-              Sign in
+              Create a free account
             </Link>
             <button
               type="button"

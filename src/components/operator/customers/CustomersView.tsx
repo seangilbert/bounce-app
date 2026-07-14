@@ -2,10 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { MagnifyingGlass, CaretRight, AddressBook } from "@phosphor-icons/react/dist/ssr";
-import type { CustomerListItem } from "@/lib/customers/repo";
+import { MagnifyingGlass, CaretRight, AddressBook, Heart } from "@phosphor-icons/react/dist/ssr";
+import { isLead, type CustomerListItem } from "@/lib/customers/repo";
 
 const money = (c: number) => `$${(c / 100).toLocaleString("en-US")}`;
+
+/** What a lead did to become one — the operator's cue for how to follow up. */
+const SOURCE_LABEL: Record<string, string> = {
+  saved: "Saved an item",
+  inquiry: "Asked a question",
+  booking: "Booked",
+};
 
 function initials(name: string | null, email: string | null): string {
   const src = (name ?? email ?? "?").trim();
@@ -31,6 +38,10 @@ export function CustomersView({
   const [itemFilter, setItemFilter] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  /** all | leads | customers — see the segment control below. */
+  const [kind, setKind] = useState<"all" | "leads" | "customers">("all");
+
+  const leadCount = useMemo(() => customers.filter((c) => isLead(c.stats)).length, [customers]);
 
   // Every item any customer has rented — the options for the item filter.
   const itemOptions = useMemo(
@@ -38,17 +49,21 @@ export function CustomersView({
     [customers],
   );
 
-  const filtersActive = q.trim() !== "" || itemFilter !== "" || from !== "" || to !== "";
+  const filtersActive =
+    q.trim() !== "" || itemFilter !== "" || from !== "" || to !== "" || kind !== "all";
   const clearFilters = () => {
     setQ("");
     setItemFilter("");
     setFrom("");
     setTo("");
+    setKind("all");
   };
 
   const shown = useMemo(() => {
     const term = q.trim().toLowerCase();
     return customers.filter((c) => {
+      if (kind === "leads" && !isLead(c.stats)) return false;
+      if (kind === "customers" && isLead(c.stats)) return false;
       if (
         term &&
         ![c.name, c.email, c.phone].some((v) => v?.toLowerCase().includes(term)) &&
@@ -63,7 +78,7 @@ export function CustomersView({
       }
       return true;
     });
-  }, [q, itemFilter, from, to, customers]);
+  }, [q, itemFilter, from, to, kind, customers]);
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-6 lg:px-8 lg:py-8">
@@ -130,6 +145,30 @@ export function CustomersView({
         ) : null}
       </div>
 
+      {/* Leads are people who've shown interest but never booked — they saved an
+          item or asked a question. Worth separating: an operator chasing warm
+          leads is doing different work from one looking after past customers. */}
+      <div className="mt-3 flex items-center gap-1 rounded-xl bg-sand/50 p-1 text-[13px] font-bold">
+        {(
+          [
+            ["all", `All ${customers.length}`],
+            ["leads", `Leads ${leadCount}`],
+            ["customers", `Customers ${customers.length - leadCount}`],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setKind(k)}
+            aria-pressed={kind === k}
+            className={`rounded-lg px-3 py-1.5 transition-colors ${
+              kind === k ? "bg-white text-ink shadow-sm" : "text-ink-mute hover:text-ink"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {filtersActive ? (
         <p className="mt-2 text-[13px] font-medium text-ink-mute">
           {shown.length} {shown.length === 1 ? "match" : "matches"}
@@ -140,7 +179,9 @@ export function CustomersView({
         <div className="mt-16 flex flex-col items-center gap-3 text-center">
           <AddressBook size={36} weight="light" className="text-ink-faint" />
           <p className="text-sm font-medium text-ink-mute">
-            {customers.length === 0 ? "No customers yet — they'll appear as people book or inquire." : "No matches."}
+            {customers.length === 0
+              ? "No customers yet — they'll appear as people book, inquire, or save an item."
+              : "No matches."}
           </p>
         </div>
       ) : (
@@ -155,19 +196,42 @@ export function CustomersView({
                 {initials(c.name, c.email)}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-bold text-ink">{c.name ?? c.email ?? c.phone ?? "Unknown"}</div>
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-bold text-ink">
+                    {c.name ?? c.email ?? c.phone ?? "Unknown"}
+                  </span>
+                  {isLead(c.stats) ? (
+                    <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-amber-tint px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-deep">
+                      {c.source === "saved" ? <Heart size={9} weight="fill" /> : null}
+                      Lead
+                    </span>
+                  ) : null}
+                </div>
                 <div className="truncate text-[13px] font-medium text-ink-mute">
                   {[c.email, c.phone].filter(Boolean).join(" · ") || "No contact"}
                 </div>
               </div>
               <div className="hidden flex-shrink-0 text-right sm:block">
-                {isAdmin ? (
-                  <div className="font-display text-sm font-bold text-ink tabular-nums">{money(c.stats.totalSpentCents)}</div>
-                ) : null}
-                <div className="text-[12px] font-medium text-ink-mute tabular-nums">
-                  {c.stats.bookingCount} {c.stats.bookingCount === 1 ? "booking" : "bookings"}
-                  {c.stats.upcomingCount > 0 ? ` · ${c.stats.upcomingCount} upcoming` : ""}
-                </div>
+                {isLead(c.stats) ? (
+                  // A lead has no money and no bookings. Showing "$0 · 0 bookings"
+                  // would read like a customer who never spent, which is a
+                  // different (and worse-sounding) thing than a fresh lead.
+                  <div className="text-[12px] font-medium text-ink-mute">
+                    {c.source ? SOURCE_LABEL[c.source] : "No bookings yet"}
+                  </div>
+                ) : (
+                  <>
+                    {isAdmin ? (
+                      <div className="font-display text-sm font-bold text-ink tabular-nums">
+                        {money(c.stats.totalSpentCents)}
+                      </div>
+                    ) : null}
+                    <div className="text-[12px] font-medium text-ink-mute tabular-nums">
+                      {c.stats.bookingCount} {c.stats.bookingCount === 1 ? "booking" : "bookings"}
+                      {c.stats.upcomingCount > 0 ? ` · ${c.stats.upcomingCount} upcoming` : ""}
+                    </div>
+                  </>
+                )}
               </div>
               <div className="hidden w-24 flex-shrink-0 text-right text-[12px] font-medium text-ink-mute md:block">
                 {fmtDate(c.stats.lastActivity)}

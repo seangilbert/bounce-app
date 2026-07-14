@@ -4,27 +4,13 @@ import { makeSupabaseMock } from "@/test/supabase-mock";
 const { adminMock } = vi.hoisted(() => ({ adminMock: vi.fn() }));
 vi.mock("@/utils/supabase/admin", () => ({ createAdminClient: adminMock }));
 
-import { normalizeEmail, claimCustomerRecords, hasCustomerRecords } from "./accounts";
+import { normalizeEmail, claimCustomerRecords } from "./accounts";
 
 beforeEach(() => adminMock.mockReset());
 
 describe("normalizeEmail", () => {
   it("lowercases and trims — email is identity here, so it must compare stably", () => {
     expect(normalizeEmail("  Jane@Example.COM ")).toBe("jane@example.com");
-  });
-});
-
-describe("hasCustomerRecords", () => {
-  it("is true when some operator has recorded this person", async () => {
-    const db = makeSupabaseMock([{ data: [{ id: "cust-a" }] }]);
-    adminMock.mockReturnValue(db);
-    expect(await hasCustomerRecords("Jane@Example.com")).toBe(true);
-    expect(db.builder.eq).toHaveBeenCalledWith("email", "jane@example.com");
-  });
-
-  it("is false when nobody has", async () => {
-    adminMock.mockReturnValue(makeSupabaseMock([{ data: [] }]));
-    expect(await hasCustomerRecords("stranger@example.com")).toBe(false);
   });
 });
 

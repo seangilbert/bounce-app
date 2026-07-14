@@ -99,10 +99,11 @@ export function CustomerLogin({ next }: { next: string }) {
       {step === "email" ? (
         <form onSubmit={requestCode}>
           <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink">
-            See your bookings
+            Sign in or create an account
           </h1>
           <p className="mt-2 text-[15px] leading-relaxed text-ink-soft">
-            Enter the email you used to book. We&apos;ll send you a sign-in code — no password needed.
+            Save rentals you love and see your bookings. Enter your email and we&apos;ll send a
+            code — no password to remember.
           </p>
           <label htmlFor="email" className="mt-6 block text-sm font-semibold text-ink">
             Email
@@ -149,8 +150,8 @@ export function CustomerLogin({ next }: { next: string }) {
             Check your email
           </h1>
           <p className="mt-2 text-[15px] leading-relaxed text-ink-soft">
-            If <span className="font-semibold text-ink">{email}</span> has bookings, we just sent it
-            a sign-in code.
+            We sent a code to <span className="font-semibold text-ink">{email}</span>. Enter it to
+            finish signing in.
           </p>
           <label htmlFor="code" className="mt-6 block text-sm font-semibold text-ink">
             Sign-in code
