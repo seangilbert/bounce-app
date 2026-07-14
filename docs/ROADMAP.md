@@ -23,43 +23,55 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 
 ---
 
-## 🚀 Go-Live Checklist (your actions, in order)
+## 🚀 Go-Live Checklist (your actions, in priority order)
 
-The single copy-paste list of everything that must be flipped/entered in the real accounts before taking real customers. Each item links to its detailed entry deeper in the roadmap. **All env changes are in Vercel → Production** unless noted. Nothing here is code — the code is built and verified; these are account/config actions only.
+> **The state of things, stated plainly (2026-07-13):** the product is feature-rich — booking engine, payments, contracts, AI quoting, storefront, embeddable widget, marketing site, renter portal, lead CRM — and **cannot take a single real customer.** Every remaining blocker is **account configuration, not code.** The right move is to *stop building features* and work this list.
+>
+> These are ordered by **leverage**, not by system. **All env changes are in Vercel → Production** unless noted; each item links to its detailed entry deeper in the roadmap.
 
-**1. Database — Supabase Pro on prod**
-- [ ] Upgrade the prod project (`urmqfxsajoboibjqhtmn`, "Rentals App") to the **Pro plan** — the free tier auto-pauses on inactivity and has no backups. _(See Go-live hardening, Tier 0.)_
+**1. Email — verify a Resend domain** ⭐ _(~30 min — the highest-leverage single action)_
+- [ ] Set `RESEND_FROM` to a **verified domain**. Today it's `onboarding@resend.dev`, which **only delivers to the Resend account owner** — i.e. to you and nobody else.
+- **Why this is first, not fifth:** it silently disables most of the product. No booking confirmations, no receipts, no operator alerts, no inquiry replies — **and nobody but you can log into the renter portal at all**, because the emailed sign-in code *is* the login. Everything else on this list is optional next to this one. _(See Transactional email, Tier 0.)_
 
-**2. Stripe — go live**
+**2. Stripe — go live** _(~1 hr — you cannot take money without it)_
 - [ ] Swap Vercel Production to **live keys**: `STRIPE_SECRET_KEY=sk_live_…` + `STRIPE_WEBHOOK_SECRET=whsec_…` from a **new live webhook endpoint** → `https://<app>/api/webhooks/stripe`, subscribed to `checkout.session.completed` + the 5 subscription events.
 - [ ] **Enable Connect in live mode** (operators re-onboard — test connected accounts don't carry over).
 - [ ] **Create live billing prices** (re-run `scripts/setup_billing.mjs` against the live account) so plan `lookup_key`s resolve.
 - [ ] Verify a real charge + refund + a subscription signup end-to-end. _(See Stripe — go live, Tier 0.)_
 
-**3. SignWell — turn contracts on** _(all four must be set together, or the `autoSendEnabled()` gate keeps agreements off — this is the current prod state)_
-- [ ] **`SIGNWELL_AUTO_SEND=true`** — ⚠️ **currently empty in prod → auto-send is OFF.** This is the master switch; agreements do not send until it's `true`.
-- [ ] **`SIGNWELL_TEMPLATE_ID`** — the **real** rental-agreement template (today's is the `basic-rental-agreement` placeholder). _(Confirm it has a value.)_
-- [ ] **`SIGNWELL_SENDER_EMAIL`** — the "from" address for signing requests. _(Confirm it has a value.)_
-- [ ] **`SIGNWELL_TEST_MODE=false`** — flips from free/non-binding **test** docs to **billable + legally binding** live docs. Only do this once the real template is in place.
-- [ ] Confirm the **live webhook** (`SIGNWELL_WEBHOOK_ID`) targets the prod endpoint.
-- [ ] After the template edits: flip `SIGNWELL_SINGLE_SIGNER=true` + `SIGNWELL_TEMPLATE_FIELDS=true` (single-signer + policy-embed items). _(See SignWell — go live, Tier 0.)_
-- _Note: B2 (operators upload their own contract) stays **blocked** until a template-capable SignWell tier — not required to go live._
+**3. Database — Supabase Pro on prod** _(~2 min)_
+- [ ] Upgrade the prod project (`urmqfxsajoboibjqhtmn`, "Rentals App") to the **Pro plan**. The free tier **auto-pauses on inactivity** and has **no backups** — a paused database is a dead app, and you'd hear about it from a customer rather than from a monitor. _(See Go-live hardening, Tier 0.)_
 
-**4. SMS — Twilio + A2P 10DLC** _(optional at launch; the Text channel stays hidden until done)_
-- [ ] Twilio account + number; **A2P 10DLC** brand/campaign registration (days-long carrier approval); set `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM`; point the inbound webhook at `/api/webhooks/twilio`; apply migration `0022`. _(See SMS external setup, Inquiries Phase 2.)_
+**4. Error monitoring — Sentry DSN** _(~10 min — code is deployed + dormant, waiting on the DSN)_
+- [ ] Create a Sentry project, then set **`NEXT_PUBLIC_SENTRY_DSN`** in Vercel Production. Optional for readable stack traces: `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT`.
+- **This matters more than it used to.** The renter portal's failures are *deliberately invisible to users* — a broken mailer still returns a normal `200`, so the endpoint can't be used as an enumeration oracle (see Customer self-service). **Sentry is the only place those failures surface.** With no DSN, a completely broken login is completely silent. _(See Error monitoring, Tier 2.)_
 
-**5. Email — Resend domain**
-- [ ] Set `RESEND_FROM` to a **verified domain** (default `onboarding@resend.dev` only delivers to the account owner). _(See Transactional email, Tier 0.)_
-
-**6. Legal**
+**5. Legal** _(before real customers, not before a soft launch)_
 - [ ] Fill the real values in `src/lib/legal/company.ts` (entity, jurisdiction, contact, address, effective date).
 - [ ] **Counsel review** of the Terms + Privacy drafts **and** the rental agreement's soundness. _(See Legal/trust, Tier 0.)_
 
-**7. Error monitoring — Sentry** _(recommended; code is deployed + dormant)_
-- [ ] Create a Sentry project, then set **`NEXT_PUBLIC_SENTRY_DSN`** in Vercel Production (turns on runtime error capture). Optional for readable stack traces: `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT`. _(See Error monitoring, Tier 2.)_
+**6. SignWell — turn contracts on** _(optional at launch — contracts are OFF today and the product works without them)_
+- [ ] **`SIGNWELL_AUTO_SEND=true`** — ⚠️ **currently empty in prod → auto-send is OFF.** This is the master switch; agreements do not send until it's `true`.
+- [ ] **`SIGNWELL_TEMPLATE_ID`** — the **real** rental-agreement template (today's is the `basic-rental-agreement` placeholder). _(Confirm it has a value.)_
+- [ ] **`SIGNWELL_SENDER_EMAIL`** — the "from" address for signing requests. _(Confirm it has a value.)_
+- [ ] **`SIGNWELL_TEST_MODE=false`** — flips from free/non-binding **test** docs to **billable + legally binding** live docs. Only once the real template is in place.
+- [ ] Confirm the **live webhook** (`SIGNWELL_WEBHOOK_ID`) targets the prod endpoint.
+- [ ] After the template edits: flip `SIGNWELL_SINGLE_SIGNER=true` + `SIGNWELL_TEMPLATE_FIELDS=true`. _(See SignWell — go live, Tier 0.)_
+- _All four must be set together, or the `autoSendEnabled()` gate keeps agreements off. B2 (operators upload their own contract) stays **blocked** until a template-capable SignWell tier — not required to go live._
 
-**8. Database — apply migrations `0046`–`0048`**
-- [ ] `./scripts/db-migrate.sh` (applies to prod + dev). Adds `customer_accounts` + `customers.account_id` (`0046`), `saved_items` (`0047`), and `customers.source` (`0048`) for the renter portal — **additive only** (new table + new nullable column; nothing existing is altered or dropped), so it's safe to apply ahead of the code deploy. Already applied to **dev**. _Note: the renter portal's sign-in codes ride on **Resend**, so item 5 (a verified `RESEND_FROM` domain) is a hard prerequisite for renters being able to log in at all — today's `onboarding@resend.dev` only delivers to the Resend account owner._
+**7. SMS — Twilio + A2P 10DLC** _(optional at launch; the Text channel stays hidden until done)_
+- [ ] Twilio account + number; **A2P 10DLC** brand/campaign registration (days-long carrier approval); set `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM`; point the inbound webhook at `/api/webhooks/twilio`; apply migration `0022`. _(See SMS external setup, Inquiries Phase 2.)_
+
+**~~8. Database — apply migrations `0046`–`0048`~~ ✅ DONE (2026-07-13)** — `customer_accounts` + `customers.account_id` (`0046`), `saved_items` (`0047`), `customers.source` (`0048`) applied to **prod + dev** via `./scripts/db-migrate.sh`; prod history verified at `0048`.
+
+### The one code item that isn't on this list — and should worry you
+
+**RLS.** Tenant isolation lives *entirely* in hand-written application code: every query goes through the service-role client, so one forgotten `.eq("operator_id", …)` leaks another operator's data with no second line of defense. **This pattern has now bitten twice** — both times harmlessly, both times by luck rather than design:
+
+1. The middleware gate was missing `/customers`, `/promos`, `/documents`, `/account` (fixed `5afc478`; nothing leaked only because each page happened to guard itself — now enforced by a test that reads the route group off disk).
+2. Every renter-portal query had to be hand-scoped by account, and correctness was established by writing tests for each one rather than by the database refusing to serve the wrong rows.
+
+It won't always be luck. Before real operators with real customer lists, this deserves the belt as well as the braces. _(Tracked under Multi-tenancy, Tier 0.)_
 
 ---
 
