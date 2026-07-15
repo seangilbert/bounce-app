@@ -7,11 +7,11 @@
  */
 export const LEGAL = {
   /** The product / brand name shown to users. */
-  product: "Bounce",
+  product: "Movables",
   /** The legal entity that operates the platform. */
   company: "[COMPANY LEGAL NAME]",
   /** Public website / app host. */
-  website: "bounce-app.vercel.app",
+  website: "movables.ai",
   /** Governing-law jurisdiction (e.g. "the State of Delaware, USA"). */
   governingLaw: "[STATE / JURISDICTION]",
   /** Where legal + privacy inquiries are sent. */

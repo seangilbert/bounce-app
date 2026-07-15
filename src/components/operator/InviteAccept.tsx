@@ -103,7 +103,7 @@ export function InviteAccept({
           <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand text-white">
             <Confetti size={20} weight="fill" />
           </span>
-          <span className="font-display text-lg font-extrabold tracking-tight text-ink">Bounce</span>
+          <span className="font-display text-lg font-extrabold tracking-tight text-ink">Movables</span>
         </div>
 
         <div className="rounded-[24px] border border-sand-line bg-white p-6 shadow-sm">
@@ -138,7 +138,7 @@ export function InviteAccept({
             // The invited email already has an account — sign in to join.
             <>
               <div className="mt-5 rounded-xl bg-brand-tint px-4 py-3 text-[13.5px] font-semibold text-ink-soft">
-                <b>{email}</b> already has a Bounce account. Sign in to join {operatorName}.
+                <b>{email}</b> already has a Movables account. Sign in to join {operatorName}.
               </div>
               <label className="mt-4 block">
                 <span className="mb-1 block text-[13px] font-bold text-ink-soft">Password</span>

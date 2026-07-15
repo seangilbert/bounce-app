@@ -30,7 +30,7 @@ export async function sendAgreementForOrder(order: Order): Promise<void> {
   // Platform identity — used only as a fallback when we can't resolve the
   // operator (or they haven't set a contact email).
   const fallbackEmail = process.env.SIGNWELL_SENDER_EMAIL;
-  const fallbackName = process.env.SIGNWELL_SENDER_NAME ?? "Bounce Party Rentals";
+  const fallbackName = process.env.SIGNWELL_SENDER_NAME ?? "Movables";
   if (!fallbackEmail) throw new Error("SIGNWELL_SENDER_EMAIL is not set.");
   if (!order.customerEmail) {
     console.warn(`[esign] order ${order.id} has no customer email; skipping agreement.`);

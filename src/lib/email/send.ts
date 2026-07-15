@@ -16,7 +16,7 @@ export interface EmailInput {
 
 export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; skipped?: boolean }> {
   const key = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM ?? "Bounce <onboarding@resend.dev>";
+  const from = process.env.RESEND_FROM ?? "Movables <onboarding@resend.dev>";
   if (!key) {
     console.warn(`[email] RESEND_API_KEY not set — skipping "${input.subject}"`);
     return { ok: false, skipped: true };

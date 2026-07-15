@@ -33,7 +33,7 @@ export function MarketingFooter() {
           </div>
         </div>
         <div className="mt-10 border-t border-sand-line pt-6 text-[13px] font-medium text-ink-faint">
-          © {new Date().getFullYear()} Bounce. All rights reserved.
+          © {new Date().getFullYear()} Movables. All rights reserved.
         </div>
       </div>
     </footer>

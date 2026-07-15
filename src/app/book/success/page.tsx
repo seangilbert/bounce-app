@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Confetti, CheckCircle, EnvelopeSimple, Signature } from "@phosphor-icons/react/dist/ssr";
 
-export const metadata = { title: "You're booked — Bounce USA" };
+export const metadata = { title: "You're booked" };
 
 export default function BookingSuccessPage() {
   return (

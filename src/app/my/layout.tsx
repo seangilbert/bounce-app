@@ -4,12 +4,12 @@ import { Confetti } from "@phosphor-icons/react/dist/ssr";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "My bookings — Bounce",
+  title: "My bookings — Movables",
   description: "See your party rental bookings, payments, and contracts.",
 };
 
 /**
- * Renter portal shell. Deliberately platform-branded (Bounce), not
+ * Renter portal shell. Deliberately platform-branded (Movables), not
  * operator-branded: this list spans every operator the person has rented from,
  * so wearing one operator's colors here would be a lie. Individual bookings
  * name their operator.
@@ -23,7 +23,7 @@ export default function PortalLayout({ children }: Readonly<{ children: React.Re
             <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-brand text-white">
               <Confetti size={18} weight="fill" />
             </span>
-            <span className="font-display text-lg font-extrabold tracking-tight text-ink">Bounce</span>
+            <span className="font-display text-lg font-extrabold tracking-tight text-ink">Movables</span>
           </Link>
           <span className="text-sm font-semibold text-ink-mute">My bookings</span>
         </div>

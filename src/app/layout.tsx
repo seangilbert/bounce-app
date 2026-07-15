@@ -18,8 +18,8 @@ const sans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Bounce USA — Operator",
-  description: "Bounce USA operator app.",
+  title: "Movables — Operator",
+  description: "Movables operator app.",
 };
 
 export default function RootLayout({

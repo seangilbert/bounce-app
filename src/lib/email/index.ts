@@ -28,7 +28,7 @@ function layout(businessName: string, heading: string, body: string): string {
       <h1 style="margin:0 0 12px;font-size:22px;font-weight:800;letter-spacing:-0.02em;">${heading}</h1>
       ${body}
     </div>
-    <div style="color:#9A9186;font-size:12px;margin-top:16px;text-align:center;">Sent by ${esc(businessName)} · powered by Bounce</div>
+    <div style="color:#9A9186;font-size:12px;margin-top:16px;text-align:center;">Sent by ${esc(businessName)} · powered by Movables</div>
   </div></body></html>`;
 }
 

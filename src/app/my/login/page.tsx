@@ -5,7 +5,7 @@ import { CustomerLogin } from "@/components/customer/CustomerLogin";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Sign in — Bounce" };
+export const metadata = { title: "Sign in — Movables" };
 
 /**
  * The "already signed in?" check the middleware deliberately doesn't do (it

@@ -79,7 +79,7 @@ export default function MarketingHome() {
               Stop losing bookings to slow replies.
             </h1>
             <p className="mt-5 max-w-lg text-lg font-medium text-ink-soft">
-              Customers book whoever answers first. Bounce replies to every inquiry instantly — with
+              Customers book whoever answers first. Movables replies to every inquiry instantly — with
               an accurate quote from your real inventory — so you never miss another booking request,
               even when you&apos;re out on a job.
             </p>
@@ -109,7 +109,7 @@ export default function MarketingHome() {
                 <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand text-white">
                   <ChatCircleText size={16} weight="fill" />
                 </span>
-                <div className="text-sm font-bold text-ink">Bounce Party Rentals</div>
+                <div className="text-sm font-bold text-ink">Sunny Party Rentals</div>
                 <span className="ml-auto flex items-center gap-1 text-[11px] font-bold text-teal">
                   <span className="h-1.5 w-1.5 rounded-full bg-teal" /> Online
                 </span>
@@ -160,7 +160,7 @@ export default function MarketingHome() {
               Everything you need to run rentals
             </h2>
             <p className="mt-3 text-lg font-medium text-ink-mute">
-              From the first customer question to the driver dropping off — Bounce handles the whole
+              From the first customer question to the driver dropping off — Movables handles the whole
               job so you can take on more parties.
             </p>
           </div>

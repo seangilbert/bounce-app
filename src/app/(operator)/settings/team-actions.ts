@@ -47,9 +47,9 @@ export async function inviteMemberAction(input: {
   try {
     await sendEmail({
       to: email,
-      subject: `You're invited to join ${operator.name} on Bounce`,
+      subject: `You're invited to join ${operator.name} on Movables`,
       html:
-        `<p><strong>${operator.name}</strong> invited you to join their team on Bounce as ` +
+        `<p><strong>${operator.name}</strong> invited you to join their team on Movables as ` +
         `${role === "admin" ? "an admin" : "an employee"}.</p>` +
         `<p><a href="${inviteUrl}">Accept the invitation</a> — this link expires in 7 days.</p>`,
     });

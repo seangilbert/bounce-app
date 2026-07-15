@@ -38,7 +38,7 @@ export default function LoginPage() {
             <Confetti size={22} weight="fill" />
           </span>
           <div>
-            <div className="font-display text-xl font-extrabold tracking-tight text-ink">Bounce</div>
+            <div className="font-display text-xl font-extrabold tracking-tight text-ink">Movables</div>
             <div className="text-xs font-semibold text-ink-mute">Operator sign in</div>
           </div>
         </div>

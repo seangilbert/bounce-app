@@ -80,7 +80,7 @@ export default function SignupPage() {
             <Confetti size={22} weight="fill" />
           </span>
           <div>
-            <div className="font-display text-xl font-extrabold tracking-tight text-ink">Bounce</div>
+            <div className="font-display text-xl font-extrabold tracking-tight text-ink">Movables</div>
             <div className="text-xs font-semibold text-ink-mute">Create your workspace</div>
           </div>
         </div>
@@ -91,7 +91,7 @@ export default function SignupPage() {
             Create an operator account — it takes a minute.
           </p>
 
-          <Field label="Business name" value={form.businessName} onChange={field("businessName")} placeholder="Bounce USA" required />
+          <Field label="Business name" value={form.businessName} onChange={field("businessName")} placeholder="Sunny Party Rentals" required />
           <Field label="Your name (optional)" value={form.ownerName} onChange={field("ownerName")} placeholder="Cheri Boyd" />
           <Field label="Email" type="email" value={form.email} onChange={field("email")} placeholder="you@business.com" required />
           <Field label="Password" type="password" value={form.password} onChange={field("password")} placeholder="At least 8 characters" required />

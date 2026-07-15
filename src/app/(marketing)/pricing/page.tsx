@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
 
 export const metadata: Metadata = {
-  title: "Pricing — Bounce",
+  title: "Pricing — Movables",
   description: "Start free. Solo at $29/mo and Growing at $59/mo unlock unlimited quotes, team members, and more.",
 };
 
@@ -18,14 +18,14 @@ const FAQ = [
   },
   {
     q: "How do payments to me work?",
-    a: "Bounce uses Stripe Connect, so customer payments go directly to your own bank account. You connect your account once during setup.",
+    a: "Movables uses Stripe Connect, so customer payments go directly to your own bank account. You connect your account once during setup.",
   },
   {
     q: "Do my customers need an account?",
     a: "No. Customers just visit your storefront link, get a quote from the AI assistant, and check out — no login required.",
   },
   {
-    q: "Can I use Bounce on my existing website?",
+    q: "Can I use Movables on my existing website?",
     a: "Yes. On the Growing plan you can embed your storefront and AI quoting directly into your own site, or connect via the API.",
   },
 ];

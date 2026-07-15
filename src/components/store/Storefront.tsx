@@ -421,7 +421,7 @@ export function StoreShell({
     return () => window.removeEventListener("message", onMsg);
   }, [embed]);
 
-  const opName = operatorName ?? data?.operator?.name ?? "Bounce USA";
+  const opName = operatorName ?? data?.operator?.name ?? "Party Rentals";
   const range = rangeLabel(date, endDate);
 
   // Catalog header (title + date range) — shared by the Chat and Inventory views.

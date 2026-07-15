@@ -4,13 +4,13 @@ import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 
 // Overrides the root layout's operator-app metadata for public marketing pages.
 export const metadata: Metadata = {
-  title: "Bounce — Your AI office manager for party rentals",
+  title: "Movables — Your AI office manager for party rentals",
   description:
-    "Stop losing bookings to slow replies. Bounce answers every customer instantly with accurate quotes from your real inventory, plus booking, payments, e-signed contracts, and delivery — all in one place.",
+    "Stop losing bookings to slow replies. Movables answers every customer instantly with accurate quotes from your real inventory, plus booking, payments, e-signed contracts, and delivery — all in one place.",
   openGraph: {
-    title: "Bounce — Your AI office manager for party rentals",
+    title: "Movables — Your AI office manager for party rentals",
     description:
-      "Customers book whoever answers first. Bounce replies to every inquiry instantly so you never miss another booking request.",
+      "Customers book whoever answers first. Movables replies to every inquiry instantly so you never miss another booking request.",
     type: "website",
   },
 };
