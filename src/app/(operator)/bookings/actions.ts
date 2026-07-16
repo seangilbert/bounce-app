@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { publicUrl } from "@/lib/urls";
 import { getSessionOperator, requireAdmin } from "@/lib/operator/session";
 import {
   getBooking,
@@ -124,8 +125,9 @@ export async function createOperatorBookingAction(
     }
 
     // link mode — email the customer a pay link (nothing is reserved until they pay).
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://bounce-app.vercel.app";
-    const payUrl = `${base}/pay/${booking.id}?type=${d.paymentType}`;
+    // The pay page is customer-facing, so it lives on the PUBLIC host, not the
+    // operator app host (they'd differ once the domain split is on).
+    const payUrl = publicUrl(`/pay/${booking.id}?type=${d.paymentType}`);
     try {
       await notifyQuoteLink(booking, op, payUrl, depositAmount(booking.total, op.depositPercent), d.message);
     } catch (err) {

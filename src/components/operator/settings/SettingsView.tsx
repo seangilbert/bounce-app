@@ -1006,7 +1006,12 @@ function DeveloperSection({
   const [snippetCopied, setSnippetCopied] = useState(false);
 
   const pubKey = apiKeys.find((k) => k.type === "publishable" && k.plaintext);
-  const base = typeof window !== "undefined" ? window.location.origin : "https://bounce-app.vercel.app";
+  // The widget must load from the PUBLIC host (the storefront), not this operator
+  // app host where the operator is copying the snippet — they differ once the
+  // domain split is on. Fall back to the current origin when no split is set.
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    (typeof window !== "undefined" ? window.location.origin : "https://bounce-app.vercel.app");
   const snippet = pubKey ? `<script src="${base}/embed.js" data-key="${pubKey.plaintext}" async></script>` : "";
 
   async function upgrade() {
