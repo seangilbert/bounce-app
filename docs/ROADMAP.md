@@ -29,9 +29,7 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 >
 > These are ordered by **leverage**, not by system. **All env changes are in Vercel → Production** unless noted; each item links to its detailed entry deeper in the roadmap.
 
-**1. Email — verify a Resend domain** ⭐ _(~30 min — the highest-leverage single action)_
-- [ ] Set `RESEND_FROM` to a **verified domain**. Today it's `onboarding@resend.dev`, which **only delivers to the Resend account owner** — i.e. to you and nobody else.
-- **Why this is first, not fifth:** it silently disables most of the product. No booking confirmations, no receipts, no operator alerts, no inquiry replies — **and nobody but you can log into the renter portal at all**, because the emailed sign-in code *is* the login. Everything else on this list is optional next to this one. _(See Transactional email, Tier 0.)_
+**~~1. Email — verify a Resend domain~~ ✅ DONE (2026-07-16)** — `movables.ai` verified in Resend (DKIM + SPF + MX all green; GoDaddy managed-SPF wrapper accepted). `RESEND_FROM=Movables <notifications@movables.ai>` set in Vercel Production. **Verified end-to-end on prod:** a renter-portal sign-in code delivered from `notifications@movables.ai`, landed in the inbox (not spam — SPF/DKIM/DMARC aligned under the existing `p=quarantine`), and the code logged in. All transactional email (sign-in codes, receipts, confirmations, operator alerts) is now live. _Note: Google Workspace (MX) handles receiving at `hello@movables.ai`; Resend handles sending from `notifications@`._
 
 **2. Stripe — go live** _(~1 hr — you cannot take money without it)_
 - [ ] Swap Vercel Production to **live keys**: `STRIPE_SECRET_KEY=sk_live_…` + `STRIPE_WEBHOOK_SECRET=whsec_…` from a **new live webhook endpoint** → `https://<app>/api/webhooks/stripe`, subscribed to `checkout.session.completed` + the 5 subscription events.
