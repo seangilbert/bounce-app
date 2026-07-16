@@ -11,6 +11,7 @@ import {
   Check,
 } from "@phosphor-icons/react/dist/ssr";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
+import { SignupCta } from "@/components/marketing/SignupCta";
 
 const FEATURES = [
   {
@@ -84,12 +85,12 @@ export default function MarketingHome() {
               even when you&apos;re out on a job.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link
-                href="/signup?plan=free"
+              <SignupCta
+                plan="free"
                 className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white hover:bg-brand-deep"
               >
                 Start free <ArrowRight size={16} weight="bold" />
-              </Link>
+              </SignupCta>
               <Link
                 href="/pricing"
                 className="inline-flex items-center rounded-full border border-sand bg-white px-6 py-3 text-sm font-bold text-ink hover:bg-cream"
@@ -229,12 +230,12 @@ export default function MarketingHome() {
           <p className="mx-auto mt-3 max-w-xl text-lg font-medium text-cream/70">
             Set up in minutes and let your AI office manager handle the inbox — day and night.
           </p>
-          <Link
-            href="/signup?plan=free"
+          <SignupCta
+            plan="free"
             className="mt-8 inline-flex items-center gap-2 rounded-full bg-brand px-7 py-3.5 text-sm font-bold text-white hover:bg-brand-deep"
           >
             Start free <ArrowRight size={16} weight="bold" />
-          </Link>
+          </SignupCta>
         </div>
       </section>
     </>

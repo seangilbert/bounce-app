@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { generateUniqueSlug } from "@/lib/inventory/repo";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { signupsOpen } from "@/lib/signups";
 import { accentForIndex } from "@/lib/branding/palette";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,13 @@ const SignupSchema = z.object({
  * service role; on partial failure we roll back what we created.
  */
 export async function POST(req: Request) {
+  // The authoritative gate. Hiding the marketing CTAs isn't enough — a direct
+  // POST here would still create an operator account — so refuse at the source
+  // while self-serve signup is closed (fail-safe: closed unless the flag is set).
+  if (!signupsOpen()) {
+    return NextResponse.json({ error: "Signups aren't open yet." }, { status: 403 });
+  }
+
   const rl = await checkRateLimit(`signup:${clientIp(req)}`, RATE_LIMIT, RATE_WINDOW_MS);
   if (!rl.allowed) {
     const retryAfter = Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000));

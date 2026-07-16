@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Wordmark } from "./Wordmark";
+import { SignupCta } from "@/components/marketing/SignupCta";
 
 /** Sticky public header for the marketing pages. Server component — no client JS. */
 export function MarketingHeader() {
@@ -26,12 +27,12 @@ export function MarketingHeader() {
           >
             Log in
           </Link>
-          <Link
-            href="/signup?plan=free"
+          <SignupCta
+            plan="free"
             className="rounded-full bg-brand px-4 py-2 text-sm font-bold text-white hover:bg-brand-deep"
           >
             Start free
-          </Link>
+          </SignupCta>
         </nav>
       </div>
     </header>

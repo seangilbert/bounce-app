@@ -3,9 +3,44 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Confetti, CircleNotch } from "@phosphor-icons/react/dist/ssr";
+import { Confetti, CircleNotch, EnvelopeSimple } from "@phosphor-icons/react/dist/ssr";
 import { createClient } from "@/utils/supabase/client";
 import { PLAN_LIST, isPaidPlan, PLANS, type PlanId, type Plan } from "@/lib/plans";
+import { signupsOpen, earlyAccessHref, EARLY_ACCESS_EMAIL } from "@/lib/signups";
+
+/** Pre-launch state for /signup — no account creation, just a way to raise a hand. */
+function SignupsClosed() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-cream px-6 py-16">
+      <div className="w-full max-w-md text-center">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand text-white">
+          <Confetti size={24} weight="fill" />
+        </span>
+        <h1 className="mt-5 font-display text-2xl font-extrabold tracking-tight text-ink">
+          Movables is launching soon
+        </h1>
+        <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-ink-soft">
+          We&apos;re onboarding operators a few at a time. Want in early? Tell us about your rental
+          business and we&apos;ll reach out.
+        </p>
+        <a
+          href={earlyAccessHref}
+          className="mt-6 inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white transition hover:bg-brand-deep"
+        >
+          <EnvelopeSimple size={17} weight="fill" /> Request early access
+        </a>
+        <p className="mt-4 text-xs font-medium text-ink-faint">
+          or email us at {EARLY_ACCESS_EMAIL}
+        </p>
+        <div className="mt-8 text-sm font-semibold text-ink-mute">
+          <Link href="/" className="hover:text-ink">
+            ← Back to home
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -32,6 +67,11 @@ export default function SignupPage() {
       setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const paid = isPaidPlan(form.plan);
+
+  // Signups are gated pre-launch. Someone reaching /signup directly (a bookmark,
+  // a stale link, the URL bar) gets the early-access path, not a form that the
+  // API would 403 anyway.
+  if (!signupsOpen()) return <SignupsClosed />;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

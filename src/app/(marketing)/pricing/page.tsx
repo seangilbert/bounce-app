@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
+import { SignupCta } from "@/components/marketing/SignupCta";
 
 export const metadata: Metadata = {
   title: "Pricing — Movables",
@@ -64,12 +65,12 @@ export default function PricingPage() {
           ))}
         </div>
         <div className="mt-12 text-center">
-          <Link
-            href="/signup?plan=free"
+          <SignupCta
+            plan="free"
             className="inline-flex items-center rounded-full bg-brand px-7 py-3.5 text-sm font-bold text-white hover:bg-brand-deep"
           >
             Get started free
-          </Link>
+          </SignupCta>
         </div>
       </section>
     </>

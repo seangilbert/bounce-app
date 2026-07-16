@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Check } from "@phosphor-icons/react/dist/ssr";
 import { PLAN_LIST, type PlanId } from "@/lib/plans";
+import { SignupCta } from "@/components/marketing/SignupCta";
 
 /** Plan the pricing grid highlights as the default choice. */
 const POPULAR: PlanId = "solo";
@@ -48,8 +49,8 @@ export function PricingTiers() {
               ))}
             </ul>
 
-            <Link
-              href={`/signup?plan=${plan.id}`}
+            <SignupCta
+              plan={plan.id}
               className={`mt-6 flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-bold ${
                 popular
                   ? "bg-brand text-white hover:bg-brand-deep"
@@ -57,7 +58,7 @@ export function PricingTiers() {
               }`}
             >
               {ctaLabel(plan.id)}
-            </Link>
+            </SignupCta>
           </div>
         );
       })}
