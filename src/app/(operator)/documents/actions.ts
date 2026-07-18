@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/operator/session";
 import { getBooking } from "@/lib/bookings/repo";
 import { getCustomer } from "@/lib/customers/repo";
-import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
 import { createContractTemplateFromDocument } from "@/lib/esign/contract-template";
 import {
   uploadDocument,
@@ -145,7 +145,7 @@ export async function finalizeContractTemplateAction(templateId: string): Promis
   if (!g.ok) return { ok: false, error: g.error };
   const op = g.membership.operator;
   if (!templateId) return { ok: false, error: "Missing template id." };
-  const { error } = await createAdminClient()
+  const { error } = await createClient()
     .from("operators")
     .update({ signwell_template_id: templateId })
     .eq("id", op.id);

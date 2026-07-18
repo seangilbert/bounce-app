@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSessionOperator } from "@/lib/operator/session";
 import { geocodeLocation } from "@/lib/operator/geocode";
-import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
 
 export type LocationResult = { ok: true; location: string } | { ok: false; error: string };
 
@@ -17,7 +17,7 @@ export async function saveLocationAction(query: string): Promise<LocationResult>
   const geo = await geocodeLocation(q);
   if (!geo) return { ok: false, error: "Couldn't find that place — try “City, State”." };
 
-  const { error } = await createAdminClient()
+  const { error } = await createClient()
     .from("operators")
     .update({ location: geo.label, latitude: geo.latitude, longitude: geo.longitude })
     .eq("id", op.id);

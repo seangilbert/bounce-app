@@ -6,7 +6,7 @@ import { requireAdmin } from "@/lib/operator/session";
 import { POLICY_MAX_CHARS } from "@/lib/operator/policies";
 import { geocodeLocation } from "@/lib/operator/geocode";
 import { isValidTimeZone } from "@/lib/operator/time";
-import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -43,7 +43,7 @@ export async function updateProfileAction(input: unknown): Promise<ActionResult>
     patch.location = null;
   }
 
-  const { error } = await createAdminClient().from("operators").update(patch).eq("id", op.id);
+  const { error } = await createClient().from("operators").update(patch).eq("id", op.id);
   if (error) return { ok: false, error: "Could not save your profile." };
   revalidatePath("/settings");
   revalidatePath("/dashboard");
@@ -65,7 +65,7 @@ export async function updatePolicyAction(input: unknown): Promise<ActionResult> 
   const p = PolicyInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
 
-  const { error } = await createAdminClient()
+  const { error } = await createClient()
     .from("operators")
     .update({
       deposit_percent: p.data.depositPercent,
@@ -90,7 +90,7 @@ export async function updateCustomerPoliciesAction(input: unknown): Promise<Acti
   const op = g.membership.operator;
   const p = CustomerPoliciesInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
-  const { error } = await createAdminClient()
+  const { error } = await createClient()
     .from("operators")
     .update({
       cancellation_policy: p.data.cancellationPolicy?.trim() || null,
@@ -121,7 +121,7 @@ export async function updateContractIdentityAction(input: unknown): Promise<Acti
   const op = g.membership.operator;
   const p = ContractIdentityInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
-  const { error } = await createAdminClient()
+  const { error } = await createClient()
     .from("operators")
     .update({
       business_address: p.data.businessAddress?.trim() || null,
@@ -148,7 +148,7 @@ export async function updateNotificationPrefsAction(input: unknown): Promise<Act
   const op = g.membership.operator;
   const p = NotificationPrefsInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
-  const { error } = await createAdminClient()
+  const { error } = await createClient()
     .from("operators")
     .update({
       notify_new_inquiry: p.data.notifyNewInquiry,
@@ -177,7 +177,7 @@ export async function updateBrandingAction(input: unknown): Promise<ActionResult
   const op = g.membership.operator;
   const p = BrandingInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
-  const { error } = await createAdminClient()
+  const { error } = await createClient()
     .from("operators")
     .update({
       brand_color: p.data.brandColor,
@@ -211,7 +211,7 @@ export async function updateAvailabilityAction(input: unknown): Promise<ActionRe
     deliveryWindows: p.data.deliveryWindows.map((w) => w.trim()).filter(Boolean),
     blackouts: p.data.blackouts.map((b) => (b.end < b.start ? { start: b.end, end: b.start } : b)),
   };
-  const { error } = await createAdminClient()
+  const { error } = await createClient()
     .from("operators")
     .update({ availability_config: config })
     .eq("id", op.id);
@@ -233,7 +233,7 @@ export async function updatePricingAction(input: unknown): Promise<ActionResult>
   const op = g.membership.operator;
   const p = PricingInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
-  const { error } = await createAdminClient()
+  const { error } = await createClient()
     .from("operators")
     .update({ tax_percent: p.data.taxPercent, delivery_taxable: p.data.deliveryTaxable })
     .eq("id", op.id);
@@ -270,7 +270,7 @@ export async function updateDeliveryPricingAction(input: unknown): Promise<Actio
   const op = g.membership.operator;
   const p = DeliveryPricingInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid delivery pricing." };
-  const { error } = await createAdminClient()
+  const { error } = await createClient()
     .from("operators")
     .update({
       delivery_mode: p.data.mode,
