@@ -1,3 +1,4 @@
+import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 export type PromoKind = "percent" | "fixed";
@@ -59,7 +60,7 @@ const rowToPromo = (r: PromoRow): Promo => ({
 const PROMOS = "promos";
 
 export async function listPromos(operatorId: string): Promise<Promo[]> {
-  const supabase = createAdminClient();
+  const supabase = createClient();
   const { data, error } = await supabase
     .from(PROMOS)
     .select("*")
@@ -98,7 +99,7 @@ function toRow(input: PromoInput) {
 }
 
 export async function createPromo(operatorId: string, input: PromoInput): Promise<Promo> {
-  const supabase = createAdminClient();
+  const supabase = createClient();
   const { data, error } = await supabase
     .from(PROMOS)
     .insert({ operator_id: operatorId, ...toRow(input) })
@@ -112,7 +113,7 @@ export async function createPromo(operatorId: string, input: PromoInput): Promis
 }
 
 export async function updatePromo(operatorId: string, id: string, input: PromoInput): Promise<Promo> {
-  const supabase = createAdminClient();
+  const supabase = createClient();
   const { data, error } = await supabase
     .from(PROMOS)
     .update(toRow(input))
@@ -128,7 +129,7 @@ export async function updatePromo(operatorId: string, id: string, input: PromoIn
 }
 
 export async function deletePromo(operatorId: string, id: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = createClient();
   const { error } = await supabase.from(PROMOS).delete().eq("id", id).eq("operator_id", operatorId);
   if (error) throw new Error(`deletePromo failed: ${error.message}`);
 }
