@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
 
 export interface Customer {
   id: string;
@@ -53,18 +54,7 @@ const rowToCustomer = (r: CustomerRow): Customer => ({
   source: r.source ?? null,
 });
 
-/**
- * A lead is someone who has shown interest but never committed money — they
- * saved an item, or asked a question, and haven't booked.
- *
- * Derived from the bookings, NOT from `source`: `source` is first-touch and
- * never changes, so someone who saved an item and then booked is still
- * source='saved' but is emphatically no longer a lead. Deriving it from actual
- * bookings is the only definition that stays true over time.
- */
-export function isLead(stats: CustomerStats): boolean {
-  return stats.bookingCount === 0;
-}
+// isLead moved to ./lead (client-safe) — repo.ts imports the server-only client.
 
 const norm = (s: string | null | undefined) => (s?.trim() ? s.trim() : null);
 const lower = (s: string | null | undefined) => (s?.trim() ? s.trim().toLowerCase() : null);
@@ -187,7 +177,9 @@ function aggregate(bookings: StatBooking[], todayIso: string) {
 
 /** The operator's customers with derived stats, optionally filtered by a search. */
 export async function listCustomers(operatorId: string, search?: string): Promise<CustomerListItem[]> {
-  const supabase = createAdminClient();
+  // User-scoped: operator SELECT policies (0054) enforce tenant isolation on
+  // customers + the embedded bookings/booking_items/items in the DB.
+  const supabase = createClient();
   let q = supabase.from("customers").select("*").eq("operator_id", operatorId);
   const term = search?.trim();
   if (term) {
@@ -239,7 +231,7 @@ export async function listCustomers(operatorId: string, search?: string): Promis
 }
 
 export async function getCustomer(operatorId: string, id: string): Promise<Customer | null> {
-  const supabase = createAdminClient();
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("customers")
     .select("*")
@@ -285,7 +277,9 @@ export async function getCustomerActivity(
   operatorId: string,
   customer: Customer,
 ): Promise<{ bookings: CustomerBooking[]; inquiries: CustomerInquiry[] }> {
-  const supabase = createAdminClient();
+  // User-scoped: reads bookings/orders/inquiries + embedded items behind the
+  // operator SELECT policies (0054).
+  const supabase = createClient();
   const [{ data: bRows }, { data: iRows }] = await Promise.all([
     supabase
       .from("bookings")
@@ -352,7 +346,7 @@ export async function getCustomerActivity(
 }
 
 export async function updateCustomerNotes(operatorId: string, id: string, notes: string): Promise<boolean> {
-  const supabase = createAdminClient();
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("customers")
     .update({ notes: notes.trim() || null })

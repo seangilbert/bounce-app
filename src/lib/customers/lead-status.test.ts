@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isLead } from "./repo";
+import { isLead } from "./lead";
 import type { CustomerStats } from "./repo";
 
 const stats = (over: Partial<CustomerStats> = {}): CustomerStats => ({

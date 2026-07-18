@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { MagnifyingGlass, CaretRight, AddressBook, Heart } from "@phosphor-icons/react/dist/ssr";
-import { isLead, type CustomerListItem } from "@/lib/customers/repo";
+import type { CustomerListItem } from "@/lib/customers/repo";
+import { isLead } from "@/lib/customers/lead";
 
 const money = (c: number) => `$${(c / 100).toLocaleString("en-US")}`;
 
