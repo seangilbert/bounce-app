@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "crypto";
+import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { getOperatorById } from "@/lib/inventory/repo";
 import type { Operator } from "@/lib/inventory/types";
@@ -104,7 +105,7 @@ export async function createApiKey(
   input: CreateApiKeyInput,
 ): Promise<{ record: ApiKeyRecord; fullKey: string }> {
   const gen = generateApiKey(input.type, input.testMode ?? false);
-  const admin = createAdminClient();
+  const admin = createClient();
   const { data, error } = await admin
     .from("api_keys")
     .insert({
@@ -127,7 +128,7 @@ export async function createApiKey(
 
 /** Active (non-revoked) keys for an operator, newest first. */
 export async function listApiKeys(operatorId: string): Promise<ApiKeyRecord[]> {
-  const admin = createAdminClient();
+  const admin = createClient();
   const { data, error } = await admin
     .from("api_keys")
     .select()
@@ -139,7 +140,7 @@ export async function listApiKeys(operatorId: string): Promise<ApiKeyRecord[]> {
 }
 
 export async function revokeApiKey(operatorId: string, id: string): Promise<void> {
-  const admin = createAdminClient();
+  const admin = createClient();
   const { error } = await admin
     .from("api_keys")
     .update({ revoked_at: new Date().toISOString() })
@@ -153,7 +154,7 @@ export async function updateApiKeyOrigins(
   id: string,
   origins: string[],
 ): Promise<void> {
-  const admin = createAdminClient();
+  const admin = createClient();
   const { error } = await admin
     .from("api_keys")
     .update({ allowed_origins: normalizeOrigins(origins) })
