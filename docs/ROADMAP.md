@@ -76,7 +76,7 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 1. The middleware gate was missing `/customers`, `/promos`, `/documents`, `/account` (fixed `5afc478`; nothing leaked only because each page happened to guard itself — now enforced by a test that reads the route group off disk).
 2. Every renter-portal query had to be hand-scoped by account, and correctness was established by writing tests for each one rather than by the database refusing to serve the wrong rows.
 
-It won't always be luck. Before real operators with real customer lists, this deserves the belt as well as the braces. _(Tracked under Multi-tenancy, Tier 0.)_
+It won't always be luck. Before real operators with real customer lists, this deserves the belt as well as the braces. _(Tracked under Multi-tenancy, Tier 0.)_ **Scoped in [docs/rls-plan.md](rls-plan.md)** (2026-07-17): 7 of 16 tables have RLS off entirely; ~3–4 days across 4 phases; portal is the pilot.
 
 ---
 
