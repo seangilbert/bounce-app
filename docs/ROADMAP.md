@@ -2,7 +2,7 @@
 
 Path from the current working demo to a production-ready, **multi-tenant** SaaS that can take real customers and pay real operators.
 
-_Last updated: 2026-07-15._
+_Last updated: 2026-07-16._
 
 ## Where we are
 
@@ -25,42 +25,49 @@ conversational AI quote → deposit/full checkout (Stripe) → e-signed booking 
 
 ## 🚀 Go-Live Checklist (your actions, in priority order)
 
-> **The state of things, stated plainly (2026-07-13):** the product is feature-rich — booking engine, payments, contracts, AI quoting, storefront, embeddable widget, marketing site, renter portal, lead CRM — and **cannot take a single real customer.** Every remaining blocker is **account configuration, not code.** The right move is to *stop building features* and work this list.
->
-> These are ordered by **leverage**, not by system. **All env changes are in Vercel → Production** unless noted; each item links to its detailed entry deeper in the roadmap.
+> **State of things (updated 2026-07-16):** the site is **LIVE at movables.ai** — rebranded to **Movables**, domain-split (`movables.ai` marketing/storefront/portal + `app.movables.ai` operator app), **transactional email working** (Resend), and the **contract flow validated in test mode** (SignWell). Operator signups are **gated closed** (waitlist + early-access mailto). A real renter can already sign in and use the portal. What remains is **protecting the live infra** and the config to **take real money + onboard real operators** — all account/config, not code. Ordered by leverage. **All env changes are in Vercel → Production** unless noted.
 
-**~~1. Email — verify a Resend domain~~ ✅ DONE (2026-07-16)** — `movables.ai` verified in Resend (DKIM + SPF + MX all green; GoDaddy managed-SPF wrapper accepted). `RESEND_FROM=Movables <notifications@movables.ai>` set in Vercel Production. **Verified end-to-end on prod:** a renter-portal sign-in code delivered from `notifications@movables.ai`, landed in the inbox (not spam — SPF/DKIM/DMARC aligned under the existing `p=quarantine`), and the code logged in. All transactional email (sign-in codes, receipts, confirmations, operator alerts) is now live. _Note: Google Workspace (MX) handles receiving at `hello@movables.ai`; Resend handles sending from `notifications@`._
+### ✅ Already done (for reference)
+- **Email (Resend)** — `movables.ai` verified; `RESEND_FROM=Movables <notifications@movables.ai>`; sign-in codes/receipts/confirmations/alerts all live (verified on prod, inbox not spam). Receiving at `hello@movables.ai` via Google Workspace.
+- **Domain + rebrand + host split + signup gate** — `movables.ai` (apex canonical) / `app.movables.ai`; Bounce→Movables; operator signups closed by default (`NEXT_PUBLIC_SIGNUPS_OPEN`).
+- **Migrations `0046`–`0048`** applied to prod + dev.
+- **SignWell** — template `Equipment_Rental_Agreement` (`349452c7-…`) built; full send→sign→**Completed** flow validated in **test mode** (free). Live flip is item 4 below.
 
-**2. Stripe — go live** _(~1 hr — you cannot take money without it)_
-- [ ] Swap Vercel Production to **live keys**: `STRIPE_SECRET_KEY=sk_live_…` + `STRIPE_WEBHOOK_SECRET=whsec_…` from a **new live webhook endpoint** → `https://<app>/api/webhooks/stripe`, subscribed to `checkout.session.completed` + the 5 subscription events.
+### ⬜ Remaining
+
+**1. Supabase Pro on prod** ⭐ _(~2 min — do first; protects the live site)_
+- [ ] Upgrade the prod project (`urmqfxsajoboibjqhtmn`, "Rentals App") to the **Pro plan**. The free tier **auto-pauses on inactivity** and has **no backups** — and the site is live now, so a paused DB breaks storefronts/portal/app for real visitors. Cheapest insurance available. _(See Go-live hardening, Tier 0.)_
+
+**2. Sentry DSN** _(~10 min — code deployed + dormant, waiting on the DSN)_
+- [ ] Create a Sentry project, set **`NEXT_PUBLIC_SENTRY_DSN`** in Vercel Production. Optional: `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT` for readable stack traces.
+- **Matters more now that email works:** email failures are *deliberately silent* (the request endpoint returns uniform `200` for enumeration-resistance), so **Sentry is the only place a broken send surfaces.** _(See Error monitoring, Tier 2.)_
+
+**3. Stripe — go live** _(~1 hr — needed to take money; less urgent while signups are closed)_
+- [ ] Vercel Production **live keys**: `STRIPE_SECRET_KEY=sk_live_…` + `STRIPE_WEBHOOK_SECRET=whsec_…` from a **new live webhook endpoint** → `https://app.movables.ai/api/webhooks/stripe`, subscribed to `checkout.session.completed` + the 5 subscription events.
 - [ ] **Enable Connect in live mode** (operators re-onboard — test connected accounts don't carry over).
-- [ ] **Create live billing prices** (re-run `scripts/setup_billing.mjs` against the live account) so plan `lookup_key`s resolve.
+- [ ] **Create live billing prices** (`scripts/setup_billing.mjs` against the live account) so plan `lookup_key`s resolve.
 - [ ] Verify a real charge + refund + a subscription signup end-to-end. _(See Stripe — go live, Tier 0.)_
 
-**3. Database — Supabase Pro on prod** _(~2 min)_
-- [ ] Upgrade the prod project (`urmqfxsajoboibjqhtmn`, "Rentals App") to the **Pro plan**. The free tier **auto-pauses on inactivity** and has **no backups** — a paused database is a dead app, and you'd hear about it from a customer rather than from a monitor. _(See Go-live hardening, Tier 0.)_
+**4. SignWell — turn contracts on** _(mechanics validated; remaining = content + flip. Optional at launch — product works without contracts)_
+- [ ] Swap the **counsel-reviewed contract text** into the existing template — **edit template `349452c7-…` in place** (ID stays stable, no env change). Do NOT delete+recreate (one-template limit → new ID).
+- [ ] Point **prod** `SIGNWELL_TEMPLATE_ID` at `349452c7-49ef-4c2f-a964-5f3c7b373de7` (dev already is; prod not yet).
+- [ ] Flip **`SIGNWELL_AUTO_SEND=true`** + **`SIGNWELL_TEST_MODE=false`** in Vercel Production (currently AUTO_SEND empty = off; test docs are free, live docs are **billable + legally binding**).
+- [ ] Confirm the **live webhook** (`SIGNWELL_WEBHOOK_ID`) targets `https://app.movables.ai` — this is the untested hop (SignWell → app → booking `confirmed`); validates on the first real prod booking.
+- [ ] _Optional:_ **single-signer** (customer-only) — remove the `Document Sender` signature field in the template, set `SIGNWELL_SINGLE_SIGNER=true`. And `SIGNWELL_TEMPLATE_FIELDS=true` only after adding the six `company_*`/policy fields to the template.
+- _B2 (operators upload their own contract) stays **blocked** until a template-capable SignWell tier — not required to go live._
 
-**4. Error monitoring — Sentry DSN** _(~10 min — code is deployed + dormant, waiting on the DSN)_
-- [ ] Create a Sentry project, then set **`NEXT_PUBLIC_SENTRY_DSN`** in Vercel Production. Optional for readable stack traces: `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT`.
-- **This matters more than it used to.** The renter portal's failures are *deliberately invisible to users* — a broken mailer still returns a normal `200`, so the endpoint can't be used as an enumeration oracle (see Customer self-service). **Sentry is the only place those failures surface.** With no DSN, a completely broken login is completely silent. _(See Error monitoring, Tier 2.)_
-
-**5. Legal** _(before real customers, not before a soft launch)_
-- [ ] Fill the real values in `src/lib/legal/company.ts` (entity, jurisdiction, contact, address, effective date).
+**5. Legal** _(before real customers)_
+- [ ] Fill `src/lib/legal/company.ts` (entity, jurisdiction, contact — e.g. `legal@movables.ai`, mailing address, effective date). It's the single source for both `/terms` and `/privacy`.
 - [ ] **Counsel review** of the Terms + Privacy drafts **and** the rental agreement's soundness. _(See Legal/trust, Tier 0.)_
 
-**6. SignWell — turn contracts on** _(optional at launch — contracts are OFF today and the product works without them)_
-- [ ] **`SIGNWELL_AUTO_SEND=true`** — ⚠️ **currently empty in prod → auto-send is OFF.** This is the master switch; agreements do not send until it's `true`.
-- [ ] **`SIGNWELL_TEMPLATE_ID`** — the **real** rental-agreement template (today's is the `basic-rental-agreement` placeholder). _(Confirm it has a value.)_
-- [ ] **`SIGNWELL_SENDER_EMAIL`** — the "from" address for signing requests. _(Confirm it has a value.)_
-- [ ] **`SIGNWELL_TEST_MODE=false`** — flips from free/non-binding **test** docs to **billable + legally binding** live docs. Only once the real template is in place.
-- [ ] Confirm the **live webhook** (`SIGNWELL_WEBHOOK_ID`) targets the prod endpoint.
-- [ ] After the template edits: flip `SIGNWELL_SINGLE_SIGNER=true` + `SIGNWELL_TEMPLATE_FIELDS=true`. _(See SignWell — go live, Tier 0.)_
-- _All four must be set together, or the `autoSendEnabled()` gate keeps agreements off. B2 (operators upload their own contract) stays **blocked** until a template-capable SignWell tier — not required to go live._
+**6. Reopen operator signups** _(when ready to onboard — currently closed/waitlist)_
+- [ ] Set **`NEXT_PUBLIC_SIGNUPS_OPEN=true`** in Vercel Production + redeploy. Do this once Stripe live (item 3) is done, since signup leads into billing. Until then the marketing CTAs point to the `hello@movables.ai` early-access mailto.
 
-**7. SMS — Twilio + A2P 10DLC** _(optional at launch; the Text channel stays hidden until done)_
-- [ ] Twilio account + number; **A2P 10DLC** brand/campaign registration (days-long carrier approval); set `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM`; point the inbound webhook at `/api/webhooks/twilio`; apply migration `0022`. _(See SMS external setup, Inquiries Phase 2.)_
+**7. SMS — Twilio + A2P 10DLC** _(optional; recurring cost even when idle — defer until you want the SMS channel)_
+- [ ] Twilio account + number (~$1/mo) + **A2P 10DLC** brand/campaign registration (recurring fee + days-long approval); set `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM`; point the inbound webhook at `/api/webhooks/twilio`; migration `0022` already applied. _(See SMS external setup, Inquiries Phase 2.)_
 
-**~~8. Database — apply migrations `0046`–`0048`~~ ✅ DONE (2026-07-13)** — `customer_accounts` + `customers.account_id` (`0046`), `saved_items` (`0047`), `customers.source` (`0048`) applied to **prod + dev** via `./scripts/db-migrate.sh`; prod history verified at `0048`.
+**8. Email housekeeping** _(minor)_
+- [ ] The app sends from `notifications@movables.ai` (Resend, send-only). If a customer *replies* to it, it routes to Google Workspace — add `notifications@` as a Workspace alias (or set a reply-to) if you want replies to land somewhere, else they bounce. Low priority.
 
 ### The one code item that isn't on this list — and should worry you
 
