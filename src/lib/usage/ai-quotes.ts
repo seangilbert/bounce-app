@@ -9,6 +9,7 @@
  * once, when the inbox inquiry is first persisted (see `handleInquiry`), not per
  * chat turn. Paid plans are unlimited (`Infinity`) and skip the DB entirely.
  */
+import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { planCapabilities } from "@/lib/plans";
 import type { Operator } from "@/lib/inventory/types";
@@ -23,7 +24,7 @@ export async function getAiQuoteUsage(
   operatorId: string,
   month: string = currentUsageMonth(),
 ): Promise<number> {
-  const admin = createAdminClient();
+  const admin = createClient();
   const { data, error } = await admin
     .from("operator_ai_usage")
     .select("count")

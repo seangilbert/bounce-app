@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import type { MemberRole } from "./roles";
 
@@ -140,7 +141,7 @@ function rowToInvite(r: {
 }
 
 export async function listPendingInvites(operatorId: string): Promise<TeamInvite[]> {
-  const db = createAdminClient();
+  const db = createClient();
   const { data, error } = await db
     .from("operator_invites")
     .select("id, email, role, created_at, expires_at")
@@ -157,7 +158,7 @@ export async function createInvite(
   role: MemberRole,
   invitedBy: string,
 ): Promise<{ ok: true; invite: TeamInvite; token: string } | { ok: false; error: string }> {
-  const db = createAdminClient();
+  const db = createClient();
   const cleanEmail = email.trim().toLowerCase();
   const token = randomBytes(24).toString("base64url");
   const { data, error } = await db
@@ -174,7 +175,7 @@ export async function createInvite(
 }
 
 export async function revokeInvite(operatorId: string, id: string): Promise<Result> {
-  const db = createAdminClient();
+  const db = createClient();
   const { error } = await db
     .from("operator_invites")
     .update({ status: "revoked" })
