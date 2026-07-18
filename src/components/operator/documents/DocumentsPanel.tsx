@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X, Trash, DownloadSimple, CircleNotch, Paperclip } from "@phosphor-icons/react/dist/ssr";
-import { DOC_TYPES, docTypeLabel, type DocType, type OperatorDocument } from "@/lib/documents/repo";
+import { DOC_TYPES, docTypeLabel, type DocType, type OperatorDocument } from "@/lib/documents/types";
 import { uploadDocumentAction, deleteDocumentAction } from "@/app/(operator)/documents/actions";
 import { DocIcon, ExpiryPill, fmtSize } from "./docPresentation";
 

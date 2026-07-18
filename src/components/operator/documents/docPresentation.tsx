@@ -1,5 +1,5 @@
 import { FilePdf, Image as ImageIcon, FileText } from "@phosphor-icons/react/dist/ssr";
-import { DOC_TYPES, type OperatorDocument } from "@/lib/documents/repo";
+import { DOC_TYPES, type OperatorDocument } from "@/lib/documents/types";
 
 /** Types whose expiry we track + warn on. */
 export const TRACKS_EXPIRY = new Set(DOC_TYPES.filter((t) => t.tracksExpiry).map((t) => t.value));

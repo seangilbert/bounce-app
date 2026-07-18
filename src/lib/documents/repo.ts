@@ -1,50 +1,15 @@
 import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
+import { DOC_TYPES, type DocType, type OperatorDocument, type ExpiringDocument } from "./types";
+
+// The display metadata + shared types live in the client-safe ./types module now
+// (so client components don't pull this server-only file). Re-exported here so the
+// existing server-side importers can keep sourcing them from repo.ts.
+export { DOC_TYPES, docTypeLabel } from "./types";
+export type { DocType, OperatorDocument, ExpiringDocument } from "./types";
 
 /** Private storage bucket for operator business documents (see migration 0040). */
 export const DOCS_BUCKET = "operator-docs";
-
-export type DocType =
-  | "coi"
-  | "license"
-  | "inspection"
-  | "w9"
-  | "permit"
-  | "waiver"
-  | "contract"
-  | "other";
-
-/** Display metadata per type. `tracksExpiry` drives the dashboard warning. */
-export const DOC_TYPES: { value: DocType; label: string; tracksExpiry: boolean }[] = [
-  { value: "coi", label: "Certificate of insurance", tracksExpiry: true },
-  { value: "license", label: "Business license", tracksExpiry: true },
-  { value: "inspection", label: "Safety / inspection record", tracksExpiry: true },
-  { value: "permit", label: "Permit", tracksExpiry: true },
-  { value: "w9", label: "W-9 / tax form", tracksExpiry: false },
-  { value: "waiver", label: "Waiver template", tracksExpiry: false },
-  { value: "contract", label: "Rental agreement / contract", tracksExpiry: false },
-  { value: "other", label: "Other", tracksExpiry: false },
-];
-
-export function docTypeLabel(type: string): string {
-  return DOC_TYPES.find((t) => t.value === type)?.label ?? "Document";
-}
-
-export interface OperatorDocument {
-  id: string;
-  operatorId: string;
-  type: DocType;
-  label: string | null;
-  filePath: string;
-  fileName: string | null;
-  mimeType: string | null;
-  sizeBytes: number | null;
-  expiresAt: string | null;
-  bookingId: string | null;
-  customerId: string | null;
-  createdAt: string;
-  /** Short-lived signed URL for download (present when listed). */
-  downloadUrl?: string | null;
-}
 
 interface DocumentRow {
   id: string;
@@ -102,7 +67,9 @@ export async function listDocuments(
   operatorId: string,
   filter: ListDocumentsFilter = {},
 ): Promise<OperatorDocument[]> {
-  const supabase = createAdminClient();
+  // Table read is user-scoped (operator SELECT policy, 0055); signed download
+  // URLs are minted separately on the admin client (bucket op) in withSignedUrls.
+  const supabase = createClient();
   let q = supabase.from("documents").select().eq("operator_id", operatorId);
   if (filter.bookingId) q = q.eq("booking_id", filter.bookingId);
   if (filter.customerId) q = q.eq("customer_id", filter.customerId);
@@ -129,18 +96,19 @@ export async function uploadDocument(
   file: File,
   meta: NewDocument,
 ): Promise<OperatorDocument> {
-  const supabase = createAdminClient();
+  const admin = createAdminClient(); // bucket op
+  const db = createClient(); // table insert, user-scoped (operator INSERT policy, 0055)
   const safeName = (file.name || "document").replace(/[^\w.\-]+/g, "_").slice(-80);
   const path = `${operatorId}/${crypto.randomUUID()}-${safeName}`;
   const bytes = Buffer.from(await file.arrayBuffer());
 
-  const { error: upErr } = await supabase.storage.from(DOCS_BUCKET).upload(path, bytes, {
+  const { error: upErr } = await admin.storage.from(DOCS_BUCKET).upload(path, bytes, {
     contentType: file.type || "application/octet-stream",
     upsert: false,
   });
   if (upErr) throw new Error(`upload failed: ${upErr.message}`);
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("documents")
     .insert({
       operator_id: operatorId,
@@ -158,7 +126,7 @@ export async function uploadDocument(
     .single();
   if (error) {
     // Roll back the orphaned file so a failed insert doesn't leak storage.
-    await supabase.storage.from(DOCS_BUCKET).remove([path]);
+    await admin.storage.from(DOCS_BUCKET).remove([path]);
     throw new Error(`createDocument failed: ${error.message}`);
   }
   return rowToDoc(data as DocumentRow);
@@ -185,7 +153,7 @@ export async function updateDocument(
   if (patch.bookingId !== undefined) row.booking_id = patch.bookingId || null;
   if (patch.customerId !== undefined) row.customer_id = patch.customerId || null;
 
-  const supabase = createAdminClient();
+  const supabase = createClient();
   const { error } = await supabase
     .from("documents")
     .update(row)
@@ -196,7 +164,7 @@ export async function updateDocument(
 
 /** Delete a document row + its stored file (operator-scoped). */
 export async function deleteDocument(operatorId: string, id: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = createClient(); // table ops, user-scoped (operator SELECT/DELETE policies, 0055)
   const { data, error } = await supabase
     .from("documents")
     .select("file_path")
@@ -206,22 +174,14 @@ export async function deleteDocument(operatorId: string, id: string): Promise<vo
   if (error) throw new Error(`deleteDocument lookup failed: ${error.message}`);
   if (!data) return;
 
-  await supabase.storage.from(DOCS_BUCKET).remove([data.file_path as string]);
+  const admin = createAdminClient(); // bucket op
+  await admin.storage.from(DOCS_BUCKET).remove([data.file_path as string]);
   const { error: delErr } = await supabase
     .from("documents")
     .delete()
     .eq("id", id)
     .eq("operator_id", operatorId);
   if (delErr) throw new Error(`deleteDocument failed: ${delErr.message}`);
-}
-
-export interface ExpiringDocument {
-  id: string;
-  type: DocType;
-  label: string | null;
-  expiresAt: string;
-  /** Whole days until expiry (negative = already expired). */
-  daysLeft: number;
 }
 
 /**
@@ -233,7 +193,7 @@ export async function getExpiringDocuments(
   today: string,
   withinDays = 30,
 ): Promise<ExpiringDocument[]> {
-  const supabase = createAdminClient();
+  const supabase = createClient();
   const horizon = addDays(today, withinDays);
   const { data, error } = await supabase
     .from("documents")

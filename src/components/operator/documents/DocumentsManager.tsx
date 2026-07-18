@@ -17,7 +17,7 @@ import {
   docTypeLabel,
   type DocType,
   type OperatorDocument,
-} from "@/lib/documents/repo";
+} from "@/lib/documents/types";
 import {
   uploadDocumentAction,
   updateDocumentAction,
