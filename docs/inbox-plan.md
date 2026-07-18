@@ -96,12 +96,12 @@ Resolution: inbound → match `channel_identities` → existing conversation; el
 - **WhatsApp's 24-hour window + template rules** — you can't freely message outside 24h of the customer's last message; requires pre-approved templates. Constrains "always-respond" on WhatsApp specifically.
 - **Meta channels are per-Page/per-number**, so this is inherently multi-tenant connection management (like Stripe Connect for messaging).
 
-## Key decisions (my recommendation in **bold**)
+## Key decisions — DECIDED (2026-07-18)
 
-1. **AI autonomy default** — auto-respond-and-escalate (**recommended**, matches today's SMS/web) vs. draft-only-until-approved. Auto keeps the "always instant" promise; escalation + easy takeover is the safety valve.
-2. **Channel priority after email** — **SMS + email are table stakes** (mostly done). For the rest, build the one the operator's customers use — for US party rentals that's often **Facebook Messenger** before WhatsApp. Recommend **Messenger next**, WhatsApp after.
-3. **Build vs. buy** — **build native** (Twilio, Meta Graph, Resend) rather than an aggregator: you already own the SMS integration, aggregators add cost + a dependency, and the AI-grounding needs deep access. The Channel interface keeps it clean.
-4. **Where handoff state lives** — evolve `inquiries` (**recommended**, minimal deltas, reuses everything) vs. a new `conversations` table (cleaner name, big refactor). Not worth the refactor now.
+1. ✅ **AI autonomy = auto-respond-and-escalate.** The AI answers every inbound instantly (matches today's SMS/web); escalation + easy takeover is the safety valve. Not draft-only.
+2. ✅ **Channel order after email = Facebook Messenger**, then WhatsApp, then Instagram. (SMS + email are table stakes / mostly done.)
+3. ✅ **Build native** (Twilio, Meta Graph, Resend) — no aggregator. We already own SMS; the AI-grounding needs deep access; the Channel interface keeps it clean.
+4. ✅ **Evolve `inquiries`** (add `owner`/handoff state + per-message `channel`/`direction`; new `channel_identities` table) — NOT a new `conversations` table. Minimal deltas, reuses everything.
 
 ## Relationship to other work
 - Absorbs roadmap items: *Inquiries Phase 2 (inbound email)*, *operator-takeover*, *cold inbound*.
