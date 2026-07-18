@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
 import { upsertCustomer } from "@/lib/customers/repo";
 
 export interface InquiryQuoteLine {
@@ -293,7 +294,7 @@ export async function linkInquiryToBooking(
 
 /** Count of inquiries awaiting operator review (for the nav badge). */
 export async function countNeedsReview(operatorId: string): Promise<number> {
-  const supabase = createAdminClient();
+  const supabase = createClient(); // user-scoped (operator SELECT policy, 0054)
   const { count, error } = await supabase
     .from("inquiries")
     .select("id", { count: "exact", head: true })
@@ -316,7 +317,10 @@ export async function replyToInquiry(
   channel: string;
   inboundMessage: string;
 } | null> {
-  const supabase = createAdminClient();
+  // User-scoped: the inquiries UPDATE + returning SELECT run behind the operator
+  // policies (0054/0057). appendInquiryMessage below stays service-role (the
+  // inquiry_messages insert is shared with the storefront/webhook thread).
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("inquiries")
     .update({ status: "replied", operator_reply: reply, replied_at: new Date().toISOString() })
@@ -342,7 +346,7 @@ export async function replyToInquiry(
 
 /** Dismiss an inquiry so it drops out of the inbox (operator-scoped). */
 export async function dismissInquiry(operatorId: string, id: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = createClient(); // user-scoped (operator UPDATE policy, 0057)
   const { error } = await supabase
     .from("inquiries")
     .update({ status: "dismissed" })
@@ -353,7 +357,7 @@ export async function dismissInquiry(operatorId: string, id: string): Promise<vo
 
 /** All inquiries for an operator, newest first (the inbox). */
 export async function listInquiries(operatorId: string): Promise<InquiryRow[]> {
-  const supabase = createAdminClient();
+  const supabase = createClient(); // user-scoped (operator SELECT policy, 0054)
   const { data, error } = await supabase
     .from("inquiries")
     .select("*")
