@@ -23,7 +23,7 @@ export default async function MyBookingPage({ params }: { params: { id: string }
 
   // Scoped by account — an id belonging to someone else returns null, and we
   // 404 it rather than saying "not yours", which would confirm it exists.
-  const booking = await getAccountBooking(account.id, params.id);
+  const booking = await getAccountBooking(params.id);
   if (!booking) notFound();
 
   const signed = booking.contractStatus === "completed" || booking.contractStatus === "signed";

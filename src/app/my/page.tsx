@@ -16,7 +16,7 @@ export default async function MyBookingsPage() {
   // /my/login: they have a session, so that page would send them right back.
   if (!account) return <NotARenter />;
 
-  const bookings = await listAccountBookings(account.id);
+  const bookings = await listAccountBookings();
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = bookings.filter((b) => isUpcoming(b, today));
   const past = bookings.filter((b) => !isUpcoming(b, today));

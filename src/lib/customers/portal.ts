@@ -1,18 +1,26 @@
+import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 /**
  * Read model for the renter's self-service portal (`/my`).
  *
- * Two rules govern everything in this file:
+ * Isolation is DATABASE-ENFORCED here (RLS Phase 1, migration 0049). The owned
+ * reads — bookings / orders / booking_items — go through the USER-SCOPED client
+ * (`createClient`, which carries the renter's JWT), and RLS policies keyed to
+ * `auth.uid()` guarantee a renter only ever sees their own rows. There is no
+ * `account_id` filter in app code anymore because there doesn't need to be:
+ * even a raw `select * from bookings` returns only the caller's, and a foreign
+ * booking id returns nothing (verified against the live DB).
  *
- * 1. ALWAYS scope by account. Every read starts from the caller's verified
- *    `customer_accounts.id`, resolves the `customers` rows that account has
- *    CLAIMED, and filters bookings to those customer ids. `getBooking(id)` in
- *    bookings/repo is an unscoped lookup-by-UUID — using it here would let
- *    anyone with a booking id read anyone's booking.
- *
- * 2. NEVER leak operator-private data. `customers.notes` is the operator's own
- *    CRM notes about this person; it must not appear in any type here.
+ * Two things stay on the service role, deliberately:
+ * 1. The public operator identity (name/slug/phone) and item names — public
+ *    catalog data, fetched for ids that came from the renter's OWN (RLS-scoped)
+ *    bookings. Kept off RLS so we never grant the renter read access to
+ *    `operators`/`items` (row-level RLS would expose their private columns, e.g.
+ *    `operators.stripe_account_id`).
+ * 2. `customers` is never read here at all — the RLS helper `auth_customer_ids()`
+ *    (SECURITY DEFINER) resolves ownership inside the DB, so `customers.notes`
+ *    (operator-private) can't leak.
  */
 
 /** A booking as the renter sees it — with the operator's public identity. */
@@ -59,8 +67,8 @@ interface BookingRow {
   delivery_window: string | null;
   subtotal: number;
   total: number | null;
-  operators: { name: string; slug: string; phone: string | null } | null;
-  booking_items: { quantity: number; item: { name: string } | null }[] | null;
+  operator_id: string;
+  booking_items: { quantity: number; item_id: string }[] | null;
   orders: OrderRow[] | null;
 }
 
@@ -72,58 +80,72 @@ interface OrderRow {
   esign_status: string | null;
 }
 
-/**
- * One round-trip, and the ownership check is baked into it.
- *
- * `customers!inner(account_id)` + the matching filter is the security control:
- * a booking is only visible if it hangs off a `customers` row this account owns.
- * Filtering through the join (rather than pre-fetching the ids and passing them
- * to `.in()`) is what lets this be a single query — and every Supabase call
- * crosses a region boundary (~120ms), so query DEPTH is what the page's latency
- * is made of. Embedding `orders` the same way removes a second hop.
- *
- * `booking_items` and `orders` are embedded, not joined-and-flattened, so a
- * booking with three line items is still one row.
- */
+/** Owned data only — RLS scopes rows to the caller. No `operators`/`items`/
+ *  `customers` joins (those carry private columns); their public bits are
+ *  fetched separately via the service role and merged. `orders` + `booking_items`
+ *  are embedded (also RLS-scoped to the caller's bookings), one row per booking. */
 const BOOKING_SELECT =
-  "id, status, start_date, end_date, delivery_address, delivery_window, subtotal, total, " +
-  "customers!inner(account_id), operators(name, slug, phone), " +
-  "booking_items(quantity, item:items(name)), " +
-  "orders(amount_total, status, created_at, metadata, esign_status)";
+  "id, status, start_date, end_date, delivery_address, delivery_window, subtotal, total, operator_id, " +
+  "orders(amount_total, status, created_at, metadata, esign_status), " +
+  "booking_items(quantity, item_id)";
 
-/**
- * Every booking belonging to this account, across all operators, newest event
- * first. Returns [] for an account that has claimed nothing.
- */
-export async function listAccountBookings(accountId: string): Promise<PortalBooking[]> {
-  const { data } = await createAdminClient()
-    .from("bookings")
-    .select(BOOKING_SELECT)
-    .eq("customers.account_id", accountId)
-    .order("start_date", { ascending: false });
-
-  return ((data ?? []) as unknown as BookingRow[]).map(toPortalBooking);
+/** Public operator identity + item names for a set of bookings — service role
+ *  (public catalog data), keyed by ids that already came from RLS-scoped rows. */
+interface RefData {
+  operators: Map<string, { name: string; slug: string; phone: string | null }>;
+  items: Map<string, string>;
+}
+async function loadRefData(rows: BookingRow[]): Promise<RefData> {
+  const operatorIds = [...new Set(rows.map((r) => r.operator_id).filter(Boolean))];
+  const itemIds = [...new Set(rows.flatMap((r) => (r.booking_items ?? []).map((b) => b.item_id)))];
+  const admin = createAdminClient();
+  const [{ data: ops }, { data: items }] = await Promise.all([
+    operatorIds.length
+      ? admin.from("operators").select("id, name, slug, phone").in("id", operatorIds)
+      : Promise.resolve({ data: [] }),
+    itemIds.length
+      ? admin.from("items").select("id, name").in("id", itemIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  return {
+    operators: new Map((ops ?? []).map((o: Record<string, unknown>) => [o.id as string, { name: o.name as string, slug: o.slug as string, phone: (o.phone as string) ?? null }])),
+    items: new Map((items ?? []).map((i: Record<string, unknown>) => [i.id as string, i.name as string])),
+  };
 }
 
 /**
- * A single booking — but ONLY if this account owns it. Returns null otherwise,
- * which the route renders as a 404: an account probing for someone else's
- * booking id must not be able to tell "exists but not yours" from "no such
- * booking".
+ * Every booking belonging to the signed-in renter, newest event first. RLS
+ * scopes it — no `accountId` argument needed. Returns [] for a renter who owns
+ * nothing (or a non-renter session).
  */
-export async function getAccountBooking(
-  accountId: string,
-  bookingId: string,
-): Promise<PortalBooking | null> {
-  const { data } = await createAdminClient()
+export async function listAccountBookings(): Promise<PortalBooking[]> {
+  const { data } = await createClient()
+    .from("bookings")
+    .select(BOOKING_SELECT)
+    .order("start_date", { ascending: false });
+
+  const rows = (data ?? []) as unknown as BookingRow[];
+  if (!rows.length) return [];
+  const ref = await loadRefData(rows);
+  return rows.map((r) => toPortalBooking(r, ref));
+}
+
+/**
+ * A single booking — but ONLY if the signed-in renter owns it. RLS returns
+ * nothing otherwise, which the route renders as a 404: probing for someone
+ * else's booking id must not be distinguishable from "no such booking".
+ */
+export async function getAccountBooking(bookingId: string): Promise<PortalBooking | null> {
+  const { data } = await createClient()
     .from("bookings")
     .select(BOOKING_SELECT)
     .eq("id", bookingId)
-    // The ownership check. Without it, the booking id alone would be enough.
-    .eq("customers.account_id", accountId)
     .maybeSingle();
 
-  return data ? toPortalBooking(data as unknown as BookingRow) : null;
+  if (!data) return null;
+  const row = data as unknown as BookingRow;
+  const ref = await loadRefData([row]);
+  return toPortalBooking(row, ref);
 }
 
 /**
@@ -155,25 +177,26 @@ function readOrders(rows: OrderRow[]): { payments: PortalPayment[]; contractStat
   return { payments, contractStatus };
 }
 
-function toPortalBooking(row: BookingRow): PortalBooking {
+function toPortalBooking(row: BookingRow, ref: RefData): PortalBooking {
   const pay = readOrders(row.orders ?? []);
   const total = row.total ?? row.subtotal; // `total` is nullable in the schema.
   const paidCents = pay.payments
     .filter((p) => p.status === "paid")
     .reduce((sum, p) => sum + p.amountCents, 0);
   const committed = COMMITTED.includes(row.status);
+  const op = ref.operators.get(row.operator_id);
   return {
     id: row.id,
-    operatorName: row.operators?.name ?? "Operator",
-    operatorSlug: row.operators?.slug ?? "",
-    operatorPhone: row.operators?.phone ?? null,
+    operatorName: op?.name ?? "Operator",
+    operatorSlug: op?.slug ?? "",
+    operatorPhone: op?.phone ?? null,
     status: row.status,
     startDate: row.start_date,
     endDate: row.end_date,
     deliveryAddress: row.delivery_address,
     deliveryWindow: row.delivery_window,
     items: (row.booking_items ?? []).map((li) => ({
-      name: li.item?.name ?? "Item",
+      name: ref.items.get(li.item_id) ?? "Item",
       quantity: li.quantity,
     })),
     total,
