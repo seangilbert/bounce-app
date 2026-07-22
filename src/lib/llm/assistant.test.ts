@@ -13,16 +13,17 @@ function op(overrides: Partial<Operator> = {}): Operator {
 }
 
 const CATALOG = "abc | Rainbow Castle | $200";
+const CONFIG = "- Service area: delivers around Plymouth, MA.\n- Operating days: open any day of the week.";
 
 describe("buildSystemPrompt — operator assistant instructions", () => {
   it("omits the guidance block when there are no instructions", () => {
-    const p = buildSystemPrompt(op(), "2026-07-21", CATALOG, true);
+    const p = buildSystemPrompt(op(), "2026-07-21", CATALOG, true, CONFIG);
     expect(p).not.toContain("Guidance from");
     expect(p).toContain("How to behave:");
   });
 
   it("omits the block when instructions are blank/whitespace", () => {
-    const p = buildSystemPrompt(op({ assistantInstructions: "   \n  " }), "2026-07-21", CATALOG, true);
+    const p = buildSystemPrompt(op({ assistantInstructions: "   \n  " }), "2026-07-21", CATALOG, true, CONFIG);
     expect(p).not.toContain("Guidance from");
   });
 
@@ -32,6 +33,7 @@ describe("buildSystemPrompt — operator assistant instructions", () => {
       "2026-07-21",
       CATALOG,
       true,
+      CONFIG,
     );
     expect(p).toContain("Guidance from Bounce USA (the business owner)");
     expect(p).toContain("Always upsell tables & chairs.");
@@ -39,5 +41,16 @@ describe("buildSystemPrompt — operator assistant instructions", () => {
     expect(p).toContain("core rules below always take precedence");
     // Guidance sits before the core behavior rules.
     expect(p.indexOf("Guidance from")).toBeLessThan(p.indexOf("How to behave:"));
+  });
+});
+
+describe("buildSystemPrompt — operator config block", () => {
+  it("always renders the config block, before the catalog, and tells the model to respect it", () => {
+    const p = buildSystemPrompt(op(), "2026-07-21", CATALOG, true, CONFIG);
+    expect(p).toContain("booking config — firm operating facts");
+    expect(p).toContain("Service area: delivers around Plymouth, MA.");
+    expect(p).toContain("Honor the booking config");
+    // Config comes before the catalog.
+    expect(p.indexOf("booking config")).toBeLessThan(p.indexOf("Your catalog"));
   });
 });

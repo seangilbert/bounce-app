@@ -10,6 +10,8 @@ import { createInquiry } from "@/lib/inquiries/repo";
 import { notifyOperatorNewInquiry } from "@/lib/email";
 import { getQuoteQuota, incrementAiQuoteUsage } from "@/lib/usage/ai-quotes";
 import { planCapabilities } from "@/lib/plans";
+import { listAssistantPromos } from "@/lib/promos/repo";
+import { buildOperatorConfig } from "./operator-config";
 import type { Operator } from "@/lib/inventory/types";
 
 /** Model for the quote assistant. Haiku is a valid cost swap (spec 7.2). */
@@ -145,10 +147,14 @@ export function buildSystemPrompt(
   today: string,
   catalog: string,
   hasDate: boolean,
+  config: string,
 ): string {
   return `You are the friendly booking assistant for ${operator.name}, a party & event rental company${operator.location ? ` in ${operator.location}` : ""}. You chat with a customer to recommend the right rental and prepare a quote.
 
 Today is ${today}.
+
+${operator.name}'s booking config — firm operating facts. Respect these; never contradict or override them:
+${config}
 
 Your catalog (id, name, price${hasDate ? ", availability" : ""}):
 ${catalog}
@@ -165,6 +171,7 @@ How to behave:
 - Ask a clarifying question ONLY when you genuinely cannot proceed. The most common missing piece is the EVENT DATE — if you don't know it, ask for it warmly. Ask ONE focused question at a time.
 - When you know what to recommend AND the event date, set action="quote" with the recommended lineItems (exact catalog ids) and eventDate.
 - Resolve dates from natural language relative to today into eventDate (YYYY-MM-DD): e.g. "next Saturday", "July 12", "the 20th". If you truly have no date, set eventDate=null and ask for it.
+- Honor the booking config: never propose or accept an event date on a blackout/closed date, a non-operating day, or sooner than the required advance notice, and don't promise delivery outside the service area. If the customer asks for something the config rules out, say so warmly and offer the nearest workable option.
 ${hasDate ? "- Availability for the chosen date is shown above; do not recommend an item with 0 available — suggest an available alternative instead.\n" : ""}- If the customer wants something not in the catalog, add it to unmatchedRequests and offer the closest alternative — never invent items.
 - "reply" is what the customer reads: warm, brief, human. Do NOT state prices — the system computes and displays them.`;
 }
@@ -221,11 +228,16 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
     }));
   }
 
+  // Structured config from the operator's own live settings (service area,
+  // hours, blackouts, lead time, deposit terms, active auto-promos).
+  const autoPromos = await listAssistantPromos(operator.id, today);
+  const config = buildOperatorConfig(operator, today, autoPromos);
+
   const client = getAnthropicClient();
   const response = await client.messages.parse({
     model: ASSISTANT_MODEL,
     max_tokens: 1024,
-    system: buildSystemPrompt(operator, today, catalogForPrompt(promptItems, hintStart), Boolean(hintStart)),
+    system: buildSystemPrompt(operator, today, catalogForPrompt(promptItems, hintStart), Boolean(hintStart), config),
     output_config: { format: zodOutputFormat(ModelOutputSchema) },
     messages: inquiry.messages,
   });

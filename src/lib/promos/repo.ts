@@ -70,6 +70,31 @@ export async function listPromos(operatorId: string): Promise<Promo[]> {
   return (data as PromoRow[]).map(rowToPromo);
 }
 
+/** Qualitative shape of an auto-applied promo for the AI assistant's config
+ *  block — trigger only, no code or amount (the system computes all pricing). */
+export interface AssistantPromo {
+  trigger: "weekday" | "repeat";
+  weekdays: number[];
+}
+
+/** Active auto-promos (weekday/repeat) in their date window as of `today`.
+ *  Service-role: the assistant runs on a storefront inquiry with no operator
+ *  session. Manual `code` promos are excluded on purpose — the assistant should
+ *  never broadcast a discount code. */
+export async function listAssistantPromos(operatorId: string, today: string): Promise<AssistantPromo[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from(PROMOS)
+    .select("trigger, weekdays, active, starts_on, ends_on")
+    .eq("operator_id", operatorId)
+    .eq("active", true)
+    .in("trigger", ["weekday", "repeat"]);
+  if (error) throw new Error(`listAssistantPromos failed: ${error.message}`);
+  return (data ?? [])
+    .filter((r) => (!r.starts_on || today >= r.starts_on) && (!r.ends_on || today <= r.ends_on))
+    .map((r) => ({ trigger: r.trigger as "weekday" | "repeat", weekdays: (r.weekdays as number[]) ?? [] }));
+}
+
 export interface PromoInput {
   code: string;
   kind: PromoKind;
