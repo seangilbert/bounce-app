@@ -40,6 +40,7 @@ interface OperatorRow {
   notify_contract_signed: boolean | null;
   tagline: string | null;
   about: string | null;
+  assistant_instructions: string | null;
   availability_config: unknown;
   business_address: string | null;
   esign_signer_name: string | null;
@@ -106,6 +107,7 @@ function rowToOperator(r: OperatorRow): Operator {
     notifyContractSigned: r.notify_contract_signed ?? true,
     tagline: r.tagline,
     about: r.about,
+    assistantInstructions: r.assistant_instructions,
     availabilityConfig: r.availability_config ?? {},
     businessAddress: r.business_address,
     esignSignerName: r.esign_signer_name,

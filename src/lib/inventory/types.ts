@@ -35,6 +35,9 @@ export interface Operator {
   notifyContractSigned: boolean;
   tagline: string | null;
   about: string | null;
+  /** Operator-authored guidance injected into the AI quote assistant's system
+   *  prompt (tone, recommendations, house rules). Null = none. */
+  assistantInstructions: string | null;
   availabilityConfig: unknown;
   /** Contract identity — the operator as counterparty on their rental agreement.
    *  Signer name/email fall back to name/contactEmail when unset. */

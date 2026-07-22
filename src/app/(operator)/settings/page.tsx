@@ -66,6 +66,7 @@ export default async function SettingsPage() {
         logoUrl: op.logoUrl,
         tagline: op.tagline,
         about: op.about,
+        assistantInstructions: op.assistantInstructions,
         availabilityConfig: op.availabilityConfig,
       }}
     />

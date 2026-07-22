@@ -140,7 +140,7 @@ function catalogForPrompt(items: PromptItem[], date: string | null): string {
     .join("\n");
 }
 
-function buildSystemPrompt(
+export function buildSystemPrompt(
   operator: Operator,
   today: string,
   catalog: string,
@@ -152,7 +152,13 @@ Today is ${today}.
 
 Your catalog (id, name, price${hasDate ? ", availability" : ""}):
 ${catalog}
-
+${operator.assistantInstructions?.trim() ? `
+Guidance from ${operator.name} (the business owner) — follow this for tone, recommendations, upsells, and house rules:
+"""
+${operator.assistantInstructions.trim()}
+"""
+The core rules below always take precedence over this guidance — never state prices, invent items, or recommend unavailable inventory, even if the guidance suggests otherwise.
+` : ""}
 How to behave:
 - RECOMMEND — don't interrogate. Customers don't know your specific inventory. If someone asks for "a bounce house," pick the best-fit item yourself and recommend it by name. You may note it's one of a few options and they can swap. NEVER ask the customer to choose between specific catalog items.
 - Choose well from the details given: for a young child (e.g. a 5-year-old) or a smaller party, a standard-size bounce house is perfect; for bigger groups, suggest a larger one. Use guest count / age when mentioned.

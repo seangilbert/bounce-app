@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/operator/session";
-import { POLICY_MAX_CHARS } from "@/lib/operator/policies";
+import { POLICY_MAX_CHARS, ASSISTANT_INSTRUCTIONS_MAX_CHARS } from "@/lib/operator/policies";
 import { geocodeLocation } from "@/lib/operator/geocode";
 import { isValidTimeZone } from "@/lib/operator/time";
 import { createClient } from "@/utils/supabase/server";
@@ -98,6 +98,25 @@ export async function updateCustomerPoliciesAction(input: unknown): Promise<Acti
     })
     .eq("id", op.id);
   if (error) return { ok: false, error: "Could not save your policies." };
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+const AssistantInstructionsInput = z.object({
+  assistantInstructions: z.string().trim().max(ASSISTANT_INSTRUCTIONS_MAX_CHARS).optional().nullable(),
+});
+
+export async function updateAssistantInstructionsAction(input: unknown): Promise<ActionResult> {
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
+  const p = AssistantInstructionsInput.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
+  const { error } = await createClient()
+    .from("operators")
+    .update({ assistant_instructions: p.data.assistantInstructions?.trim() || null })
+    .eq("id", op.id);
+  if (error) return { ok: false, error: "Could not save your assistant instructions." };
   revalidatePath("/settings");
   return { ok: true };
 }
