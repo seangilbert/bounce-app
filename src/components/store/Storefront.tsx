@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Confetti,
   CastleTurret,
@@ -21,6 +21,9 @@ import {
   Heart,
   PaperPlaneTilt,
   ChatCircleDots,
+  CaretLeft,
+  Ruler,
+  Lightning,
 } from "@phosphor-icons/react/dist/ssr";
 import type { Icon } from "@phosphor-icons/react";
 import { DEPOSIT_PERCENT, depositAmount } from "@/lib/deposit";
@@ -44,6 +47,10 @@ interface ApiItem {
   priceUnit: string;
   images?: string[];
   availability?: { owned: number; reserved: number; available: number };
+  // Static specs — already present in the /api/items payload (full Item rows);
+  // surfaced on the customer-facing detail page.
+  footprint?: { w: number | null; l: number | null; h: number | null };
+  powerRequired?: boolean;
 }
 interface ApiResponse {
   operator: {
@@ -189,6 +196,7 @@ export function StoreShell({
   /** Their most recent conversation with this operator, offered (not forced). */
   resumable?: ResumableConversation | null;
 }) {
+  const router = useRouter();
   const opParam = operatorId ? `&operator=${operatorId}` : "";
   const [date, setDate] = useState(nextSaturday);
   const [endDate, setEndDate] = useState(nextSaturday);
@@ -303,21 +311,25 @@ export function StoreShell({
     }
   }
 
-  async function sendChat() {
-    const text = chatInput.trim();
+  async function sendChat(opts?: { text?: string; startDate?: string }) {
+    const text = (opts?.text ?? chatInput).trim();
     if (!text || chatLoading) return;
     const next: ChatMsg[] = [...chat, { role: "user", content: text }];
     setChat(next);
     setChatInput("");
     setChatLoading(true);
     setChatError(null);
+    // A seeded quote (from an item detail page) carries the date the customer is
+    // viewing; a typed message keeps whatever date the conversation established.
+    const startDate = opts?.startDate ?? chatDate ?? undefined;
+    if (opts?.startDate) setChatDate(opts.startDate);
     try {
       const res = await fetch("/api/inquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: next,
-          startDate: chatDate ?? undefined,
+          startDate,
           inquiryId: chatInquiryId ?? undefined,
           operatorId,
         }),
@@ -345,6 +357,15 @@ export function StoreShell({
     setCart(Object.fromEntries(chatQuote.lineItems.map((l) => [l.itemId, l.quantity])));
     setCheckoutInquiryId(chatInquiryId); // tie the resulting booking to this inquiry
     setCheckoutOpen(true);
+  }
+
+  /** From an item detail page: jump to the AI chat and open a quote for this
+   *  item on the date the customer is viewing. The item + date seed the very
+   *  first message so the assistant answers with a quote right away. */
+  function seedQuote(item: ApiItem) {
+    const when = date === endDate ? prettyDate(date) : rangeLabel(date, endDate);
+    router.push(base); // switch to the chat view (shell stays mounted)
+    sendChat({ text: `I'd like a quote for the ${item.name} on ${when}.`, startDate: date });
   }
 
   useEffect(() => {
@@ -382,15 +403,24 @@ export function StoreShell({
 
   const base = `/s/${slug}`;
   const pathname = usePathname();
+  // `/inventory/{id}` is the detail view; `/inventory` alone is the grid. Pull the
+  // id from the path so the shell can render one item's detail without unmounting.
+  const invDetailPrefix = `${base}/inventory/`;
+  const detailId =
+    !embed && pathname.startsWith(invDetailPrefix)
+      ? pathname.slice(invDetailPrefix.length).split("/")[0] || null
+      : null;
   const view = embed
     ? "chat"
-    : pathname.startsWith(`${base}/inventory`)
-      ? "inventory"
-      : pathname.startsWith(`${base}/saved`)
-        ? "saved"
-        : pathname.startsWith(`${base}/inspiration`)
-          ? "inspiration"
-          : "chat";
+    : detailId
+      ? "detail"
+      : pathname.startsWith(`${base}/inventory`)
+        ? "inventory"
+        : pathname.startsWith(`${base}/saved`)
+          ? "saved"
+          : pathname.startsWith(`${base}/inspiration`)
+            ? "inspiration"
+            : "chat";
 
   // Embed bridge: post our height to the parent page so the iframe can auto-size.
   useEffect(() => {
@@ -448,6 +478,7 @@ export function StoreShell({
       <InventoryGrid
         items={items}
         loading={loading}
+        base={base}
         cart={cart}
         setQty={setQty}
         saved={saved}
@@ -651,7 +682,7 @@ export function StoreShell({
                       className="min-w-0 flex-1 bg-transparent px-2 text-sm font-medium text-ink outline-none placeholder:text-ink-faint"
                     />
                     <button
-                      onClick={sendChat}
+                      onClick={() => sendChat()}
                       disabled={!chatInput.trim() || chatLoading}
                       className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-colors hover:bg-brand-deep disabled:bg-sand disabled:text-ink-mute"
                       aria-label="Send"
@@ -672,6 +703,25 @@ export function StoreShell({
                 {inventoryScroller}
               </section>
             </div>
+          ) : view === "detail" ? (
+            /* Single-item detail — a customer reads the full item before quoting. */
+            <ItemDetailView
+              item={detailId ? byId.get(detailId) : undefined}
+              loading={loading}
+              base={base}
+              date={date}
+              endDate={endDate}
+              days={days}
+              changeStart={changeStart}
+              setEndDate={setEndDate}
+              dateBlocked={dateAssessment.ok ? null : dateAssessment.message ?? "That date isn't available."}
+              qty={detailId ? cart[detailId] ?? 0 : 0}
+              onQty={(q) => detailId && setQty(detailId, q)}
+              isSaved={detailId ? saved.has(detailId) : false}
+              onToggleSave={() => detailId && toggleSave(detailId)}
+              onGetQuote={seedQuote}
+              deliveryFeeCents={data?.operator?.deliveryFeeCents ?? 0}
+            />
           ) : view === "inventory" ? (
             /* Inventory-only — the full catalog, edge to edge. */
             <section className="flex flex-1 flex-col bg-cream lg:min-h-0">
@@ -703,6 +753,7 @@ export function StoreShell({
                   <InventoryGrid
                     items={savedItems}
                     loading={loading}
+                    base={base}
                     cart={cart}
                     setQty={setQty}
                     saved={saved}
@@ -1303,6 +1354,7 @@ function DateRange({
 function InventoryGrid({
   items,
   loading,
+  base,
   cart,
   setQty,
   saved,
@@ -1310,6 +1362,7 @@ function InventoryGrid({
 }: {
   items: ApiItem[];
   loading: boolean;
+  base: string;
   cart: Record<string, number>;
   setQty: (id: string, q: number) => void;
   saved: Set<string>;
@@ -1330,6 +1383,7 @@ function InventoryGrid({
         <ItemCard
           key={item.id}
           item={item}
+          base={base}
           qty={cart[item.id] ?? 0}
           onQty={(q) => setQty(item.id, q)}
           isSaved={saved.has(item.id)}
@@ -1594,12 +1648,14 @@ function ChatQuoteCard({
 
 function ItemCard({
   item,
+  base,
   qty,
   onQty,
   isSaved,
   onToggleSave,
 }: {
   item: ApiItem;
+  base: string;
   qty: number;
   onQty: (q: number) => void;
   isSaved: boolean;
@@ -1652,7 +1708,12 @@ function ItemCard({
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="font-bold text-ink">{item.name}</div>
+            <Link
+              href={`${base}/inventory/${item.id}`}
+              className="font-bold text-ink hover:text-brand focus-visible:outline-none focus-visible:underline"
+            >
+              {item.name}
+            </Link>
             <div className="text-xs font-semibold text-ink-mute">{meta.label}</div>
           </div>
           {item.availability != null ? (
@@ -1674,6 +1735,13 @@ function ItemCard({
             {item.description}
           </p>
         ) : null}
+
+        <Link
+          href={`${base}/inventory/${item.id}`}
+          className="mt-2 inline-flex w-fit items-center gap-1 text-[13px] font-bold text-brand hover:text-brand-deep focus-visible:outline-none focus-visible:underline"
+        >
+          View details <ArrowRight size={13} weight="bold" />
+        </Link>
 
         <div className="mt-auto flex items-center justify-between pt-4">
           <div className="font-display text-xl font-bold text-ink">
@@ -1711,6 +1779,300 @@ function ItemCard({
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Space (footprint) as a readable "15 × 15 × 12 ft" string, or null if unset. */
+function footprintLabel(f?: { w: number | null; l: number | null; h: number | null }): string | null {
+  if (!f || (f.w == null && f.l == null && f.h == null)) return null;
+  return [f.w, f.l, f.h].map((p) => (p == null ? "—" : `${p}`)).join(" × ") + " ft";
+}
+
+/**
+ * Customer-facing single-item detail — a shopper reads the full item (photos,
+ * description, specs, live availability for their dates) before quoting. Public,
+ * no auth: browsing and quoting stay guest-first; only the heart needs a sign-in.
+ * The primary CTA seeds the AI quote chat with this item + date.
+ */
+function ItemDetailView({
+  item,
+  loading,
+  base,
+  date,
+  endDate,
+  days,
+  changeStart,
+  setEndDate,
+  dateBlocked,
+  qty,
+  onQty,
+  isSaved,
+  onToggleSave,
+  onGetQuote,
+  deliveryFeeCents,
+}: {
+  item?: ApiItem;
+  loading: boolean;
+  base: string;
+  date: string;
+  endDate: string;
+  days: number;
+  changeStart: (v: string) => void;
+  setEndDate: (v: string) => void;
+  dateBlocked: string | null;
+  qty: number;
+  onQty: (q: number) => void;
+  isSaved: boolean;
+  onToggleSave: () => void;
+  onGetQuote: (item: ApiItem) => void;
+  deliveryFeeCents: number;
+}) {
+  const { open } = useLightbox();
+  const [heroIdx, setHeroIdx] = useState(0);
+
+  const backLink = (
+    <Link
+      href={`${base}/inventory`}
+      className="inline-flex items-center gap-1.5 text-sm font-bold text-ink-soft transition hover:text-ink"
+    >
+      <CaretLeft size={18} weight="bold" /> Back to catalog
+    </Link>
+  );
+
+  // The shell is still loading the catalog — show a skeleton, not "not found".
+  if (!item && loading) {
+    return (
+      <div className="flex-1 overflow-y-auto px-5 py-6 lg:px-8">
+        <div className="mx-auto w-full max-w-4xl">
+          {backLink}
+          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="aspect-[4/3] animate-pulse rounded-2xl bg-sand/50" />
+            <div className="space-y-3">
+              <div className="h-8 w-2/3 animate-pulse rounded-lg bg-sand/50" />
+              <div className="h-5 w-1/3 animate-pulse rounded-lg bg-sand/50" />
+              <div className="h-24 w-full animate-pulse rounded-lg bg-sand/50" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Loaded, but no such active item (bad link, or the item was hidden/removed).
+  if (!item) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-20 text-center">
+        <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-sand text-ink-mute">
+          <Confetti size={30} weight="fill" />
+        </span>
+        <h2 className="font-display text-2xl font-bold text-ink">Item not found</h2>
+        <p className="mt-2 max-w-sm text-sm font-medium text-ink-soft">
+          This rental isn&apos;t available right now. Browse the rest of the catalog.
+        </p>
+        <Link
+          href={`${base}/inventory`}
+          className="mt-5 rounded-2xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-deep"
+        >
+          Browse rentals
+        </Link>
+      </div>
+    );
+  }
+
+  const meta = CAT_META[toCategory(item.category)];
+  const images = item.images ?? [];
+  const heroUrl = images[heroIdx] ?? images[0];
+  const available = item.availability?.available ?? 0;
+  const soldOut = item.availability != null && available <= 0;
+  const footprint = footprintLabel(item.footprint);
+
+  return (
+    <div className="flex-1 overflow-y-auto px-5 py-6 lg:px-8">
+      <div className="mx-auto w-full max-w-4xl">
+        {backLink}
+
+        <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Gallery */}
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={images.length ? () => open(images, heroIdx) : undefined}
+              disabled={!images.length}
+              aria-label={images.length ? `View photos of ${item.name}` : undefined}
+              className={`relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl border border-sand-line ${
+                heroUrl ? "cursor-zoom-in bg-white" : meta.tint
+              }`}
+            >
+              {heroUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={heroUrl} alt={item.name} className="h-full w-full object-cover" />
+              ) : (
+                <meta.Icon size={72} weight="fill" className={meta.ink} />
+              )}
+              {images.length > 1 ? (
+                <span className="absolute bottom-2.5 right-2.5 rounded-full bg-ink/70 px-2.5 py-1 text-[11px] font-bold text-white">
+                  {heroIdx + 1} / {images.length}
+                </span>
+              ) : null}
+            </button>
+            {images.length > 1 ? (
+              <div className="flex flex-wrap gap-2">
+                {images.map((url, i) => (
+                  <button
+                    key={url}
+                    type="button"
+                    onClick={() => setHeroIdx(i)}
+                    aria-label={`Photo ${i + 1}`}
+                    className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 transition ${
+                      i === heroIdx ? "border-brand" : "border-sand-line hover:border-sand"
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Info */}
+          <div className="flex flex-col">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs font-bold uppercase tracking-[0.05em] text-ink-mute">{meta.label}</div>
+                <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-ink">{item.name}</h1>
+              </div>
+              <button
+                type="button"
+                onClick={onToggleSave}
+                aria-pressed={isSaved}
+                aria-label={isSaved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
+                title={isSaved ? "Saved" : "Save"}
+                className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-ring ${
+                  isSaved ? "border-coral/30 bg-coral-tint text-coral" : "border-sand bg-white text-ink-soft hover:border-sand"
+                }`}
+              >
+                <Heart size={19} weight={isSaved ? "fill" : "bold"} />
+              </button>
+            </div>
+
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="font-display text-3xl font-bold text-ink">{money(item.basePrice)}</span>
+              <span className="text-sm font-semibold text-ink-mute">
+                {item.priceUnit === "flat" ? "flat" : item.priceUnit === "per_hour" ? "/ hour" : "/ day"}
+              </span>
+            </div>
+
+            {/* Date-aware availability */}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <DateRange date={date} endDate={endDate} changeStart={changeStart} setEndDate={setEndDate} />
+              {item.availability != null ? (
+                soldOut ? (
+                  <span className="rounded-full bg-coral-tint px-3 py-1.5 text-[12px] font-extrabold text-coral-deep">
+                    Booked for these dates
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 rounded-full bg-teal-tint px-3 py-1.5 text-[12px] font-extrabold text-teal-deep">
+                    <CheckCircle size={13} weight="fill" />
+                    {available} available{days > 1 ? ` · ${days}-day rental` : ""}
+                  </span>
+                )
+              ) : null}
+            </div>
+            {dateBlocked ? (
+              <p className="mt-2 rounded-xl bg-coral-tint px-3.5 py-2.5 text-[13px] font-semibold text-coral-deep">
+                {dateBlocked}
+              </p>
+            ) : null}
+
+            {item.description ? (
+              <p className="mt-5 whitespace-pre-line text-[15px] leading-relaxed text-ink-soft">{item.description}</p>
+            ) : null}
+
+            {/* Specs a renter actually cares about — space and power. */}
+            {(footprint || item.powerRequired != null) ? (
+              <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {footprint ? (
+                  <SpecPill Icon={Ruler} label="Space needed" value={`${footprint} (W × L × H)`} />
+                ) : null}
+                {item.powerRequired != null ? (
+                  <SpecPill
+                    Icon={Lightning}
+                    label="Power"
+                    value={item.powerRequired ? "Needs a standard outlet" : "No power needed"}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* CTAs */}
+            <div className="mt-6 flex flex-col gap-2.5">
+              <button
+                onClick={() => onGetQuote(item)}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-brand px-6 py-3.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep"
+              >
+                <Sparkle size={16} weight="fill" /> Get an instant quote
+              </button>
+              {qty > 0 ? (
+                <div className="flex items-center justify-between rounded-full border border-sand bg-white px-2 py-2">
+                  <button
+                    onClick={() => onQty(qty - 1)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-ink-soft hover:bg-sand"
+                    aria-label="Decrease"
+                  >
+                    <Minus size={16} weight="bold" />
+                  </button>
+                  <span className="font-display text-sm font-bold text-ink">
+                    {qty} in cart
+                  </span>
+                  <button
+                    onClick={() => onQty(qty + 1)}
+                    disabled={qty >= available}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-ink-soft hover:bg-sand disabled:opacity-30"
+                    aria-label="Increase"
+                  >
+                    <Plus size={16} weight="bold" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => onQty(1)}
+                  disabled={soldOut}
+                  className="flex w-full items-center justify-center gap-2 rounded-full border-2 border-sand bg-white px-6 py-3 text-sm font-bold text-ink transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:border-sand-line disabled:bg-sand disabled:text-ink-mute"
+                >
+                  <Plus size={15} weight="bold" /> {soldOut ? "Booked for these dates" : "Add to cart"}
+                </button>
+              )}
+            </div>
+
+            {/* Trust line — mirrors checkout messaging. */}
+            <div className="mt-4 flex flex-col gap-2 rounded-2xl bg-brand-tint p-4 text-[13px] font-semibold text-brand-deep">
+              <span className="flex items-center gap-2">
+                <Truck size={16} weight="fill" />{" "}
+                {deliveryFeeCents > 0 ? "Delivery, setup & pickup" : "Free delivery, setup & pickup"}
+              </span>
+              <span className="flex items-center gap-2">
+                <ShieldCheck size={16} weight="fill" /> Secure payment · e-signed rental agreement
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SpecPill({ Icon, label, value }: { Icon: typeof Ruler; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-2xl border border-sand-line bg-white px-3.5 py-3">
+      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-sand text-ink-soft">
+        <Icon size={18} weight="bold" />
+      </span>
+      <div className="min-w-0">
+        <div className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-faint">{label}</div>
+        <div className="truncate text-[13px] font-bold text-ink">{value}</div>
       </div>
     </div>
   );
