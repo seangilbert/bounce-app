@@ -42,6 +42,11 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
+  // The storefront names its operator (by slug → id). Require it explicitly
+  // rather than letting the agent default to another tenant.
+  if (!parsed.data.operatorId) {
+    return NextResponse.json({ error: "operatorId is required." }, { status: 400 });
+  }
 
   try {
     const result = await handleInquiry(parsed.data);

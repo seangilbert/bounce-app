@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSystemPrompt } from "./assistant";
+import { buildSystemPrompt, handleInquiry } from "./assistant";
 import type { Operator } from "@/lib/inventory/types";
 
 /** Minimal operator — buildSystemPrompt only reads name/location/assistantInstructions. */
@@ -41,6 +41,13 @@ describe("buildSystemPrompt — operator assistant instructions", () => {
     expect(p).toContain("core rules below always take precedence");
     // Guidance sits before the core behavior rules.
     expect(p.indexOf("Guidance from")).toBeLessThan(p.indexOf("How to behave:"));
+  });
+});
+
+describe("handleInquiry — operator scoping", () => {
+  it("refuses to run without an operatorId (no silent default to another tenant)", async () => {
+    // Throws before any DB/model call, so no mocks needed.
+    await expect(handleInquiry({ messages: [{ role: "user", content: "hi" }] })).rejects.toThrow(/operatorId/);
   });
 });
 

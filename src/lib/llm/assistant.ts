@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropicClient } from "./client";
-import { getDefaultOperator, getOperatorById } from "@/lib/inventory/repo";
+import { getOperatorById } from "@/lib/inventory/repo";
 import { listItems } from "@/lib/inventory/repo";
 import { availabilityForOperator } from "@/lib/inventory/availability";
 import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing";
@@ -44,7 +44,9 @@ export const InquirySchema = z.object({
   // Set once an inquiry has been persisted, so we don't create duplicate inbox
   // rows as the conversation continues.
   inquiryId: z.string().uuid().optional(),
-  // Which operator's storefront this inquiry is for (else the default operator).
+  // Which operator's storefront this inquiry is for. handleInquiry requires it;
+  // the /api/v1 agent route injects it from the API key (the body can't pick a
+  // tenant), so it stays optional here for that route's parse.
   operatorId: z.string().uuid().optional(),
 });
 export type Inquiry = z.infer<typeof InquirySchema>;
@@ -183,10 +185,14 @@ ${hasDate ? "- Availability for the chosen date is shown above; do not recommend
  * recomputed from authoritative DB prices; the model's numbers are advisory.
  */
 export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResult> {
-  const operator = inquiry.operatorId
-    ? await getOperatorById(inquiry.operatorId)
-    : await getDefaultOperator();
-  if (!operator) throw new Error("No operator configured.");
+  // Require an explicit operator — never fall back to a "default" one. With more
+  // than one tenant, defaulting would serve one operator's agent (its custom
+  // instructions + config) to another operator's customer. Every real entry
+  // point supplies it: the storefront by slug, the /api/v1 agent by key, SMS
+  // from the matched thread.
+  if (!inquiry.operatorId) throw new Error("handleInquiry requires an operatorId.");
+  const operator = await getOperatorById(inquiry.operatorId);
+  if (!operator) throw new Error(`Operator ${inquiry.operatorId} not found.`);
 
   // Free-tier AI-quote cap. Gate a *new* conversation (no inquiryId yet) BEFORE
   // any model call, so a capped operator never spends against our Anthropic bill;
