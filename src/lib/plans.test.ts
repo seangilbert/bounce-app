@@ -27,6 +27,17 @@ describe("effectivePlanId", () => {
     expect(effectivePlanId({ plan: "growing", subscriptionStatus: null })).toBe("free");
   });
 
+  it("keeps a billing-exempt (comp) account on the top tier no matter the billing state", () => {
+    // Immune to a lapsed status, a free/unset plan, or no subscription at all.
+    expect(effectivePlanId({ plan: "growing", subscriptionStatus: "canceled", billingExempt: true })).toBe("growing");
+    expect(effectivePlanId({ plan: "free", subscriptionStatus: null, billingExempt: true })).toBe("growing");
+    expect(effectivePlanId({ plan: null, subscriptionStatus: null, billingExempt: true })).toBe("growing");
+    // And a comp account gets the full top-tier capabilities.
+    expect(planCapabilities({ plan: "free", subscriptionStatus: null, billingExempt: true })).toEqual(
+      PLAN_CAPABILITIES.growing,
+    );
+  });
+
   it("falls back to free for an unknown plan value", () => {
     expect(effectivePlanId({ plan: "enterprise", subscriptionStatus: "active" })).toBe("free");
     expect(effectivePlanId({ plan: null, subscriptionStatus: "active" })).toBe("free");

@@ -38,6 +38,9 @@ export interface Operator {
   /** Operator-authored guidance injected into the AI quote assistant's system
    *  prompt (tone, recommendations, house rules). Null = none. */
   assistantInstructions: string | null;
+  /** Comp / internal account — always entitled to the top tier, never billed.
+   *  Admin-set only; see effectivePlanId. */
+  billingExempt: boolean;
   availabilityConfig: unknown;
   /** Contract identity — the operator as counterparty on their rental agreement.
    *  Signer name/email fall back to name/contactEmail when unset. */

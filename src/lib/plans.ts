@@ -72,16 +72,24 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
 /** Subscription statuses that still entitle a paid plan (incl. past_due grace). */
 const ENTITLED_STATUSES = new Set(["trialing", "active", "past_due"]);
 
-type Billed = { plan: string | null; subscriptionStatus: string | null };
+/** The tier a billing-exempt (comp / internal) operator always gets — the top
+ *  paid plan, independent of any subscription state. */
+export const COMP_PLAN_ID: PlanId = "growing";
+
+type Billed = { plan: string | null; subscriptionStatus: string | null; billingExempt?: boolean | null };
 
 /**
- * The tier an operator is actually entitled to *right now*. A paid `plan` only
- * counts while its subscription is in good standing (trialing/active, plus a
- * past_due grace window); otherwise the operator falls back to Free. This is the
- * belt to the webhook's suspenders — even if a downgrade write is missed, access
- * still reflects the subscription state.
+ * The tier an operator is actually entitled to *right now*.
+ *
+ * A billing-exempt (comp/internal) operator is always on the top tier, immune to
+ * subscription state — this is what makes a comped account durable: even a
+ * missed or late billing webhook, a lapsed status, or a stray checkout can't
+ * downgrade it. Otherwise a paid `plan` only counts while its subscription is in
+ * good standing (trialing/active, plus a past_due grace window); else the
+ * operator falls back to Free. This is the belt to the webhook's suspenders.
  */
 export function effectivePlanId(op: Billed): PlanId {
+  if (op.billingExempt) return COMP_PLAN_ID;
   const plan = (op.plan as PlanId) in PLANS ? (op.plan as PlanId) : "free";
   if (plan === "free") return "free";
   return op.subscriptionStatus && ENTITLED_STATUSES.has(op.subscriptionStatus) ? plan : "free";

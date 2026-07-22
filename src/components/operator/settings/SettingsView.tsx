@@ -53,6 +53,7 @@ interface OperatorSettings {
   slug: string | null;
   plan: string;
   subscriptionStatus: string | null;
+  billingExempt: boolean;
   aiQuotaUsed: number;
   /** Monthly AI-quote cap; null = unlimited (paid plan). */
   aiQuotaLimit: number | null;
@@ -1287,14 +1288,18 @@ function AccountSection({ operator }: { operator: OperatorSettings }) {
       setUpgrading(false);
     }
   }
-  const planLabel = operator.plan
-    ? `${operator.plan[0].toUpperCase()}${operator.plan.slice(1)}`
-    : "Free";
-  const subLabel = operator.subscriptionStatus
-    ? ` · ${operator.subscriptionStatus}`
-    : operator.plan === "free"
-      ? ""
-      : " · not active";
+  const planLabel = operator.billingExempt
+    ? "Growing"
+    : operator.plan
+      ? `${operator.plan[0].toUpperCase()}${operator.plan.slice(1)}`
+      : "Free";
+  const subLabel = operator.billingExempt
+    ? " · complimentary"
+    : operator.subscriptionStatus
+      ? ` · ${operator.subscriptionStatus}`
+      : operator.plan === "free"
+        ? ""
+        : " · not active";
 
   async function connect() {
     setConnecting(true);

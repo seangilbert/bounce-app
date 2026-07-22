@@ -18,6 +18,15 @@ export async function POST(req: Request) {
   }
   const operator = g.membership.operator;
 
+  // Comp / internal accounts are never billed — refuse to create a subscription
+  // (which would link them to Stripe and expose them to lapse-downgrades).
+  if (operator.billingExempt) {
+    return NextResponse.json(
+      { error: "This account is complimentary and isn't billed." },
+      { status: 400 },
+    );
+  }
+
   // An existing operator can upgrade by naming a target plan (e.g. a Free
   // operator who hit the AI-quote cap picks Solo); signup omits it and checks
   // out the plan chosen at account creation. The webhook reconciles the plan

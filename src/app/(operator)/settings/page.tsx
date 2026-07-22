@@ -43,6 +43,7 @@ export default async function SettingsPage() {
         slug: op.slug,
         plan: op.plan,
         subscriptionStatus: op.subscriptionStatus,
+        billingExempt: op.billingExempt,
         connectChargesEnabled: op.connectChargesEnabled,
         depositPercent: op.depositPercent,
         autoQuoteCapCents: op.autoQuoteCapCents,

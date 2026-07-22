@@ -41,6 +41,7 @@ interface OperatorRow {
   tagline: string | null;
   about: string | null;
   assistant_instructions: string | null;
+  billing_exempt: boolean | null;
   availability_config: unknown;
   business_address: string | null;
   esign_signer_name: string | null;
@@ -108,6 +109,7 @@ function rowToOperator(r: OperatorRow): Operator {
     tagline: r.tagline,
     about: r.about,
     assistantInstructions: r.assistant_instructions,
+    billingExempt: r.billing_exempt ?? false,
     availabilityConfig: r.availability_config ?? {},
     businessAddress: r.business_address,
     esignSignerName: r.esign_signer_name,
