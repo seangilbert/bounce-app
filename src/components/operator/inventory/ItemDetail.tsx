@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CaretLeft,
+  CaretRight,
   PencilSimple,
   Lightning,
   Ruler,
@@ -13,10 +14,21 @@ import {
   Broom,
   Warning,
   Package,
+  CalendarBlank,
 } from "@phosphor-icons/react/dist/ssr";
 import { bookableUnits, outOfServiceUnits, type Item } from "@/lib/inventory/types";
+import type { ItemHold } from "@/lib/inventory/availability";
 import { ItemDrawer } from "./ItemDrawer";
 import { catMeta, money, unitLabel } from "./shared";
+
+/** Live availability of this item over a forward window (from the engine). */
+export interface ItemAvailabilitySummary {
+  owned: number;
+  reserved: number;
+  available: number;
+  horizonDate: string;
+  horizonDays: number;
+}
 
 function footprintLabel(f: Item["footprint"]): string | null {
   const parts = [f.w, f.l, f.h];
@@ -24,7 +36,36 @@ function footprintLabel(f: Item["footprint"]): string | null {
   return parts.map((p) => (p == null ? "—" : `${p}`)).join(" × ") + " ft (W × L × H)";
 }
 
-export function ItemDetail({ item, isAdmin }: { item: Item; isAdmin: boolean }) {
+/** "Sat, Jul 25" or "Jul 25 → Jul 27" for a booking's date range. */
+function fmtHoldRange(start: string, end: string): string {
+  const f = (iso: string) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  return start === end ? f(start) : `${f(start)} → ${f(end)}`;
+}
+
+const HOLD_STATUS_LABEL: Record<string, string> = {
+  pending_payment: "Payment pending",
+  paid: "Paid",
+  contracted: "Contracted",
+  confirmed: "Confirmed",
+  delivered: "Out now",
+};
+
+export function ItemDetail({
+  item,
+  isAdmin,
+  holds,
+  availability,
+}: {
+  item: Item;
+  isAdmin: boolean;
+  holds: ItemHold[];
+  availability: ItemAvailabilitySummary;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [hero, setHero] = useState(0);
@@ -147,6 +188,64 @@ export function ItemDetail({ item, isAdmin }: { item: Item; isAdmin: boolean }) 
         ) : (
           <p className="mt-2 text-[12px] font-medium text-ink-mute">All owned units are ready to book.</p>
         )}
+      </Card>
+
+      {/* Live availability over the next window + the bookings holding units. */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <SectionLabel>Availability · next {availability.horizonDays} days</SectionLabel>
+          <span className="text-[12px] font-semibold text-ink-mute">
+            through {fmtHoldRange(availability.horizonDate, availability.horizonDate)}
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <Stat value={availability.owned} label="Bookable" />
+          <Stat
+            value={availability.reserved}
+            label="Peak booked"
+            tone={availability.reserved > 0 ? "amber" : "mute"}
+          />
+          <Stat
+            value={Math.max(0, availability.available)}
+            label="Free at peak"
+            tone={availability.available > 0 ? "teal" : "mute"}
+          />
+        </div>
+        <p className="mt-2 text-[12px] font-medium text-ink-mute">
+          {availability.reserved === 0
+            ? `No committed bookings hold this item in the next ${availability.horizonDays} days.`
+            : availability.available <= 0
+              ? "Fully booked on its busiest upcoming day."
+              : `Up to ${availability.reserved} of ${availability.owned} reserved on the busiest upcoming day.`}
+        </p>
+
+        {holds.length > 0 ? (
+          <div className="mt-3 space-y-1.5 border-t border-sand-line pt-3">
+            <div className="mb-1 text-[12px] font-bold text-ink-soft">
+              Upcoming bookings ({holds.length})
+            </div>
+            {holds.map((h) => (
+              <Link
+                key={h.bookingId}
+                href={`/bookings/${h.bookingId}`}
+                className="-mx-2 flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-cream"
+              >
+                <CalendarBlank size={16} weight="fill" className="flex-shrink-0 text-brand" />
+                <span className="flex-shrink-0 text-sm font-bold text-ink">
+                  {fmtHoldRange(h.startDate, h.endDate)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink-mute">
+                  {h.customerName ?? "Customer"}
+                  {h.quantity > 1 ? ` · ${h.quantity} units` : ""}
+                </span>
+                <span className="flex-shrink-0 text-[11px] font-bold text-ink-soft">
+                  {HOLD_STATUS_LABEL[h.status] ?? h.status}
+                </span>
+                <CaretRight size={14} weight="bold" className="flex-shrink-0 text-ink-faint" />
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </Card>
 
       {/* Required equipment */}

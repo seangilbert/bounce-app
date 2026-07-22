@@ -56,6 +56,62 @@ export async function checkAvailability(
   return { owned, reserved, available, ok: available >= quantityNeeded };
 }
 
+/** Statuses that hold inventory (mirrors the SQL in migration 0004/0005). A mere
+ *  inquiry/quote does NOT hold a unit. */
+const RESERVED_STATUSES = ["pending_payment", "paid", "contracted", "confirmed", "delivered"];
+
+/** One committed booking currently or soon holding units of an item. */
+export interface ItemHold {
+  bookingId: string;
+  customerName: string | null;
+  startDate: string;
+  endDate: string;
+  status: string;
+  quantity: number;
+}
+
+/**
+ * Committed bookings that hold this item on or after `fromDate` (in-progress +
+ * upcoming), soonest first. Operator-scoped. Powers the "bookings currently
+ * holding this unit" panel on the operator inventory detail page.
+ */
+export async function listItemHolds(
+  operatorId: string,
+  itemId: string,
+  fromDate: string,
+): Promise<ItemHold[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("booking_items")
+    .select("quantity, bookings!inner(id, operator_id, customer_name, start_date, end_date, status)")
+    .eq("item_id", itemId)
+    .eq("bookings.operator_id", operatorId)
+    .gte("bookings.end_date", fromDate)
+    .in("bookings.status", RESERVED_STATUSES);
+  if (error) throw new Error(`listItemHolds failed: ${error.message}`);
+
+  type Row = {
+    quantity: number;
+    bookings: {
+      id: string;
+      customer_name: string | null;
+      start_date: string;
+      end_date: string;
+      status: string;
+    };
+  };
+  return ((data as unknown as Row[]) ?? [])
+    .map((r) => ({
+      bookingId: r.bookings.id,
+      customerName: r.bookings.customer_name,
+      startDate: r.bookings.start_date,
+      endDate: r.bookings.end_date,
+      status: r.bookings.status,
+      quantity: r.quantity,
+    }))
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+}
+
 /** The operator's active catalog, each item annotated with availability over the range. */
 export async function availabilityForOperator(
   operatorId: string,
