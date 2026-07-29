@@ -21,6 +21,14 @@ const ItemInput = z.object({
     .optional(),
   basePrice: z.number().int().min(0), // minor units (cents)
   priceUnit: z.enum(["per_day", "per_hour", "flat"]),
+  // Footprint in feet — fully optional; each dimension may be null (unset).
+  footprint: z
+    .object({
+      w: z.number().min(0).max(999).nullable(),
+      l: z.number().min(0).max(999).nullable(),
+      h: z.number().min(0).max(999).nullable(),
+    })
+    .optional(),
   powerRequired: z.boolean().optional(),
   images: z.array(z.string().url()).max(12).optional(),
   active: z.boolean().optional(),

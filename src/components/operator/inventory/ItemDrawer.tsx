@@ -28,6 +28,9 @@ interface DraftForm {
   damaged: string;
   inRepair: string;
   equipment: EquipmentItem[];
+  footW: string; // footprint in feet, as typed; "" = unset
+  footL: string;
+  footH: string;
 }
 
 const emptyDraft: DraftForm = {
@@ -44,7 +47,16 @@ const emptyDraft: DraftForm = {
   damaged: "0",
   inRepair: "0",
   equipment: [],
+  footW: "",
+  footL: "",
+  footH: "",
 };
+
+/** Feet string → number, or null when blank/invalid. Never throws; keeps footprint optional. */
+function footFt(s: string): number | null {
+  const n = parseFloat(s);
+  return s.trim() !== "" && Number.isFinite(n) && n >= 0 ? n : null;
+}
 
 function itemToDraft(i: Item): DraftForm {
   return {
@@ -61,6 +73,9 @@ function itemToDraft(i: Item): DraftForm {
     damaged: String(i.unitsDamaged),
     inRepair: String(i.unitsInRepair),
     equipment: i.requiredEquipment.map((e) => ({ ...e })),
+    footW: i.footprint.w != null ? String(i.footprint.w) : "",
+    footL: i.footprint.l != null ? String(i.footprint.l) : "",
+    footH: i.footprint.h != null ? String(i.footprint.h) : "",
   };
 }
 
@@ -160,6 +175,7 @@ export function ItemDrawer({
         .filter((e) => e.label),
       basePrice: priceCents,
       priceUnit: draft.priceUnit,
+      footprint: { w: footFt(draft.footW), l: footFt(draft.footL), h: footFt(draft.footH) },
       powerRequired: draft.powerRequired,
       images: draft.images,
       active: draft.active,
@@ -408,6 +424,24 @@ export function ItemDrawer({
             </p>
           </Field>
 
+          {/* Footprint — optional; feeds the "Space needed" spec on the storefront. */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[13px] font-bold text-ink-soft">Footprint (ft)</span>
+              <span className="text-[12px] font-medium text-ink-mute">Optional</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <FootInput label="W" value={draft.footW} onChange={(v) => set("footW", v)} />
+              <span className="pt-4 text-ink-faint" aria-hidden="true">×</span>
+              <FootInput label="L" value={draft.footL} onChange={(v) => set("footL", v)} />
+              <span className="pt-4 text-ink-faint" aria-hidden="true">×</span>
+              <FootInput label="H" value={draft.footH} onChange={(v) => set("footH", v)} />
+            </div>
+            <p className="mt-1 text-[12px] font-medium text-ink-mute">
+              Shown as “Space needed” on your storefront so customers know it&apos;ll fit. Leave blank if unsure.
+            </p>
+          </div>
+
           <div className="space-y-2.5">
             <Toggle checked={draft.active} onChange={(v) => set("active", v)}>
               Visible on storefront
@@ -479,6 +513,33 @@ function ReadinessInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="input"
+      />
+    </label>
+  );
+}
+
+function FootInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="flex-1">
+      <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-ink-faint">{label}</span>
+      <input
+        type="number"
+        min="0"
+        step="0.5"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="—"
+        className="input"
+        aria-label={`Footprint ${label} in feet`}
       />
     </label>
   );

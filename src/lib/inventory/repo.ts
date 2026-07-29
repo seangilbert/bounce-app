@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
-import { normalizeEquipment, type EquipmentItem, type Item, type NewItem, type Operator, type PriceUnit } from "./types";
+import { normalizeEquipment, type EquipmentItem, type Footprint, type Item, type NewItem, type Operator, type PriceUnit } from "./types";
 import type { MemberRole } from "@/lib/operator/roles";
 
 const OPERATORS = "operators";
@@ -266,6 +266,7 @@ export interface ItemPatch {
   requiredEquipment?: EquipmentItem[];
   basePrice?: number;
   priceUnit?: PriceUnit;
+  footprint?: Partial<Footprint>;
   powerRequired?: boolean;
   images?: string[];
   active?: boolean;
@@ -285,6 +286,11 @@ export async function updateItem(operatorId: string, id: string, patch: ItemPatc
   if (patch.requiredEquipment !== undefined) row.required_equipment = normalizeEquipment(patch.requiredEquipment);
   if (patch.basePrice !== undefined) row.base_price = patch.basePrice;
   if (patch.priceUnit !== undefined) row.price_unit = patch.priceUnit;
+  if (patch.footprint !== undefined) {
+    row.footprint_w = patch.footprint.w ?? null;
+    row.footprint_l = patch.footprint.l ?? null;
+    row.footprint_h = patch.footprint.h ?? null;
+  }
   if (patch.powerRequired !== undefined) row.power_required = patch.powerRequired;
   if (patch.images !== undefined) row.images = patch.images;
   if (patch.active !== undefined) row.active = patch.active;
