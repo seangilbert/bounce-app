@@ -44,6 +44,30 @@ describe("buildSystemPrompt — operator assistant instructions", () => {
   });
 });
 
+describe("buildSystemPrompt — universal agent behavior (core, every operator)", () => {
+  // These live in code so a brand-new operator inherits them with NO custom
+  // instructions — they must be present even when assistantInstructions is null.
+  it("bakes voice, handoff, safety, add-on, objection, and discount conduct into the core prompt", () => {
+    const p = buildSystemPrompt(op(), "2026-07-21", CATALOG, true, CONFIG);
+    expect(p).toContain("Voice:");
+    expect(p).toContain("not a person"); // never claim to be human
+    expect(p).toContain("HAND OFF to a human");
+    expect(p).toContain("SAFETY beats a sale");
+    expect(p).toContain("ADD-ONS:");
+    expect(p).toContain("OBJECTIONS:");
+    expect(p).toContain("DISCOUNTS:");
+    expect(p).toContain("REUSE what's already known");
+    expect(p).toContain('Respect "no" immediately');
+  });
+
+  it("keeps item-specific hazards out of core — safety defers to the owner's guidance", () => {
+    const p = buildSystemPrompt(op(), "2026-07-21", CATALOG, true, CONFIG);
+    // The core prompt states the principle but names no category-specific hazard.
+    expect(p).toContain("item-specific hazards to watch for come from the owner's guidance");
+    expect(p).not.toMatch(/anchoring|wet\/dry|Hometown Heroes/i);
+  });
+});
+
 describe("handleInquiry — operator scoping", () => {
   it("refuses to run without an operatorId (no silent default to another tenant)", async () => {
     // Throws before any DB/model call, so no mocks needed.
