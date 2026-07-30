@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Confetti, CircleNotch } from "@phosphor-icons/react/dist/ssr";
@@ -13,6 +13,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Surface failures handed back by /auth/callback (e.g. an expired reset link).
+  useEffect(() => {
+    const msg = new URLSearchParams(window.location.search).get("error");
+    if (msg) setError(msg);
+  }, []);
 
   async function signIn(e: React.FormEvent) {
     e.preventDefault();
@@ -64,7 +70,12 @@ export default function LoginPage() {
           </label>
 
           <label className="mt-3 block">
-            <span className="mb-1 block text-[13px] font-bold text-ink-soft">Password</span>
+            <span className="mb-1 flex items-center justify-between">
+              <span className="text-[13px] font-bold text-ink-soft">Password</span>
+              <Link href="/forgot-password" className="text-[13px] font-bold text-brand hover:text-brand-deep">
+                Forgot?
+              </Link>
+            </span>
             <input
               type="password"
               autoComplete="current-password"
