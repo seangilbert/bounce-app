@@ -93,6 +93,14 @@ const APP_PATH_PREFIXES = [
   "/login",
   "/signup",
   "/invite",
+  "/forgot-password",
+  "/reset-password",
+  // The emailed password-recovery link lands on /auth/callback, which exchanges
+  // the code for a session and forwards to /reset-password. Both must stay on
+  // the APP host: the session cookies it sets are host-scoped, and the operator
+  // dashboard it leads to lives here — bounce them to the public host and the
+  // recovery session is stranded on the wrong origin.
+  "/auth",
 ];
 
 export function isAppPath(path: string): boolean {

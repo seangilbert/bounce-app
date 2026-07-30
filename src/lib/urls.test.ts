@@ -27,7 +27,17 @@ describe("isAppPath", () => {
   });
 
   it("classifies auth + onboarding as app paths (they belong with the operator app)", () => {
-    for (const p of ["/login", "/signup", "/invite", "/invite/tok-123"]) {
+    for (const p of [
+      "/login",
+      "/signup",
+      "/invite",
+      "/invite/tok-123",
+      // Password recovery: request page, the callback that mints the session,
+      // and the set-new-password page all live on the app host.
+      "/forgot-password",
+      "/reset-password",
+      "/auth/callback",
+    ]) {
       expect(isAppPath(p), p).toBe(true);
     }
   });
