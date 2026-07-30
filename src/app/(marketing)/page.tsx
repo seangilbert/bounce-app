@@ -13,11 +13,15 @@ import {
 import { PricingTiers } from "@/components/marketing/PricingTiers";
 import { SignupCta } from "@/components/marketing/SignupCta";
 
+// Radius scale is locked page-wide: pills/buttons = rounded-full, cards & panels
+// = rounded-3xl, icon chips = rounded-2xl. Accent is locked to `brand` (the only
+// accent on the page); teal appears once, as a genuine "online" status dot.
+
 const FEATURES = [
   {
     icon: Sparkle,
     title: "AI quote assistant",
-    body: "Customers ask in plain language and get an instant, accurate quote grounded in your real inventory and prices — even while you're on a job.",
+    body: "Customers ask in plain language and get an instant, accurate quote grounded in your real inventory and prices, even while you're out on a job.",
   },
   {
     icon: Storefront,
@@ -37,12 +41,12 @@ const FEATURES = [
   {
     icon: Signature,
     title: "E-signed contracts",
-    body: "Rental agreements sent and signed automatically the moment a booking is paid — no chasing paperwork before the party.",
+    body: "Rental agreements sent and signed automatically the moment a booking is paid, so there's no paperwork to chase before the party.",
   },
   {
     icon: Truck,
     title: "Delivery routing",
-    body: "See the day's drop-offs and pickups, priced by zone or distance, so your drivers know exactly where to go.",
+    body: "See the day's drop-offs and pickups, priced by zone or distance, so your drivers know exactly where to go and when.",
   },
 ];
 
@@ -50,7 +54,7 @@ const STEPS = [
   {
     n: "1",
     title: "Add your inventory",
-    body: "List your bounce houses, tables, tents — whatever you rent — with prices, quantities, and delivery rules.",
+    body: "List everything you rent, from bounce houses to tables to tents, with prices, quantities, and delivery rules.",
   },
   {
     n: "2",
@@ -65,6 +69,8 @@ const STEPS = [
 ];
 
 export default function MarketingHome() {
+  const [featLead, featMid, featBanner] = [FEATURES.slice(0, 2), FEATURES.slice(2, 5), FEATURES[5]];
+
   return (
     <>
       {/* Hero */}
@@ -80,9 +86,8 @@ export default function MarketingHome() {
               Stop losing bookings to slow replies.
             </h1>
             <p className="mt-5 max-w-lg text-lg font-medium text-ink-soft">
-              Customers book whoever answers first. Movables replies to every inquiry instantly — with
-              an accurate quote from your real inventory — so you never miss another booking request,
-              even when you&apos;re out on a job.
+              Customers book whoever answers first. Movables replies instantly with an accurate
+              quote, even while you&apos;re on a job.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <SignupCta
@@ -103,9 +108,9 @@ export default function MarketingHome() {
             </p>
           </div>
 
-          {/* AI-quote taste — a static mock of the storefront chat. */}
+          {/* AI-quote taste - a static mock of the storefront chat. */}
           <div className="relative">
-            <div className="mx-auto max-w-md rounded-[28px] border border-sand-line bg-white p-5 shadow-xl shadow-ink/5">
+            <div className="mx-auto max-w-md rounded-3xl border border-sand-line bg-white p-5 shadow-xl shadow-ink/5">
               <div className="flex items-center gap-2 border-b border-sand-line pb-3">
                 <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand text-white">
                   <ChatCircleText size={16} weight="fill" />
@@ -120,11 +125,11 @@ export default function MarketingHome() {
                   Need a bounce house + 4 tables for Sat June 20, in Katy 77494
                 </div>
                 <div className="max-w-[88%] rounded-2xl rounded-bl-md bg-cream px-3.5 py-2.5 text-sm font-medium text-ink-soft">
-                  Great — the Castle Combo is available that day! Here&apos;s your quote:
+                  Good news, the Castle Combo is available that day. Here&apos;s your quote:
                   <div className="mt-2 space-y-1 rounded-xl border border-sand-line bg-white p-2.5 text-[13px]">
                     <div className="flex justify-between"><span>Castle Combo (1 day)</span><span className="font-bold text-ink">$225</span></div>
                     <div className="flex justify-between"><span>6ft tables × 4</span><span className="font-bold text-ink">$40</span></div>
-                    <div className="flex justify-between"><span>Delivery — Katy</span><span className="font-bold text-ink">$25</span></div>
+                    <div className="flex justify-between"><span>Delivery to Katy</span><span className="font-bold text-ink">$25</span></div>
                     <div className="mt-1 flex justify-between border-t border-sand-line pt-1"><span className="font-bold text-ink">Total</span><span className="font-extrabold text-ink">$290</span></div>
                   </div>
                 </div>
@@ -137,23 +142,26 @@ export default function MarketingHome() {
         </div>
       </section>
 
-      {/* Value strip */}
+      {/* Value strip - a single divided benefit bar (distinct from the card grids below). */}
       <section className="border-y border-sand-line bg-cream-2">
-        <div className="mx-auto grid max-w-6xl gap-6 px-5 py-8 sm:grid-cols-3 sm:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-8 sm:flex-row sm:items-center sm:divide-x sm:divide-sand-line sm:px-8">
           {[
             "Never miss another booking request",
-            "Reply to every customer instantly — even mid-delivery",
+            "Reply in seconds, not hours",
             "Turn more inquiries into paid bookings",
           ].map((line) => (
-            <div key={line} className="flex items-start gap-2 text-sm font-semibold text-ink-soft">
-              <Check size={18} weight="bold" className="mt-0.5 shrink-0 text-teal" />
+            <div
+              key={line}
+              className="flex flex-1 items-center gap-2 text-sm font-semibold text-ink-soft sm:justify-center sm:px-6"
+            >
+              <Check size={18} weight="bold" className="shrink-0 text-brand" />
               {line}
             </div>
           ))}
         </div>
       </section>
 
-      {/* Features */}
+      {/* Features - asymmetric bento: 2 lead tiles, 3 mid tiles, 1 full-width banner. */}
       <section id="features" className="scroll-mt-20">
         <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
           <div className="max-w-2xl">
@@ -161,13 +169,30 @@ export default function MarketingHome() {
               Everything you need to run rentals
             </h2>
             <p className="mt-3 text-lg font-medium text-ink-mute">
-              From the first customer question to the driver dropping off — Movables handles the whole
+              From the first customer question to the driver dropping off, Movables handles the whole
               job so you can take on more parties.
             </p>
           </div>
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f) => (
-              <div key={f.title} className="rounded-3xl border border-sand-line bg-white p-6">
+          <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-6">
+            {/* Two prominent lead tiles (tinted). */}
+            {featLead.map((f) => (
+              <div
+                key={f.title}
+                className="rounded-3xl border border-brand/15 bg-gradient-to-br from-brand/[0.08] to-brand/[0.02] p-7 md:col-span-3"
+              >
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand text-white">
+                  <f.icon size={24} weight="fill" />
+                </span>
+                <h3 className="mt-4 font-display text-xl font-bold text-ink">{f.title}</h3>
+                <p className="mt-1.5 max-w-md text-sm font-medium text-ink-soft">{f.body}</p>
+              </div>
+            ))}
+            {/* Three supporting tiles. */}
+            {featMid.map((f) => (
+              <div
+                key={f.title}
+                className="rounded-3xl border border-sand-line bg-white p-6 md:col-span-2"
+              >
                 <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand/10 text-brand">
                   <f.icon size={22} weight="fill" />
                 </span>
@@ -175,27 +200,44 @@ export default function MarketingHome() {
                 <p className="mt-1.5 text-sm font-medium text-ink-mute">{f.body}</p>
               </div>
             ))}
+            {/* Full-width banner tile to break the grid rhythm. */}
+            <div className="flex flex-col gap-5 rounded-3xl border border-sand-line bg-gradient-to-r from-cream-2 to-brand/5 p-7 sm:flex-row sm:items-center md:col-span-6">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand text-white">
+                <featBanner.icon size={24} weight="fill" />
+              </span>
+              <div>
+                <h3 className="font-display text-xl font-bold text-ink">{featBanner.title}</h3>
+                <p className="mt-1 max-w-2xl text-sm font-medium text-ink-soft">{featBanner.body}</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* How it works */}
+      {/* How it works - heading left, vertical stepper right (a different layout family). */}
       <section className="border-y border-sand-line bg-cream-2">
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
-          <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
-            Up and running in an afternoon
-          </h2>
-          <div className="mt-12 grid gap-8 sm:grid-cols-3">
-            {STEPS.map((s) => (
-              <div key={s.n}>
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand font-display text-lg font-extrabold text-white">
-                  {s.n}
-                </span>
-                <h3 className="mt-4 font-display text-xl font-bold text-ink">{s.title}</h3>
-                <p className="mt-1.5 text-sm font-medium text-ink-mute">{s.body}</p>
-              </div>
-            ))}
+        <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 sm:px-8 sm:py-24 md:grid-cols-5">
+          <div className="md:col-span-2">
+            <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+              Up and running in an afternoon
+            </h2>
+            <p className="mt-3 text-lg font-medium text-ink-mute">
+              No installers, no onboarding calls. Three steps and your storefront is taking bookings.
+            </p>
           </div>
+          <ol className="relative md:col-span-3 md:border-l md:border-sand md:pl-10">
+            {STEPS.map((s, i) => (
+              <li key={s.n} className={i === 0 ? "" : "mt-8"}>
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand font-display text-lg font-extrabold text-white md:-ml-[3.25rem]">
+                    {s.n}
+                  </span>
+                  <h3 className="font-display text-xl font-bold text-ink">{s.title}</h3>
+                </div>
+                <p className="mt-1.5 max-w-lg text-sm font-medium text-ink-soft md:pl-0">{s.body}</p>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
 
@@ -223,12 +265,12 @@ export default function MarketingHome() {
 
       {/* Final CTA */}
       <section className="px-5 pb-20 sm:px-8">
-        <div className="mx-auto max-w-6xl overflow-hidden rounded-[32px] bg-ink px-8 py-14 text-center sm:py-20">
+        <div className="mx-auto max-w-6xl overflow-hidden rounded-3xl bg-ink px-8 py-14 text-center sm:py-20">
           <h2 className="mx-auto max-w-2xl font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
             Ready to stop losing bookings?
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-lg font-medium text-cream/70">
-            Set up in minutes and let your AI office manager handle the inbox — day and night.
+            Set up in minutes and let your AI office manager handle the inbox, day and night.
           </p>
           <SignupCta
             plan="free"

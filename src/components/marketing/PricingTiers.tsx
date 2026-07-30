@@ -43,7 +43,7 @@ export function PricingTiers() {
             <ul className="mt-5 space-y-2.5">
               {plan.features.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm font-medium text-ink-soft">
-                  <Check size={17} weight="bold" className="mt-0.5 shrink-0 text-teal" />
+                  <Check size={17} weight="bold" className="mt-0.5 shrink-0 text-brand" />
                   {f}
                 </li>
               ))}
