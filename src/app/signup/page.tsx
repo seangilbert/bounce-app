@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Confetti, CircleNotch, EnvelopeSimple } from "@phosphor-icons/react/dist/ssr";
+import { CircleNotch, EnvelopeSimple } from "@phosphor-icons/react/dist/ssr";
 import { createClient } from "@/utils/supabase/client";
 import { PLAN_LIST, isPaidPlan, PLANS, type PlanId, type Plan } from "@/lib/plans";
 import { signupsOpen, earlyAccessHref, EARLY_ACCESS_EMAIL } from "@/lib/signups";
@@ -13,9 +13,8 @@ function SignupsClosed() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-cream px-6 py-16">
       <div className="w-full max-w-md text-center">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand text-white">
-          <Confetti size={24} weight="fill" />
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/movables-icon.png" alt="Movables" className="mx-auto h-12 w-12 object-contain" />
         <h1 className="mt-5 font-display text-2xl font-extrabold tracking-tight text-ink">
           Movables is launching soon
         </h1>
@@ -115,14 +114,10 @@ export default function SignupPage() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-cream px-6 py-16">
       <div className="w-full max-w-md">
-        <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand text-white">
-            <Confetti size={22} weight="fill" />
-          </span>
-          <div>
-            <div className="font-display text-xl font-extrabold tracking-tight text-ink">Movables</div>
-            <div className="text-xs font-semibold text-ink-mute">Create your workspace</div>
-          </div>
+        <div className="mb-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/movables-logo.png" alt="Movables" className="h-8 w-auto" />
+          <div className="mt-2 text-xs font-semibold text-ink-mute">Create your workspace</div>
         </div>
 
         <form onSubmit={submit} className="rounded-[24px] border border-sand-line bg-white p-6 shadow-sm">

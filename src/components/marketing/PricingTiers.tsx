@@ -36,7 +36,7 @@ export function PricingTiers() {
             <div className="font-display text-lg font-bold text-ink">{plan.name}</div>
             <p className="mt-0.5 text-[13.5px] font-medium text-ink-mute">{plan.tagline}</p>
             <div className="mt-4 flex items-baseline gap-1">
-              <span className="font-display text-4xl font-extrabold text-ink">{priceLabel(plan.priceCents)}</span>
+              <span className="font-display text-4xl font-extrabold tracking-tight text-ink">{priceLabel(plan.priceCents)}</span>
               <span className="text-sm font-semibold text-ink-mute">/mo</span>
             </div>
 

@@ -82,7 +82,7 @@ export default function MarketingHome() {
               <Sparkle size={14} weight="fill" className="text-brand" />
               Your AI office manager for party rentals
             </span>
-            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tight text-ink sm:text-5xl lg:text-6xl">
+            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tighter text-ink sm:text-5xl lg:text-6xl">
               Stop losing bookings to slow replies.
             </h1>
             <p className="mt-5 max-w-lg text-lg font-medium text-ink-soft">
@@ -165,7 +165,7 @@ export default function MarketingHome() {
       <section id="features" className="scroll-mt-20">
         <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
           <div className="max-w-2xl">
-            <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+            <h2 className="font-display text-3xl font-extrabold tracking-tighter text-ink sm:text-4xl">
               Everything you need to run rentals
             </h2>
             <p className="mt-3 text-lg font-medium text-ink-mute">
@@ -218,7 +218,7 @@ export default function MarketingHome() {
       <section className="border-y border-sand-line bg-cream-2">
         <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 sm:px-8 sm:py-24 md:grid-cols-5">
           <div className="md:col-span-2">
-            <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+            <h2 className="font-display text-3xl font-extrabold tracking-tighter text-ink sm:text-4xl">
               Up and running in an afternoon
             </h2>
             <p className="mt-3 text-lg font-medium text-ink-mute">
@@ -245,7 +245,7 @@ export default function MarketingHome() {
       <section id="pricing" className="scroll-mt-20">
         <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+            <h2 className="font-display text-3xl font-extrabold tracking-tighter text-ink sm:text-4xl">
               Simple pricing that scales with you
             </h2>
             <p className="mt-3 text-lg font-medium text-ink-mute">
@@ -266,7 +266,7 @@ export default function MarketingHome() {
       {/* Final CTA */}
       <section className="px-5 pb-20 sm:px-8">
         <div className="mx-auto max-w-6xl overflow-hidden rounded-3xl bg-ink px-8 py-14 text-center sm:py-20">
-          <h2 className="mx-auto max-w-2xl font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+          <h2 className="mx-auto max-w-2xl font-display text-3xl font-extrabold tracking-tighter text-white sm:text-4xl">
             Ready to stop losing bookings?
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-lg font-medium text-cream/70">

@@ -79,7 +79,7 @@ export default async function PayPage({
 
   return shell(
     <>
-      <h1 className="font-display text-2xl font-bold text-ink">Your custom quote</h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight text-ink">Your custom quote</h1>
       <div className="mt-1 text-sm font-bold text-brand">{fmtRange(booking.startDate, booking.endDate)}</div>
 
       <div className="mt-4 flex flex-col gap-2 border-t border-sand-line pt-4">

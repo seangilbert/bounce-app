@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CaretRight, Confetti, Phone, SignIn } from "@phosphor-icons/react/dist/ssr";
+import { CaretRight, Phone, SignIn } from "@phosphor-icons/react/dist/ssr";
 import { STORE_NAV, isStoreNavActive, type StoreNavItem } from "@/lib/store/nav";
 
 function NavLink({ href, item, active }: { href: string; item: StoreNavItem; active: boolean }) {
@@ -54,9 +54,8 @@ export function StoreSidebar({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logoUrl} alt={operatorName} className="h-11 w-11 flex-shrink-0 rounded-2xl object-contain" />
         ) : (
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand text-white">
-            <Confetti size={22} weight="fill" />
-          </span>
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/movables-icon.png" alt="Movables" className="h-11 w-11 flex-shrink-0 object-contain" />
         )}
         <div className="min-w-0">
           <div className="truncate font-display text-[17px] font-extrabold leading-tight tracking-tight text-ink">

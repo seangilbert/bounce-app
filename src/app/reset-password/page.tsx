@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Confetti, CircleNotch } from "@phosphor-icons/react/dist/ssr";
+import { CircleNotch } from "@phosphor-icons/react/dist/ssr";
 import { createClient } from "@/utils/supabase/client";
 
 export default function ResetPasswordPage() {
@@ -55,14 +55,10 @@ export default function ResetPasswordPage() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-cream px-6 py-16">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand text-white">
-            <Confetti size={22} weight="fill" />
-          </span>
-          <div>
-            <div className="font-display text-xl font-extrabold tracking-tight text-ink">Movables</div>
-            <div className="text-xs font-semibold text-ink-mute">Choose a new password</div>
-          </div>
+        <div className="mb-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/movables-logo.png" alt="Movables" className="h-8 w-auto" />
+          <div className="mt-2 text-xs font-semibold text-ink-mute">Choose a new password</div>
         </div>
 
         {ready === false ? (

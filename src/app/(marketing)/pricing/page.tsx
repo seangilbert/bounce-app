@@ -36,7 +36,7 @@ export default function PricingPage() {
     <>
       <section className="mx-auto max-w-6xl px-5 pt-16 sm:px-8 sm:pt-24">
         <div className="mx-auto max-w-2xl text-center">
-          <h1 className="font-display text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">
+          <h1 className="font-display text-4xl font-extrabold tracking-tighter text-ink sm:text-5xl">
             Pricing built for operators
           </h1>
           <p className="mt-4 text-lg font-medium text-ink-mute">

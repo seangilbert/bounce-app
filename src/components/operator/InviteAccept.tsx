@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Confetti, CircleNotch } from "@phosphor-icons/react/dist/ssr";
+import { CircleNotch } from "@phosphor-icons/react/dist/ssr";
 import { createClient } from "@/utils/supabase/client";
 import { roleLabel, type MemberRole } from "@/lib/operator/roles";
 import { acceptInviteAction, acceptInviteWithSignupAction } from "@/app/invite/actions";
@@ -99,11 +99,9 @@ export function InviteAccept({
   return (
     <div className="flex min-h-dvh items-center justify-center bg-cream px-6">
       <div className="w-full max-w-sm">
-        <div className="mb-5 flex items-center gap-2.5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand text-white">
-            <Confetti size={20} weight="fill" />
-          </span>
-          <span className="font-display text-lg font-extrabold tracking-tight text-ink">Movables</span>
+        <div className="mb-5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/movables-logo.png" alt="Movables" className="h-7 w-auto" />
         </div>
 
         <div className="rounded-[24px] border border-sand-line bg-white p-6 shadow-sm">

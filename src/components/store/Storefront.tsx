@@ -458,7 +458,7 @@ export function StoreShell({
   const catalogHeader = (
     <div className="flex flex-shrink-0 flex-wrap items-end justify-between gap-3 px-5 pb-4 pt-6 lg:px-8 lg:pt-7">
       <div>
-        <h2 className="font-display text-2xl font-bold text-ink">Browse the catalog</h2>
+        <h2 className="font-display text-2xl font-bold tracking-tight text-ink">Browse the catalog</h2>
         <p className="mt-0.5 text-sm font-medium text-ink-mute">
           Available {range}
           {days > 1 ? ` · ${days}-day rental` : ""}
@@ -1411,7 +1411,7 @@ function EmptyState({
       <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-tint text-brand">
         <Icon size={30} weight="fill" />
       </span>
-      <h2 className="font-display text-2xl font-bold text-ink">{title}</h2>
+      <h2 className="font-display text-2xl font-bold tracking-tight text-ink">{title}</h2>
       <p className="mt-2 max-w-sm text-sm font-medium text-ink-soft">{body}</p>
       {action ? (
         <Link
@@ -1867,7 +1867,7 @@ function ItemDetailView({
         <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-sand text-ink-mute">
           <Confetti size={30} weight="fill" />
         </span>
-        <h2 className="font-display text-2xl font-bold text-ink">Item not found</h2>
+        <h2 className="font-display text-2xl font-bold tracking-tight text-ink">Item not found</h2>
         <p className="mt-2 max-w-sm text-sm font-medium text-ink-soft">
           This rental isn&apos;t available right now. Browse the rest of the catalog.
         </p>
@@ -1959,7 +1959,7 @@ function ItemDetailView({
             </div>
 
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="font-display text-3xl font-bold text-ink">{money(item.basePrice)}</span>
+              <span className="font-display text-3xl font-bold tracking-tight text-ink">{money(item.basePrice)}</span>
               <span className="text-sm font-semibold text-ink-mute">
                 {item.priceUnit === "flat" ? "flat" : item.priceUnit === "per_hour" ? "/ hour" : "/ day"}
               </span>

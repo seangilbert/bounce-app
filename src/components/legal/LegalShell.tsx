@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Confetti } from "@phosphor-icons/react/dist/ssr";
 import { LEGAL } from "@/lib/legal/company";
 
 /** Page chrome for a legal document: brand header, readable column, footer. */
@@ -16,11 +15,9 @@ export function LegalShell({
     <div className="min-h-dvh bg-cream text-ink">
       <header className="border-b border-sand">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
-          <Link href="/" className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-white">
-              <Confetti size={18} weight="fill" />
-            </span>
-            <span className="font-display text-lg font-extrabold tracking-tight">{LEGAL.product}</span>
+          <Link href="/" className="inline-flex items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/movables-logo.png" alt={LEGAL.product} className="h-7 w-auto" />
           </Link>
           <nav className="flex items-center gap-5 text-sm font-bold">
             <Link href="/terms" className="text-ink-mute hover:text-ink">
