@@ -59,6 +59,8 @@ export default async function SettingsPage() {
         esignSignerName: op.esignSignerName,
         esignSignerEmail: op.esignSignerEmail,
         signwellTemplateId: op.signwellTemplateId,
+        remindBalance: op.remindBalance,
+        remindContract: op.remindContract,
         notifyNewInquiry: op.notifyNewInquiry,
         notifyNewBooking: op.notifyNewBooking,
         notifyBalancePaid: op.notifyBalancePaid,

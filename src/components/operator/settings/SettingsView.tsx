@@ -27,6 +27,7 @@ import {
   updateAssistantInstructionsAction,
   updateContractIdentityAction,
   updateNotificationPrefsAction,
+  updateAutomationPrefsAction,
   updateBrandingAction,
   updateAvailabilityAction,
   type ActionResult,
@@ -72,6 +73,8 @@ interface OperatorSettings {
   esignSignerName: string | null;
   esignSignerEmail: string | null;
   signwellTemplateId: string | null;
+  remindBalance: boolean;
+  remindContract: boolean;
   notifyNewInquiry: boolean;
   notifyNewBooking: boolean;
   notifyBalancePaid: boolean;
@@ -116,6 +119,7 @@ export function SettingsView({
       <CustomerPoliciesSection operator={operator} />
       <ContractSection operator={operator} />
       <NotificationsSection operator={operator} />
+      <AutomationsSection operator={operator} />
       <TeamSection
         teamEnabled={teamEnabled}
         members={members}
@@ -612,6 +616,53 @@ function NotificationsSection({ operator }: { operator: OperatorSettings }) {
         ))}
       </div>
       <SaveBar busy={busy} saved={saved} error={error} onSave={() => save(() => updateNotificationPrefsAction(prefs))} />
+    </Section>
+  );
+}
+
+function AutomationsSection({ operator }: { operator: OperatorSettings }) {
+  const { busy, saved, error, save } = useSaver();
+  const [prefs, setPrefs] = useState({
+    remindBalance: operator.remindBalance,
+    remindContract: operator.remindContract,
+  });
+  const toggle = (k: keyof typeof prefs) => setPrefs((s) => ({ ...s, [k]: !s[k] }));
+
+  const ROWS: { key: keyof typeof prefs; label: string; desc: string }[] = [
+    {
+      key: "remindBalance",
+      label: "Balance reminder",
+      desc: "Email customers with an unpaid balance a few days before their event, with a pay link. Sent once per booking.",
+    },
+    {
+      key: "remindContract",
+      label: "Contract reminder",
+      desc: "Nudge customers who haven't signed their rental agreement after 48 hours. Sent once per booking.",
+    },
+  ];
+
+  return (
+    <Section
+      title="Automated follow-ups"
+      desc="Emails sent to your customers automatically, written in your business's voice — off by default."
+    >
+      <div className="divide-y divide-sand-line">
+        {ROWS.map((r) => (
+          <label key={r.key} className="flex cursor-pointer items-start gap-3 py-3 first:pt-0">
+            <input
+              type="checkbox"
+              checked={prefs[r.key]}
+              onChange={() => toggle(r.key)}
+              className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand"
+            />
+            <span className="min-w-0">
+              <span className="block text-[14px] font-bold text-ink-soft">{r.label}</span>
+              <span className="block text-[12.5px] font-medium text-ink-mute">{r.desc}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+      <SaveBar busy={busy} saved={saved} error={error} onSave={() => save(() => updateAutomationPrefsAction(prefs))} />
     </Section>
   );
 }

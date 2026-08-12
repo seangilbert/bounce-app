@@ -102,6 +102,13 @@ export interface ESignatureProvider {
   createDraftTemplate?(input: CreateDraftTemplateInput): Promise<DraftTemplate>;
 
   /**
+   * Re-send the provider's signing email to recipients who haven't signed.
+   * Optional — callers treat it as best-effort (a failed remind must never
+   * block the app's own reminder email). Throws on provider error.
+   */
+  remind?(documentId: string): Promise<void>;
+
+  /**
    * Verify a webhook against its signature and return a normalized event.
    * Throws if the signature is invalid.
    */

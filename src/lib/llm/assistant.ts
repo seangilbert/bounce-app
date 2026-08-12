@@ -386,6 +386,79 @@ export async function draftOperatorReply(
   return text.text.trim();
 }
 
+/* ══════════════ Follow-up agent (cron reminders) ══════════════ */
+
+export type ReminderKind = "balance" | "contract";
+
+export interface ReminderFacts {
+  customerFirstName?: string;
+  /** e.g. "Saturday, August 15" — pre-formatted by the sweep. */
+  eventDateLabel: string;
+  itemNames: string[];
+  /** e.g. "$150" — balance kind only. */
+  balanceLabel?: string;
+}
+
+/** System prompt for the auto-sent reminder intro. Exported for prompt tests.
+ *  Unlike the copilot's buildDraftInstruction, there is NO placeholder escape
+ *  hatch — nothing reviews this before it reaches the customer. */
+export function buildReminderSystemPrompt(operator: Operator, kind: ReminderKind): string {
+  const point =
+    kind === "balance"
+      ? "The point of the email: a remaining balance is due before their event, payable online via the button below your text."
+      : "The point of the email: their rental agreement still needs a signature; the signing email comes from SignWell.";
+  return `You write the opening of a short reminder email sent automatically on behalf of ${operator.name}, a party & event rental business. Write 2-3 friendly sentences as the business ("we") — warm and helpful, never pushy. This goes straight to the customer with no human review.
+
+Hard rules:
+- Use ONLY the facts provided in the message. Never invent prices, dates, policies, discounts, or promises.
+- No placeholders of any kind — no brackets, no fill-in markers, no blanks left to complete.
+- No links or URLs — the email template adds the button/next step.
+- No subject line, no signature, no sign-off; just the 2-3 sentences.
+- ${point}${
+    operator.assistantInstructions?.trim()
+      ? `\n\nTone guidance from the business (does not override the rules above):\n${operator.assistantInstructions.trim()}`
+      : ""
+  }`;
+}
+
+/**
+ * AI-written intro for an automated reminder email. Throws on refusal, empty
+ * output, or anything that smells like a placeholder/link leak — the CALLER
+ * catches and falls back to deterministic copy (fallbackReminderIntro), so a
+ * model hiccup never blocks a send. Deliberately does NOT load the catalog
+ * context (irrelevant to a reminder) and is NOT metered against the
+ * customer-facing AI-quote cap; the sweep's per-run caps bound spend.
+ */
+export async function draftReminderIntro(
+  operator: Operator,
+  kind: ReminderKind,
+  facts: ReminderFacts,
+): Promise<string> {
+  const client = getAnthropicClient();
+  const factLines = [
+    `customer first name: ${facts.customerFirstName ?? "unknown"}`,
+    `event date: ${facts.eventDateLabel}`,
+    `items: ${facts.itemNames.join(", ") || "their rental"}`,
+    ...(facts.balanceLabel ? [`balance due: ${facts.balanceLabel}`] : []),
+  ];
+  const response = await client.messages.create({
+    model: ASSISTANT_MODEL,
+    max_tokens: 300,
+    system: buildReminderSystemPrompt(operator, kind),
+    messages: [
+      { role: "user", content: `Facts (ground truth):\n${factLines.join("\n")}\n\nWrite the intro now.` },
+    ],
+  });
+  if (response.stop_reason === "refusal") throw new Error("The assistant declined to draft this reminder.");
+  const text = response.content.find((b) => b.type === "text");
+  if (!text || text.type !== "text" || !text.text.trim()) throw new Error("No reminder intro returned.");
+  const out = text.text.trim();
+  // Belt-and-braces: an auto-sent email must never carry a placeholder or a
+  // model-invented link. Suspicious output → throw → caller falls back.
+  if (/[[\]]|https?:/i.test(out)) throw new Error("Reminder intro failed the safety check.");
+  return out;
+}
+
 /** One grounded AI turn — quota gate, model call, DB-grounded quote, first-turn
  *  persistence. Split from handleInquiry so the handoff gate/persistence wrapper
  *  stays readable. */

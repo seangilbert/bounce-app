@@ -35,6 +35,10 @@ function layout(businessName: string, heading: string, body: string): string {
 
 const p = (t: string) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.5;color:#463F38;">${t}</p>`;
 
+/** The brand CTA pill. `label` is raw HTML (callers may pass entities). */
+const cta = (href: string, label: string) =>
+  `<a href="${esc(href)}" style="display:inline-block;margin-top:14px;background:#3B7DF0;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:999px;">${label}</a>`;
+
 /** Operator's customer-facing policies, rendered as an email footer block. */
 function policiesBlock(operator: Operator): string {
   const items = [
@@ -140,7 +144,7 @@ export async function notifyQuoteLink(
     lineTable(items) +
     `<hr style="border:none;border-top:1px solid #F1E8DE;margin:8px 0;">` +
     lineTable(totals) +
-    `<a href="${esc(payUrl)}" style="display:inline-block;margin-top:14px;background:#3B7DF0;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:999px;">Review &amp; reserve</a>` +
+    cta(payUrl, "Review &amp; reserve") +
     p(`<span style="color:#9A9186;font-size:13px;">Delivery, setup &amp; pickup included. This link holds nothing until you pay.</span>`) +
     policiesBlock(operator);
   await sendEmail({
@@ -261,7 +265,7 @@ export function buildAiInquiryReplyEmail(opts: {
   const body =
     p(esc(opts.reply).replace(/\n/g, "<br>")) +
     (opts.reserveUrl
-      ? `<a href="${esc(opts.reserveUrl)}" style="display:inline-block;margin-top:14px;background:#3B7DF0;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:999px;">Reserve online</a>`
+      ? cta(opts.reserveUrl, "Reserve online")
       : "");
   return {
     to: opts.to,
@@ -269,6 +273,85 @@ export function buildAiInquiryReplyEmail(opts: {
     html: layout(opts.businessName, `A note from ${esc(opts.businessName)}`, body),
     replyTo: inboundReplyAddress(opts.inquiryId) ?? opts.operatorEmail ?? undefined,
     fromName: opts.businessName,
+  };
+}
+
+/**
+ * Automated balance reminder to the customer (follow-up agent, cron). Pure
+ * builder — the sweep sends it and records/releases the claim on the result.
+ * `intro` is the AI-drafted (or fallback) opening; every number below it is
+ * rendered from the DB.
+ */
+export function buildBalanceReminderEmail(opts: {
+  booking: Booking;
+  operator: Operator;
+  to: string;
+  balanceCents: number;
+  payUrl: string;
+  intro: string;
+}): EmailInput {
+  const { booking, operator } = opts;
+  const items = booking.items.map((li) => ({
+    label: `${li.quantity > 1 ? `${li.quantity}× ` : ""}${li.name}`,
+    value: money(li.lineTotal),
+  }));
+  const totals = [
+    { label: "Total", value: money(booking.total), bold: true },
+    { label: "Paid so far", value: money(booking.deposit ?? 0) },
+    { label: "Balance due", value: money(opts.balanceCents), bold: true },
+  ];
+  const body =
+    p(esc(opts.intro).replace(/\n/g, "<br>")) +
+    `<div style="font-weight:700;font-size:14px;color:#3B7DF0;margin:14px 0 4px;">${esc(fmtRange(booking.startDate, booking.endDate))}</div>` +
+    lineTable(items) +
+    `<hr style="border:none;border-top:1px solid #F1E8DE;margin:8px 0;">` +
+    lineTable(totals) +
+    cta(opts.payUrl, "Pay balance") +
+    p(`<span style="color:#9A9186;font-size:13px;">Secure online payment — takes about a minute.</span>`) +
+    policiesBlock(operator);
+  return {
+    to: opts.to,
+    subject: `Balance due — ${operator.name}`,
+    html: layout(operator.name, "Your balance", body),
+    replyTo: operator.contactEmail ?? undefined,
+    fromName: operator.name,
+  };
+}
+
+/**
+ * Automated unsigned-contract reminder to the customer (follow-up agent,
+ * cron). No CTA — the signing link only exists inside SignWell's own email,
+ * which we (best-effort) re-send just before this goes out; `signwellResent`
+ * flips the phrasing accordingly.
+ */
+export function buildContractReminderEmail(opts: {
+  booking: Booking;
+  operator: Operator;
+  to: string;
+  intro: string;
+  signwellResent: boolean;
+}): EmailInput {
+  const { booking, operator } = opts;
+  const items = booking.items.map((li) => ({
+    label: `${li.quantity > 1 ? `${li.quantity}× ` : ""}${li.name}`,
+    value: money(li.lineTotal),
+  }));
+  const body =
+    p(esc(opts.intro).replace(/\n/g, "<br>")) +
+    `<div style="font-weight:700;font-size:14px;color:#3B7DF0;margin:14px 0 4px;">${esc(fmtRange(booking.startDate, booking.endDate))}</div>` +
+    lineTable(items) +
+    p(
+      opts.signwellResent
+        ? "We've just re-sent your signing email from SignWell — look for it in your inbox (check spam too) and sign when you have a minute."
+        : "Look for the earlier email from SignWell with your signing link — check your inbox and spam folder.",
+    ) +
+    policiesBlock(operator);
+  return {
+    to: opts.to,
+    subject: `Your rental agreement is waiting — ${operator.name}`,
+    html: layout(operator.name, "One signature to go", body),
+    replyTo: operator.contactEmail ?? undefined,
+    fromName: operator.name,
   };
 }
 

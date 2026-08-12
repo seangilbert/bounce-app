@@ -35,6 +35,8 @@ const ALLOWLIST = new Set<string>([
   // — Webhooks + background jobs: no user session exists. —
   "src/lib/billing/webhook.ts", // stripe/signwell/twilio reconciliation
   "src/lib/bookings/expire.ts", // expireStaleCheckouts cron-style job
+  "src/lib/reminders/repo.ts", // reminder send-log claim/release (cron job, no session)
+  "src/lib/reminders/sweep.ts", // cross-tenant reminder sweep (cron job, no session)
 
   // — Provisioning / auth: runs before (or to create) the session. —
   "src/app/api/auth/signup/route.ts", // creates the operator + first member

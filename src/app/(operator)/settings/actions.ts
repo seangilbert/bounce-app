@@ -181,6 +181,32 @@ export async function updateNotificationPrefsAction(input: unknown): Promise<Act
   return { ok: true };
 }
 
+const AutomationPrefsInput = z.object({
+  remindBalance: z.boolean(),
+  remindContract: z.boolean(),
+});
+
+/** Customer-facing automation toggles (follow-up agent). Separate from the
+ *  notification prefs on purpose: those control emails the OPERATOR receives;
+ *  these authorize emails sent to their CUSTOMERS automatically. */
+export async function updateAutomationPrefsAction(input: unknown): Promise<ActionResult> {
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
+  const p = AutomationPrefsInput.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid." };
+  const { error } = await createClient()
+    .from("operators")
+    .update({
+      remind_balance: p.data.remindBalance,
+      remind_contract: p.data.remindContract,
+    })
+    .eq("id", op.id);
+  if (error) return { ok: false, error: "Could not save automation settings." };
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
 const BrandingInput = z.object({
   brandColor: z
     .string()

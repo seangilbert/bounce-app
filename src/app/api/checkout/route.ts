@@ -89,7 +89,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Booking not found." }, { status: 404 });
     }
     // Deposit/full pay a fresh quote; balance is collected on an already-paid
-    // booking, so it allows the committed statuses instead.
+    // booking, so it allows the committed statuses instead. The balance list
+    // MUST stay in lockstep with BALANCE_PAYABLE in /pay/[bookingId]/page.tsx.
     const okStatuses =
       data.paymentType === "balance"
         ? ["paid", "contracted", "confirmed", "delivered"]

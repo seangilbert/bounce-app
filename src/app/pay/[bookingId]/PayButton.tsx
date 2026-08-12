@@ -10,7 +10,7 @@ export function PayButton({
   dueLabel,
 }: {
   bookingId: string;
-  paymentType: "deposit" | "full";
+  paymentType: "deposit" | "full" | "balance";
   dueLabel: string;
 }) {
   const [busy, setBusy] = useState(false);
@@ -50,7 +50,8 @@ export function PayButton({
           <CircleNotch size={18} weight="bold" className="animate-spin" />
         ) : (
           <>
-            {paymentType === "full" ? "Pay" : "Pay deposit"} {dueLabel} <ArrowRight size={16} weight="bold" />
+            {paymentType === "full" ? "Pay" : paymentType === "balance" ? "Pay balance" : "Pay deposit"}{" "}
+            {dueLabel} <ArrowRight size={16} weight="bold" />
           </>
         )}
       </button>

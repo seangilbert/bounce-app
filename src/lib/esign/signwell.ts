@@ -125,6 +125,21 @@ export const signwellProvider: ESignatureProvider = {
     return { id: tmpl.id, embeddedEditUrl: tmpl.embedded_edit_url, status: tmpl.status ?? "draft" };
   },
 
+  // Re-send SignWell's signing email to everyone who hasn't signed yet (empty
+  // body = all unsigned recipients; 201 on success, 422 when the document's
+  // status doesn't permit reminders). Callers treat this as best-effort.
+  async remind(documentId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/documents/${documentId}/remind`, {
+      method: "POST",
+      headers: { "X-Api-Key": apiKey(), "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new Error(`SignWell remind failed (${res.status}): ${detail.slice(0, 500)}`);
+    }
+  },
+
   async verifyWebhook(rawBody: string): Promise<ESignEvent> {
     // The signing key is the webhook's own id (from the create/list webhook
     // response), NOT the API key.

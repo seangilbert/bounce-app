@@ -10,6 +10,10 @@ export const dynamic = "force-dynamic";
 
 const money = (c: number) => `$${(c / 100).toLocaleString("en-US")}`;
 const RESERVING = ["paid", "contracted", "confirmed", "delivered", "completed"];
+// Statuses where a remaining balance can be paid online. MUST stay in lockstep
+// with the balance allowlist in /api/checkout (src/app/api/checkout/route.ts)
+// or this page renders a button that 409s.
+const BALANCE_PAYABLE = ["paid", "contracted", "confirmed", "delivered"];
 
 function fmtRange(start: string, end: string): string {
   const f = (iso: string) =>
@@ -40,8 +44,13 @@ export default async function PayPage({
   const operator = await getOperatorById(booking.operatorId);
   if (!operator) notFound();
 
-  const paymentType = searchParams.type === "full" ? "full" : "deposit";
+  const requested =
+    searchParams.type === "full" ? "full" : searchParams.type === "balance" ? "balance" : "deposit";
+  // A balance charge only makes sense after payment; on a pre-payment booking
+  // a ?type=balance link falls back to the normal deposit quote view.
+  const paymentType = requested === "balance" ? "deposit" : requested;
   const dueNow = paymentType === "full" ? booking.total : depositAmount(booking.total, operator.depositPercent);
+  const balance = booking.total - (booking.deposit ?? 0);
 
   const shell = (children: React.ReactNode) => (
     <div className="flex min-h-dvh flex-col items-center bg-cream px-5 py-10" style={brandVars(operator.brandColor)}>
@@ -66,6 +75,34 @@ export default async function PayPage({
   }
 
   if (RESERVING.includes(booking.status)) {
+    // Paid booking with a remaining balance: the customer-facing balance
+    // payment (linked from the renter portal and the balance-reminder email).
+    if (requested === "balance" && BALANCE_PAYABLE.includes(booking.status) && balance > 0) {
+      return shell(
+        <>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-ink">Pay your balance</h1>
+          <div className="mt-1 text-sm font-bold text-brand">{fmtRange(booking.startDate, booking.endDate)}</div>
+          <div className="mt-4 space-y-1 border-t border-sand-line pt-4 text-sm">
+            <div className="flex justify-between text-ink-mute">
+              <span>Total</span>
+              <span className="font-semibold text-ink">{money(booking.total)}</span>
+            </div>
+            <div className="flex justify-between text-ink-mute">
+              <span>Paid so far</span>
+              <span className="font-semibold text-ink">{money(booking.deposit ?? 0)}</span>
+            </div>
+            <div className="flex justify-between pt-0.5">
+              <span className="font-bold text-ink">Balance due</span>
+              <span className="font-display text-lg font-extrabold text-ink">{money(balance)}</span>
+            </div>
+          </div>
+          <PayButton bookingId={booking.id} paymentType="balance" dueLabel={money(balance)} />
+          <p className="mt-2 text-center text-xs font-medium text-ink-mute">
+            Secure checkout — you&apos;ll get a receipt by email.
+          </p>
+        </>,
+      );
+    }
     return shell(
       <div className="flex flex-col items-center gap-2 text-center">
         <CheckCircle size={40} weight="fill" className="text-teal" />
