@@ -103,6 +103,7 @@ export async function notifyBookingConfirmed(booking: Booking, operator: Operato
     subject: `Booking confirmed — ${operator.name}`,
     html: layout(operator.name, "You're booked!", body),
     replyTo: operator.contactEmail ?? undefined,
+    fromName: operator.name,
   });
 }
 
@@ -147,6 +148,7 @@ export async function notifyQuoteLink(
     subject: `Your quote from ${operator.name}`,
     html: layout(operator.name, "Your custom quote", body),
     replyTo: operator.contactEmail ?? undefined,
+    fromName: operator.name,
   });
 }
 
@@ -228,6 +230,7 @@ export async function notifyInquiryReply(opts: {
       (opts.inquiryId ? inboundReplyAddress(opts.inquiryId) : null) ??
       opts.operatorEmail ??
       undefined,
+    fromName: opts.businessName,
   });
 }
 
@@ -265,6 +268,7 @@ export function buildAiInquiryReplyEmail(opts: {
     subject,
     html: layout(opts.businessName, `A note from ${esc(opts.businessName)}`, body),
     replyTo: inboundReplyAddress(opts.inquiryId) ?? opts.operatorEmail ?? undefined,
+    fromName: opts.businessName,
   };
 }
 
