@@ -1,4 +1,5 @@
-import { sendEmail } from "./send";
+import { sendEmail, type EmailInput } from "./send";
+import { inboundReplyAddress } from "./inbound";
 import type { Booking } from "@/lib/bookings/types";
 import type { Operator } from "@/lib/inventory/types";
 
@@ -208,6 +209,9 @@ export async function notifyInquiryReply(opts: {
   operatorEmail?: string | null;
   reply: string;
   original?: string | null;
+  /** When set (and inbound email is configured), the customer's email reply
+   *  routes back into this inquiry's thread via the plus-addressed Reply-To. */
+  inquiryId?: string;
 }) {
   const body =
     p(esc(opts.reply).replace(/\n/g, "<br>")) +
@@ -220,8 +224,48 @@ export async function notifyInquiryReply(opts: {
     to: opts.to,
     subject: `Re: your inquiry — ${opts.businessName}`,
     html: layout(opts.businessName, `A note from ${esc(opts.businessName)}`, body),
-    replyTo: opts.operatorEmail ?? undefined,
+    replyTo:
+      (opts.inquiryId ? inboundReplyAddress(opts.inquiryId) : null) ??
+      opts.operatorEmail ??
+      undefined,
   });
+}
+
+/**
+ * The AI's reply to an inbound customer email (inbox-plan Phase 1). Pure
+ * builder — the webhook route sends it — so subject threading and the reply
+ * loop are unit-testable. Reply-To carries the plus address so the customer's
+ * next reply routes straight back to this thread.
+ */
+export function buildAiInquiryReplyEmail(opts: {
+  to: string;
+  businessName: string;
+  reply: string;
+  inquiryId: string;
+  /** The customer's subject — threaded as "Re: <subject>" (never doubled). */
+  inboundSubject?: string | null;
+  /** Reply-To fallback when inbound email isn't configured. */
+  operatorEmail?: string | null;
+  /** Storefront CTA, appended when the AI produced a ready-to-book quote. */
+  reserveUrl?: string | null;
+}): EmailInput {
+  const subjectBase = opts.inboundSubject?.trim();
+  const subject = subjectBase
+    ? /^re:/i.test(subjectBase)
+      ? subjectBase
+      : `Re: ${subjectBase}`
+    : `Re: your inquiry — ${opts.businessName}`;
+  const body =
+    p(esc(opts.reply).replace(/\n/g, "<br>")) +
+    (opts.reserveUrl
+      ? `<a href="${esc(opts.reserveUrl)}" style="display:inline-block;margin-top:14px;background:#3B7DF0;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:999px;">Reserve online</a>`
+      : "");
+  return {
+    to: opts.to,
+    subject,
+    html: layout(opts.businessName, `A note from ${esc(opts.businessName)}`, body),
+    replyTo: inboundReplyAddress(opts.inquiryId) ?? opts.operatorEmail ?? undefined,
+  };
 }
 
 /** Alert to the operator that a new inquiry needs review. */

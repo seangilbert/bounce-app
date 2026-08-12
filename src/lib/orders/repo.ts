@@ -222,8 +222,9 @@ export async function setEsignStatusByDocumentId(
  * the claim is race-free even across concurrent deliveries.
  */
 /** Sources that dedupe deliveries via the shared webhook_events table. Payment
- *  providers plus non-payment webhooks (e.g. Twilio inbound SMS). */
-export type WebhookProvider = PaymentProviderName | "twilio";
+ *  providers plus non-payment webhooks (e.g. Twilio inbound SMS, Resend
+ *  inbound email). */
+export type WebhookProvider = PaymentProviderName | "twilio" | "resend";
 
 export async function claimWebhookEvent(
   provider: WebhookProvider,

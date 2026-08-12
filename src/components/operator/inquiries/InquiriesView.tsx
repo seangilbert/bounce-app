@@ -20,6 +20,7 @@ import {
 import type {
   InquiryListItem,
   InquiryStatus,
+  InquiryOwner,
   InquiryDetail,
   ThreadMsg,
   BookingOutcome,
@@ -28,16 +29,26 @@ import {
   replyInquiryAction,
   dismissInquiryAction,
   sendInquirySmsAction,
+  takeOverInquiryAction,
+  handBackInquiryAction,
+  draftReplyAction,
 } from "@/app/(operator)/inquiries/actions";
 import { BookingBuilder } from "@/components/operator/bookings/BookingBuilder";
 
 interface InquiriesProps {
   list: InquiryListItem[];
   details: Record<string, InquiryDetail>;
-  filters: { all: number; needsYou: number; auto: number };
+  filters: { all: number; needsYou: number; ai: number; mine: number };
   operatorId: string;
   smsEnabled: boolean;
 }
+
+/** The handoff chip: who answers this thread right now. */
+const OWNER: Record<InquiryOwner, { label: string; cls: string }> = {
+  ai: { label: "AI handling", cls: "bg-teal-tint text-teal-deep" },
+  needs_human: { label: "Needs you", cls: "bg-brand-tint text-brand-deep" },
+  human: { label: "You own this", cls: "bg-sand text-ink-soft" },
+};
 
 const STATUS: Record<
   InquiryStatus,
@@ -70,22 +81,28 @@ const STATUS: Record<
 };
 
 export function InquiriesView({ list, details, filters, operatorId, smsEnabled }: InquiriesProps) {
-  const initial = list.find((i) => i.status === "needs_review") ?? list[0];
+  const initial = list.find((i) => i.owner === "needs_human") ?? list[0];
   const [selectedId, setSelectedId] = useState(initial?.id ?? "");
   const [mobileDetail, setMobileDetail] = useState(false);
-  const [filter, setFilter] = useState<"all" | "needsYou" | "auto">("all");
+  const [filter, setFilter] = useState<"all" | "needsYou" | "ai" | "mine">("all");
   const [builderOpen, setBuilderOpen] = useState(false);
   const [deliverBy, setDeliverBy] = useState<"email" | "sms">("email");
   const [smsPhone, setSmsPhone] = useState("");
   const router = useRouter();
   const [reply, setReply] = useState("");
-  const [busy, setBusy] = useState<null | "send" | "dismiss">(null);
+  const [busy, setBusy] = useState<null | "send" | "dismiss" | "owner" | "draft">(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
 
   const selected = list.find((i) => i.id === selectedId) ?? list[0];
   const detail = selected ? details[selected.id] : undefined;
   const shown = list.filter((i) =>
-    filter === "all" ? true : filter === "needsYou" ? i.status === "needs_review" : i.status !== "needs_review",
+    filter === "all"
+      ? true
+      : filter === "needsYou"
+        ? i.owner === "needs_human"
+        : filter === "mine"
+          ? i.owner === "human"
+          : i.owner === "ai",
   );
 
   // The composer is for follow-up conversation now (the AI draft feeds the quote
@@ -135,6 +152,28 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
     }
   }
 
+  async function flipOwner(toHuman: boolean) {
+    if (!selected) return;
+    setBusy("owner");
+    setActionErr(null);
+    const res = toHuman
+      ? await takeOverInquiryAction(selected.id)
+      : await handBackInquiryAction(selected.id);
+    if (res.ok) router.refresh();
+    else setActionErr(res.error);
+    setBusy(null);
+  }
+
+  async function draftReply() {
+    if (!selected) return;
+    setBusy("draft");
+    setActionErr(null);
+    const res = await draftReplyAction(selected.id);
+    if (res.ok) setReply(res.draft);
+    else setActionErr(res.error);
+    setBusy(null);
+  }
+
   if (!selected || !detail) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center p-8 text-sm font-medium text-ink-mute">
@@ -158,15 +197,26 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
             <FilterPill active={filter === "needsYou"} tone="blue" onClick={() => setFilter("needsYou")}>
               Needs you {filters.needsYou}
             </FilterPill>
-            <FilterPill active={filter === "auto"} tone="green" onClick={() => setFilter("auto")}>
-              Auto {filters.auto}
+            <FilterPill active={filter === "ai"} tone="green" onClick={() => setFilter("ai")}>
+              AI {filters.ai}
+            </FilterPill>
+            <FilterPill active={filter === "mine"} onClick={() => setFilter("mine")}>
+              Mine {filters.mine}
             </FilterPill>
           </div>
         </div>
         <div className="flex flex-col gap-3 p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {shown.length === 0 ? (
             <p className="px-2 py-8 text-center text-sm font-medium text-ink-mute">
-              No {filter === "needsYou" ? "inquiries need you" : filter === "auto" ? "auto-handled inquiries" : "inquiries"} right now.
+              No{" "}
+              {filter === "needsYou"
+                ? "inquiries need you"
+                : filter === "ai"
+                  ? "AI-handled inquiries"
+                  : filter === "mine"
+                    ? "inquiries you've taken over"
+                    : "inquiries"}{" "}
+              right now.
             </p>
           ) : (
             shown.map((item) => (
@@ -201,13 +251,46 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
               {selected.initials}
             </span>
             <div className="min-w-0">
-              <div className="truncate font-display text-xl font-bold text-ink">{selected.name}</div>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="truncate font-display text-xl font-bold text-ink">{selected.name}</span>
+                <span
+                  className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold tracking-wide ${OWNER[detail.owner].cls}`}
+                >
+                  {OWNER[detail.owner].label.toUpperCase()}
+                </span>
+              </div>
               <div className="truncate text-sm font-medium text-ink-mute">
                 {selected.customerType} · {selected.location}
               </div>
             </div>
           </div>
           <div className="flex flex-shrink-0 items-center gap-2.5">
+            {detail.owner === "human" ? (
+              <button
+                onClick={() => flipOwner(false)}
+                disabled={busy !== null}
+                title="The AI resumes answering this customer"
+                className="flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2 text-sm font-bold text-ink-soft transition-colors hover:bg-sand disabled:opacity-50"
+              >
+                {busy === "owner" ? (
+                  <CircleNotch size={15} weight="bold" className="animate-spin" />
+                ) : (
+                  <Sparkle size={15} weight="fill" className="text-teal" />
+                )}
+                <span className="hidden sm:inline">Hand back to AI</span>
+                <span className="sm:hidden">Hand back</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => flipOwner(true)}
+                disabled={busy !== null}
+                title="Pause the AI — you answer this customer until you hand back"
+                className="flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2 text-sm font-bold text-ink-soft transition-colors hover:bg-sand disabled:opacity-50"
+              >
+                {busy === "owner" ? <CircleNotch size={15} weight="bold" className="animate-spin" /> : null}
+                Take over
+              </button>
+            )}
             <button
               onClick={() => setBuilderOpen(true)}
               className="flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-deep"
@@ -306,9 +389,24 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
         {/* Reply composer — always available (persistent conversation). */}
         <div className="border-t border-sand px-5 py-4 lg:px-8 lg:py-5">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-              Your reply
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                Your reply
+              </span>
+              <button
+                onClick={draftReply}
+                disabled={busy !== null}
+                title="AI drafts a grounded reply — edit it before sending"
+                className="flex items-center gap-1.5 rounded-full bg-brand-tint px-3 py-1.5 text-[12px] font-bold text-brand-deep transition-colors hover:bg-brand-tint/70 disabled:opacity-50"
+              >
+                {busy === "draft" ? (
+                  <CircleNotch size={13} weight="bold" className="animate-spin" />
+                ) : (
+                  <Sparkle size={13} weight="fill" />
+                )}
+                Draft reply
+              </button>
+            </div>
             {smsEnabled ? (
               <div className="flex rounded-full bg-sand/70 p-0.5">
                 {(["email", "sms"] as const).map((ch) => (

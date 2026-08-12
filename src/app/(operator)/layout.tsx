@@ -3,7 +3,7 @@ import { BottomNav } from "@/components/operator/BottomNav";
 import { Sidebar } from "@/components/operator/Sidebar";
 import { getSessionMembership, getSessionOperatorOptions, userDisplayName } from "@/lib/operator/session";
 import { getSessionCustomer } from "@/lib/customers/session";
-import { countNeedsReview } from "@/lib/inquiries/repo";
+import { countNeedsHuman } from "@/lib/inquiries/repo";
 import { brandVars } from "@/lib/branding/palette";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ export default async function OperatorLayout({
   const role = membership?.role ?? "employee";
   const userDisplay = membership ? userDisplayName(membership) : "Account";
   const operatorOptions = await getSessionOperatorOptions();
-  const needsCount = operator ? await countNeedsReview(operator.id) : 0;
+  const needsCount = operator ? await countNeedsHuman(operator.id) : 0;
   return (
     <div
       className="flex min-h-dvh w-full bg-cream lg:h-dvh lg:overflow-hidden"

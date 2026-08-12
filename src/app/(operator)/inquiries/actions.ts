@@ -2,7 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { getSessionOperator } from "@/lib/operator/session";
-import { replyToInquiry, dismissInquiry, setInquiryPhoneChannel } from "@/lib/inquiries/repo";
+import {
+  replyToInquiry,
+  dismissInquiry,
+  setInquiryPhoneChannel,
+  setInquiryOwnerAsOperator,
+  getInquiryForOperator,
+  listMessagesByInquiry,
+} from "@/lib/inquiries/repo";
+import { toApiMessages } from "@/lib/inquiries/thread";
+import { draftOperatorReply } from "@/lib/llm/assistant";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { notifyInquiryReply } from "@/lib/email";
 import { sendSms, smsEnabled } from "@/lib/sms";
 
@@ -27,6 +37,7 @@ export async function replyInquiryAction(id: string, reply: string): Promise<Act
           operatorEmail: op.contactEmail,
           reply: text,
           original: inq.inboundMessage,
+          inquiryId: id, // plus-addressed Reply-To → the customer's reply routes back
         });
       } catch (err) {
         console.error("[inquiries] reply email failed:", err);
@@ -74,6 +85,66 @@ export async function sendInquirySmsAction(
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Could not send the text." };
+  }
+}
+
+/** Take over: pause the AI on this thread — the operator owns replies until an
+ *  explicit hand-back. (Sending a reply also takes over, via replyToInquiry.) */
+export async function takeOverInquiryAction(id: string): Promise<ActionResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  try {
+    const found = await setInquiryOwnerAsOperator(op.id, id, "human");
+    if (!found) return { ok: false, error: "Inquiry not found." };
+    revalidatePath("/inquiries");
+    revalidatePath("/dashboard");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not take over." };
+  }
+}
+
+/** Hand back: the AI resumes auto-responding on this thread. */
+export async function handBackInquiryAction(id: string): Promise<ActionResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  try {
+    const found = await setInquiryOwnerAsOperator(op.id, id, "ai");
+    if (!found) return { ok: false, error: "Inquiry not found." };
+    revalidatePath("/inquiries");
+    revalidatePath("/dashboard");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not hand back." };
+  }
+}
+
+export type DraftResult = { ok: true; draft: string } | { ok: false; error: string };
+
+/**
+ * AI-as-copilot (on demand): draft a reply the operator can edit and send. Not
+ * metered against the monthly AI-quote cap — that cap targets customer-facing
+ * auto-quoting spend, and capped Free operators are exactly the ones replying
+ * by hand. Rate-limited per operator purely as a cost backstop.
+ */
+export async function draftReplyAction(id: string): Promise<DraftResult> {
+  const op = await getSessionOperator();
+  if (!op) return { ok: false, error: "Not signed in." };
+  const rl = await checkRateLimit(`draft:${op.id}`, 10, 60_000);
+  if (!rl.allowed) return { ok: false, error: "Too many drafts — try again in a minute." };
+  try {
+    const row = await getInquiryForOperator(op.id, id);
+    if (!row) return { ok: false, error: "Inquiry not found." };
+    const thread = (await listMessagesByInquiry([id])).get(id) ?? [];
+    const messages = toApiMessages(thread);
+    const draft = await draftOperatorReply(
+      op.id,
+      messages.length ? messages : [{ role: "user", content: row.inbound_message }],
+      { startDate: row.start_date },
+    );
+    return { ok: true, draft };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not draft a reply." };
   }
 }
 

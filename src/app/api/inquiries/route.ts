@@ -7,8 +7,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // Public acquisition hook (spec 2.1) — rate-limited since each call hits Claude.
-// NOTE: the Free-tier monthly cap (20/mo per operator) still needs a persistent
-// per-operator counter; this per-IP limit is only an abuse/cost backstop.
+// The Free-tier monthly cap (20/mo per operator) is enforced inside
+// handleInquiry (operator_ai_usage, migration 0038); this per-IP limit is only
+// an abuse/cost backstop.
 const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60_000;
 
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await handleInquiry(parsed.data);
+    const result = await handleInquiry(parsed.data, { persistTurn: true });
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error.";

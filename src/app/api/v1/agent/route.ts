@@ -32,7 +32,10 @@ const handler = withApiKey(async (req, { operator }) => {
 
   try {
     // Override operatorId with the key's operator — the request body can't pick a tenant.
-    const result = await handleInquiry({ ...parsed.data, operatorId: operator.id });
+    const result = await handleInquiry(
+      { ...parsed.data, operatorId: operator.id },
+      { persistTurn: true },
+    );
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error.";

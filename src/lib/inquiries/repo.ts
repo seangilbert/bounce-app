@@ -43,6 +43,12 @@ export interface CreateInquiryInput {
 
 export type InquirySender = "customer" | "operator" | "ai";
 
+/** Handoff state (inbox-plan Phase 0) — who answers the customer right now.
+ *  Distinct from the lifecycle `status`. */
+export type InquiryOwner = "ai" | "needs_human" | "human";
+
+export type MessageDirection = "inbound" | "outbound";
+
 /** One message in an inquiry's conversation thread (see `inquiry_messages`). */
 export interface ThreadMessage {
   id: string;
@@ -65,6 +71,9 @@ export interface InquiryRow {
   start_date: string;
   end_date: string;
   status: "needs_review" | "auto" | "replied" | "dismissed";
+  owner: InquiryOwner;
+  last_customer_at: string | null;
+  last_human_at: string | null;
   auto: boolean;
   confidence: "high" | "medium" | "low" | null;
   ai_summary: string | null;
@@ -108,6 +117,10 @@ export async function createInquiry(input: CreateInquiryInput): Promise<{ id: st
       start_date: input.startDate,
       end_date: input.endDate,
       status: input.auto ? "auto" : "needs_review",
+      // Handoff state alongside the lifecycle: an auto-answered inquiry stays
+      // AI-owned; an escalated one needs a human (the ack was already sent).
+      owner: input.auto ? "ai" : "needs_human",
+      last_customer_at: new Date().toISOString(),
       auto: input.auto,
       confidence: input.confidence,
       ai_summary: input.aiSummary,
@@ -123,25 +136,119 @@ export async function createInquiry(input: CreateInquiryInput): Promise<{ id: st
   // Seed the conversation thread: the customer's inbound message + (for an
   // auto-answered inquiry) the AI's reply. A needs_review draft stays a
   // suggestion, not a thread message, until the operator sends it.
-  const seed: { inquiry_id: string; sender: InquirySender; body: string }[] = [];
-  if (input.inboundMessage?.trim()) seed.push({ inquiry_id: id, sender: "customer", body: input.inboundMessage });
-  if (input.auto && input.aiSummary?.trim()) seed.push({ inquiry_id: id, sender: "ai", body: input.aiSummary });
+  const channel = input.channel ?? "website";
+  const seed: {
+    inquiry_id: string;
+    sender: InquirySender;
+    body: string;
+    channel: string;
+    direction: MessageDirection;
+  }[] = [];
+  if (input.inboundMessage?.trim())
+    seed.push({ inquiry_id: id, sender: "customer", body: input.inboundMessage, channel, direction: "inbound" });
+  if (input.auto && input.aiSummary?.trim())
+    seed.push({ inquiry_id: id, sender: "ai", body: input.aiSummary, channel, direction: "outbound" });
   if (seed.length) await supabase.from("inquiry_messages").insert(seed);
 
   return { id };
 }
 
-/** Append a message to an inquiry's thread. */
+/** Append a message to an inquiry's thread. Direction defaults from the sender
+ *  (customer → inbound, ai/operator → outbound); channel when the caller knows it. */
 export async function appendInquiryMessage(
   inquiryId: string,
   sender: InquirySender,
   body: string,
+  opts?: { channel?: string; direction?: MessageDirection },
 ): Promise<void> {
   const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("inquiry_messages")
-    .insert({ inquiry_id: inquiryId, sender, body });
+  const { error } = await supabase.from("inquiry_messages").insert({
+    inquiry_id: inquiryId,
+    sender,
+    body,
+    channel: opts?.channel ?? null,
+    direction: opts?.direction ?? (sender === "customer" ? "inbound" : "outbound"),
+  });
   if (error) throw new Error(`appendInquiryMessage failed: ${error.message}`);
+}
+
+/** One inquiry row by id (service-role — used by the AI brain's handoff gate,
+ *  which runs on storefront/webhook paths with no operator session). */
+export async function getInquiryById(id: string): Promise<InquiryRow | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getInquiryById failed: ${error.message}`);
+  return (data as InquiryRow) ?? null;
+}
+
+/** One inquiry row, operator-scoped (user client — SELECT policy 0054). */
+export async function getInquiryForOperator(
+  operatorId: string,
+  id: string,
+): Promise<InquiryRow | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .select("*")
+    .eq("id", id)
+    .eq("operator_id", operatorId)
+    .maybeSingle();
+  if (error) throw new Error(`getInquiryForOperator failed: ${error.message}`);
+  return (data as InquiryRow) ?? null;
+}
+
+/** Operator flips the handoff state (Take over / Hand back). User-scoped — the
+ *  0057 UPDATE policy enforces tenancy. Taking over records human activity so
+ *  the notify-once-per-burst rule resets. Returns false when not found / not
+ *  this operator's. */
+export async function setInquiryOwnerAsOperator(
+  operatorId: string,
+  id: string,
+  owner: InquiryOwner,
+): Promise<boolean> {
+  const supabase = createClient();
+  const patch: Record<string, unknown> =
+    owner === "human" ? { owner, last_human_at: new Date().toISOString() } : { owner };
+  const { data, error } = await supabase
+    .from("inquiries")
+    .update(patch)
+    .eq("id", id)
+    .eq("operator_id", operatorId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`setInquiryOwnerAsOperator failed: ${error.message}`);
+  return !!data;
+}
+
+/** System-side escalation: lifecycle AND handoff state in one round trip
+ *  (service-role — called from the AI brain on storefront/webhook paths). */
+export async function markInquiryNeedsHuman(inquiryId: string): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("inquiries")
+    .update({ status: "needs_review", owner: "needs_human" })
+    .eq("id", inquiryId);
+  if (error) throw new Error(`markInquiryNeedsHuman failed: ${error.message}`);
+}
+
+/** Append an inbound customer message AND touch last_customer_at — one helper
+ *  so the webhook and web paths can't forget one half. Service-role. */
+export async function recordCustomerInbound(
+  inquiryId: string,
+  body: string,
+  channel: string,
+): Promise<void> {
+  await appendInquiryMessage(inquiryId, "customer", body, { channel, direction: "inbound" });
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("inquiries")
+    .update({ last_customer_at: new Date().toISOString() })
+    .eq("id", inquiryId);
+  if (error) throw new Error(`recordCustomerInbound failed: ${error.message}`);
 }
 
 /**
@@ -292,15 +399,17 @@ export async function linkInquiryToBooking(
   if (error) throw new Error(`linkInquiryToBooking failed: ${error.message}`);
 }
 
-/** Count of inquiries awaiting operator review (for the nav badge). */
-export async function countNeedsReview(operatorId: string): Promise<number> {
+/** Count of conversations waiting on a human (for the nav badge). Keyed on the
+ *  handoff `owner`, not the lifecycle status: "needs you" means nobody — AI or
+ *  operator — currently owns the reply. */
+export async function countNeedsHuman(operatorId: string): Promise<number> {
   const supabase = createClient(); // user-scoped (operator SELECT policy, 0054)
   const { count, error } = await supabase
     .from("inquiries")
     .select("id", { count: "exact", head: true })
     .eq("operator_id", operatorId)
-    .eq("status", "needs_review");
-  if (error) throw new Error(`countNeedsReview failed: ${error.message}`);
+    .eq("owner", "needs_human");
+  if (error) throw new Error(`countNeedsHuman failed: ${error.message}`);
   return count ?? 0;
 }
 
@@ -321,9 +430,18 @@ export async function replyToInquiry(
   // policies (0054/0057). appendInquiryMessage below stays service-role (the
   // inquiry_messages insert is shared with the storefront/webhook thread).
   const supabase = createClient();
+  const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("inquiries")
-    .update({ status: "replied", operator_reply: reply, replied_at: new Date().toISOString() })
+    .update({
+      status: "replied",
+      operator_reply: reply,
+      replied_at: now,
+      // Sending a reply IS taking over: the AI stays quiet from here until an
+      // explicit "Hand back to AI" (inbox-plan Phase 0).
+      owner: "human",
+      last_human_at: now,
+    })
     .eq("id", id)
     .eq("operator_id", operatorId)
     .select("customer_email, customer_name, customer_phone, channel, inbound_message")
@@ -333,7 +451,10 @@ export async function replyToInquiry(
 
   // Append to the thread (operator_reply above keeps the "last reply" for the
   // inbox preview; the thread holds the full history).
-  await appendInquiryMessage(id, "operator", reply);
+  await appendInquiryMessage(id, "operator", reply, {
+    channel: data.channel,
+    direction: "outbound",
+  });
 
   return {
     customerEmail: data.customer_email,

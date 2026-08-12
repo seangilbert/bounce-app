@@ -1,22 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSmsProvider, smsEnabled } from "@/lib/sms";
 import { claimWebhookEvent } from "@/lib/orders/repo";
-import {
-  findLatestInquiryByPhone,
-  appendInquiryMessage,
-  listMessagesByInquiry,
-  setInquiryStatus,
-  type ThreadMessage,
-} from "@/lib/inquiries/repo";
-import { handleInquiry } from "@/lib/llm/assistant";
-import { getOperatorById } from "@/lib/inventory/repo";
-import { notifyOperatorNewInquiry } from "@/lib/email";
+import { findLatestInquiryByPhone } from "@/lib/inquiries/repo";
+import { ingestInbound } from "@/lib/inquiries/ingest";
+import { publicUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 // The AI turn makes a Claude call — give it headroom.
 export const maxDuration = 60;
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bounce-app.vercel.app";
 
 function escapeXml(s: string): string {
   return s
@@ -37,31 +28,11 @@ function twiml(message?: string): Response {
 }
 
 /**
- * Collapse the inquiry thread into an Anthropic-valid message array: customer →
- * `user`, ai/operator → `assistant`, consecutive same-role merged, leading
- * assistant turns dropped so it starts with `user`, capped to the recent tail.
- */
-function toApiMessages(thread: ThreadMessage[]): { role: "user" | "assistant"; content: string }[] {
-  const mapped = thread
-    .filter((m) => m.body.trim())
-    .map((m) => ({ role: m.sender === "customer" ? ("user" as const) : ("assistant" as const), content: m.body }));
-  const merged: { role: "user" | "assistant"; content: string }[] = [];
-  for (const m of mapped) {
-    const last = merged[merged.length - 1];
-    if (last && last.role === m.role) last.content += "\n" + m.content;
-    else merged.push({ ...m });
-  }
-  let out = merged.slice(-30);
-  while (out.length && out[0]!.role !== "user") out = out.slice(1);
-  return out;
-}
-
-/**
- * Inbound SMS webhook (Twilio). Shared-number, full-AI-loop model: route the text
- * to the customer's inquiry by phone, append it to the thread, run the same AI
- * brain as the web chat, reply over SMS, and escalate to the operator when the
- * quote needs review. Always acks 200 so Twilio doesn't retry (idempotency is by
- * MessageSid regardless).
+ * Inbound SMS webhook (Twilio). Shared-number model: route the text to the
+ * customer's inquiry by phone, then hand the message to the shared ingest
+ * pipeline (owner gate / burst-notify / AI turn — see lib/inquiries/ingest).
+ * Always acks 200 so Twilio doesn't retry (idempotency is by MessageSid
+ * regardless).
  */
 export async function POST(req: Request) {
   if (!smsEnabled()) return twiml(); // Twilio not configured — nothing to do.
@@ -103,46 +74,15 @@ export async function POST(req: Request) {
     // needs per-operator numbers; that's a follow-up.)
     if (!inquiry) return twiml();
 
-    await appendInquiryMessage(inquiry.id, "customer", text);
+    const result = await ingestInbound({ inquiry, text, channel: "sms", customerLabel: from });
+    if (result.kind === "silent") return twiml(); // human-owned: saved, no auto-reply
 
-    const thread = (await listMessagesByInquiry([inquiry.id])).get(inquiry.id) ?? [];
-    const messages = toApiMessages(thread);
-    const result = await handleInquiry({
-      operatorId: inquiry.operator_id,
-      inquiryId: inquiry.id,
-      messages,
-      startDate: inquiry.start_date,
-      endDate: inquiry.end_date,
-    });
-
-    await appendInquiryMessage(inquiry.id, "ai", result.reply);
-
-    const operator = await getOperatorById(inquiry.operator_id);
     let reply = result.reply;
-    if (result.status === "review") {
-      // Over the auto-quote cap / unmatched items — hand to the operator.
-      await setInquiryStatus(inquiry.id, "needs_review");
-      if (operator?.contactEmail && operator.notifyNewInquiry) {
-        try {
-          await notifyOperatorNewInquiry({
-            to: operator.contactEmail,
-            businessName: operator.name,
-            customer: inquiry.customer_name ?? from,
-            message: text,
-            link: `${APP_URL}/inquiries`,
-          });
-        } catch (e) {
-          console.error("[sms] operator alert failed:", e);
-        }
-      }
-    } else {
-      await setInquiryStatus(inquiry.id, "auto");
-      // A ready quote isn't self-serve over SMS — point them to the storefront.
-      if (result.status === "quoted" && operator?.slug) {
-        reply += `\n\nReserve online: ${APP_URL}/s/${operator.slug}`;
-      }
+    // Delivery decoration, deliberately channel-side and not persisted: a ready
+    // quote isn't self-serve over SMS — point them to the storefront.
+    if (result.status === "quoted" && result.operator?.slug) {
+      reply += `\n\nReserve online: ${publicUrl(`/s/${result.operator.slug}`)}`;
     }
-
     return twiml(reply);
   } catch (err) {
     // The inbound message is already saved; ack 200 (no retry) and let the

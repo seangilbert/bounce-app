@@ -1,5 +1,8 @@
 export type InquiryStatus = "needs_review" | "escalated" | "auto" | "replied";
 
+/** Handoff state (inbox-plan Phase 0): who answers this thread right now. */
+export type InquiryOwner = "ai" | "needs_human" | "human";
+
 /** Did this inquiry turn into a booking? Shown in the inbox so operators (esp.
  *  on auto-answered inquiries) can see the outcome and decide whether to follow up. */
 export type BookingOutcomeStatus = "booked" | "pending" | "canceled" | "none";
@@ -16,6 +19,7 @@ export interface InquiryListItem {
   initials: string;
   time: string;
   status: InquiryStatus;
+  owner: InquiryOwner;
   preview: string;
   customerType: string;
   location: string;
@@ -39,6 +43,8 @@ export interface InquiryDetail {
   whyBanner?: string;
   /** Whether this inquiry converted to a booking. */
   outcome: BookingOutcome;
+  /** Handoff state — drives the AI-paused chip + Take over / Hand back. */
+  owner: InquiryOwner;
   /** Customer email, for the reply/contact action (null if not captured). */
   email: string | null;
   /** Customer phone, for texting (null if not captured). */

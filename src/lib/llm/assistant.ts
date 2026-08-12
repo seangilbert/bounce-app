@@ -6,7 +6,14 @@ import { listItems } from "@/lib/inventory/repo";
 import { availabilityForOperator } from "@/lib/inventory/availability";
 import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing";
 import { assessRange, normalizeSchedule } from "@/lib/availability/schedule";
-import { createInquiry } from "@/lib/inquiries/repo";
+import {
+  createInquiry,
+  getInquiryById,
+  recordCustomerInbound,
+  appendInquiryMessage,
+  markInquiryNeedsHuman,
+  type InquiryRow,
+} from "@/lib/inquiries/repo";
 import { notifyOperatorNewInquiry } from "@/lib/email";
 import { getQuoteQuota, incrementAiQuoteUsage } from "@/lib/usage/ai-quotes";
 import { planCapabilities } from "@/lib/plans";
@@ -74,7 +81,9 @@ const ModelOutputSchema = z.object({
     .describe('For "quote": the recommended catalog items. Empty for "ask".'),
   unmatchedRequests: z
     .array(z.string())
-    .describe("Things the customer asked for that aren't in the catalog."),
+    .describe(
+      "Things the customer asked for that aren't in the catalog AND still wants. Never include a request the customer has withdrawn or declined (e.g. \"no X needed\", \"skip the X\") — withdrawn requests must not block an otherwise-ready quote.",
+    ),
 });
 
 export interface QuoteLine {
@@ -176,7 +185,7 @@ How to behave:
 - When you know what to recommend AND the event date, set action="quote" with the recommended lineItems (exact catalog ids) and eventDate.
 - Resolve dates from natural language relative to today into eventDate (YYYY-MM-DD): e.g. "next Saturday", "July 12", "the 20th". If you truly have no date, set eventDate=null and ask for it.
 - Honor the booking config: never propose or accept an event date on a blackout/closed date, a non-operating day, or sooner than the required advance notice, and don't promise delivery outside the service area. If the customer asks for something the config rules out, say so warmly and offer the nearest workable option.
-${hasDate ? "- Availability for the chosen date is shown above; do not recommend an item with 0 available — suggest an available alternative instead.\n" : ""}- If the customer wants something not in the catalog, add it to unmatchedRequests and offer the closest alternative — never invent items.
+${hasDate ? "- Availability for the chosen date is shown above; do not recommend an item with 0 available — suggest an available alternative instead.\n" : ""}- If the customer wants something not in the catalog, add it to unmatchedRequests and offer the closest alternative — never invent items. Drop it from unmatchedRequests the moment they withdraw or decline it — that list is only for things they STILL want.
 - "reply" is what the customer reads: warm, brief, human. Do NOT state prices — the system computes and displays them.
 - REUSE what's already known — never re-ask for something the customer gave you (date, contact, item interest, a prior quote). If a question comes out of order, answer it, then return to where you left off.
 - HAND OFF to a human without friction whenever the customer asks for a person, seems upset or repeatedly misunderstood, or raises a complaint, refund, injury, damage, legal, payment, or policy-exception issue. Tell them you'll pass the conversation to the team and flag it for follow-up. Never make someone argue to reach a person.
@@ -187,13 +196,28 @@ ${hasDate ? "- Availability for the chosen date is shown above; do not recommend
 - Respect "no" immediately — stop upsells and follow-ups on any decline or opt-out.`;
 }
 
+export interface HandleInquiryOptions {
+  /** Append this turn's customer message + AI reply to inquiry_messages when an
+   *  inquiry row already exists (web/API routes pass true). The Twilio webhook
+   *  omits it — it appends itself around the call, so a thrown AI turn still
+   *  keeps the inbound message. */
+  persistTurn?: boolean;
+}
+
+/** What the customer hears while a human owns the thread (inbox-plan Phase 0). */
+export const HUMAN_OWNED_ACK =
+  "Thanks — the team has your message and will get back to you directly.";
+
 /**
  * Handle one turn of a customer conversation. Returns either a clarifying
  * question ("gathering") or a quote grounded in live inventory ("quoted" when
  * auto-approved, "review" when it needs an operator). The quote is always
  * recomputed from authoritative DB prices; the model's numbers are advisory.
  */
-export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResult> {
+export async function handleInquiry(
+  inquiry: Inquiry,
+  opts: HandleInquiryOptions = {},
+): Promise<ConversationResult> {
   // Require an explicit operator — never fall back to a "default" one. With more
   // than one tenant, defaulting would serve one operator's agent (its custom
   // instructions + config) to another operator's customer. Every real entry
@@ -203,19 +227,88 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
   const operator = await getOperatorById(inquiry.operatorId);
   if (!operator) throw new Error(`Operator ${inquiry.operatorId} not found.`);
 
-  // Free-tier AI-quote cap. Gate a *new* conversation (no inquiryId yet) BEFORE
-  // any model call, so a capped operator never spends against our Anthropic bill;
-  // an in-progress thread continues so we don't abandon a customer mid-chat. The
-  // count is bumped once below, when the inbox inquiry is first persisted. Paid
-  // plans are unlimited and getQuoteQuota short-circuits without a DB read.
-  const metered = Number.isFinite(planCapabilities(operator).aiQuotesPerMonth);
-  if (!inquiry.inquiryId) {
-    const quota = await getQuoteQuota(operator);
-    if (quota.atLimit) return cappedInquiry(operator, inquiry);
+  // ── Handoff gate (inbox-plan Phase 0) — before quota and any model call. ──
+  // When a human owns (or was asked to own) this thread, the AI stays quiet:
+  // save the customer's message so the operator sees it, return a courtesy
+  // ack. The ack is NOT persisted as a thread message — it's a receipt, not
+  // conversation, and would clutter the operator's thread once per message.
+  // This lives here (not in the routes) so every entry point — storefront,
+  // /api/v1 agent, SMS — is protected even if a route forgets.
+  const lastUser = [...inquiry.messages].reverse().find((m) => m.role === "user");
+  let existing: InquiryRow | null = null;
+  if (inquiry.inquiryId) {
+    existing = await getInquiryById(inquiry.inquiryId);
+    if (existing && existing.owner !== "ai") {
+      if (opts.persistTurn && lastUser) {
+        try {
+          await recordCustomerInbound(existing.id, lastUser.content, existing.channel);
+        } catch (err) {
+          console.error("[inquiries] failed to persist paused-thread message:", err);
+        }
+      }
+      return {
+        reply: HUMAN_OWNED_ACK,
+        // "review" keeps the storefront's contact-capture box visible on
+        // escalated threads; "gathering" leaves an operator-owned chat open.
+        status: existing.owner === "needs_human" ? "review" : "gathering",
+        eventDate: inquiry.startDate ?? null,
+        quote: null,
+        auto: false,
+        unmatchedRequests: [],
+        inquiryId: existing.id,
+      };
+    }
   }
 
+  // Persist this turn's customer message for pre-existing threads. (The first
+  // turn's message is seeded by createInquiry; without this, web turns after
+  // creation lived only in the client and an operator taking over never saw
+  // them.)
+  if (opts.persistTurn && existing && lastUser) {
+    try {
+      await recordCustomerInbound(existing.id, lastUser.content, existing.channel);
+    } catch (err) {
+      console.error("[inquiries] failed to persist customer turn:", err);
+    }
+  }
+
+  const result = await runInquiryTurn(inquiry, operator);
+
+  if (existing) {
+    // Persist the AI's reply so the operator thread mirrors the conversation.
+    if (opts.persistTurn && result.reply) {
+      try {
+        await appendInquiryMessage(existing.id, "ai", result.reply, {
+          channel: existing.channel,
+          direction: "outbound",
+        });
+      } catch (err) {
+        console.error("[inquiries] failed to persist AI turn:", err);
+      }
+    }
+    // Centralized escalation for continuing threads: a mid-conversation
+    // "review" outcome flips lifecycle + handoff state together. (New
+    // conversations set both inside createInquiry.)
+    if (result.status === "review") {
+      try {
+        await markInquiryNeedsHuman(existing.id);
+      } catch (err) {
+        console.error("[inquiries] failed to mark needs-human:", err);
+      }
+    }
+  }
+
+  return result;
+}
+
+/** Load the grounded prompt context — catalog (with availability when a date is
+ *  known) + the operator's structured config. Shared by the customer agent and
+ *  the operator copilot so their grounding never drifts. */
+async function loadPromptContext(
+  operator: Operator,
+  hintStart: string | null,
+): Promise<{ today: string; promptItems: PromptItem[]; config: string }> {
   const today = new Date().toISOString().slice(0, 10);
-  const hintStart = inquiry.startDate ?? null;
 
   // Give the model availability only when we already know a date; otherwise show
   // prices alone (a date-less "availability" would be misleading).
@@ -247,6 +340,69 @@ export async function handleInquiry(inquiry: Inquiry): Promise<ConversationResul
   // hours, blackouts, lead time, deposit terms, active auto-promos).
   const autoPromos = await listAssistantPromos(operator.id, today);
   const config = buildOperatorConfig(operator, today, autoPromos);
+
+  return { today, promptItems, config };
+}
+
+/** The copilot mode-switch appended to the customer-agent system prompt when
+ *  drafting a reply for the operator to review. Exported for prompt tests. */
+export function buildDraftInstruction(operatorName: string): string {
+  return `
+
+MODE CHANGE — you are now drafting a message that a human at ${operatorName} will review, edit, and send to the customer under the business's own name. Write ONLY the message body: no subject line, no signature, no surrounding quotes, no commentary. First person plural as the business ("we"). Keep it short, warm, and concrete. Unlike normal mode, you may reference a price if (and only if) it already appears earlier in this conversation. If the right content depends on something only the operator knows (a custom price, a policy exception, a schedule promise), put a clearly-marked [FILL IN] placeholder there instead of inventing it.`;
+}
+
+/**
+ * AI-as-copilot (inbox-plan Phase 0): one-shot suggested reply for the
+ * operator's composer. Grounded in the same catalog + config as the customer
+ * agent; plain text out — no structured output, no pricing recompute, no
+ * persistence, no metering (the caller rate-limits).
+ */
+export async function draftOperatorReply(
+  operatorId: string,
+  messages: { role: "user" | "assistant"; content: string }[],
+  opts?: { startDate?: string | null },
+): Promise<string> {
+  const operator = await getOperatorById(operatorId);
+  if (!operator) throw new Error(`Operator ${operatorId} not found.`);
+  const hintStart = opts?.startDate ?? null;
+  const { today, promptItems, config } = await loadPromptContext(operator, hintStart);
+
+  const client = getAnthropicClient();
+  const response = await client.messages.create({
+    model: ASSISTANT_MODEL,
+    max_tokens: 512,
+    system:
+      buildSystemPrompt(operator, today, catalogForPrompt(promptItems, hintStart), Boolean(hintStart), config) +
+      buildDraftInstruction(operator.name),
+    // Always end on a user turn: the thread can end with an ai/operator message,
+    // and a trailing assistant turn is a prefill (400 on this model family).
+    // Consecutive same-role user turns are valid — the API merges them.
+    messages: [...messages, { role: "user", content: "Draft the next reply to send to this customer now." }],
+  });
+  if (response.stop_reason === "refusal") throw new Error("The assistant declined to draft this reply.");
+  const text = response.content.find((b) => b.type === "text");
+  if (!text || text.type !== "text" || !text.text.trim()) throw new Error("No draft returned.");
+  return text.text.trim();
+}
+
+/** One grounded AI turn — quota gate, model call, DB-grounded quote, first-turn
+ *  persistence. Split from handleInquiry so the handoff gate/persistence wrapper
+ *  stays readable. */
+async function runInquiryTurn(inquiry: Inquiry, operator: Operator): Promise<ConversationResult> {
+  // Free-tier AI-quote cap. Gate a *new* conversation (no inquiryId yet) BEFORE
+  // any model call, so a capped operator never spends against our Anthropic bill;
+  // an in-progress thread continues so we don't abandon a customer mid-chat. The
+  // count is bumped once below, when the inbox inquiry is first persisted. Paid
+  // plans are unlimited and getQuoteQuota short-circuits without a DB read.
+  const metered = Number.isFinite(planCapabilities(operator).aiQuotesPerMonth);
+  if (!inquiry.inquiryId) {
+    const quota = await getQuoteQuota(operator);
+    if (quota.atLimit) return cappedInquiry(operator, inquiry);
+  }
+
+  const hintStart = inquiry.startDate ?? null;
+  const { today, promptItems, config } = await loadPromptContext(operator, hintStart);
 
   const client = getAnthropicClient();
   const response = await client.messages.parse({

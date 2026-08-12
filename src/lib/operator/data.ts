@@ -294,15 +294,26 @@ function rowToListItem(r: InquiryRow): Omit<InquiryListItem, "outcome"> {
     id: r.id,
     name,
     initials: initials(name),
-    time: relTime(r.created_at),
+    time: relTime(inquiryActivityAt(r)),
     status: r.status === "needs_review" ? "needs_review" : r.status === "replied" ? "replied" : "auto",
+    owner: r.owner,
     preview: r.status === "replied" ? `You replied · ${r.operator_reply ?? ""}` : preview,
     customerType: r.customer_type ?? "New customer",
     location: r.location ?? r.customer_email ?? "via your website",
   };
 }
 
-function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, "outcome"> {
+/** Latest activity on an inquiry — creation, newest customer message, or newest
+ *  human action — so paused threads with fresh messages bubble up (no realtime
+ *  until inbox Phase 2). */
+function inquiryActivityAt(r: InquiryRow): string {
+  return [r.created_at, r.last_customer_at, r.last_human_at]
+    .filter((t): t is string => !!t)
+    .sort()
+    .pop()!;
+}
+
+function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, "outcome" | "owner"> {
   const source: ThreadMessage[] = msgs.length
     ? msgs
     : [{ id: `${r.id}-inbound`, sender: "customer", body: r.inbound_message, createdAt: r.created_at }];
@@ -312,7 +323,13 @@ function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, 
     body: m.body,
     time: relTime(m.createdAt),
   }));
-  const channelMeta = `${relTime(r.created_at)} · via your ${r.channel}`;
+  const channelLabel =
+    r.channel === "sms"
+      ? "by text message"
+      : r.channel === "email"
+        ? "by email"
+        : `via your ${r.channel}`;
+  const channelMeta = `${relTime(r.created_at)} · ${channelLabel}`;
   const email = r.customer_email;
   const phone = r.customer_phone;
   const channel = r.channel;
@@ -430,10 +447,13 @@ async function resolveOutcomes(
  */
 export async function getInquiries(operatorId: string): Promise<{
   list: InquiryListItem[];
-  filters: { all: number; needsYou: number; auto: number };
+  filters: { all: number; needsYou: number; ai: number; mine: number };
   details: Record<string, InquiryDetail>;
 }> {
   const rows = (await listInquiries(operatorId)).filter((r) => r.status !== "dismissed");
+  // Latest-activity first (not created-at): a paused thread with a fresh
+  // customer message must bubble up, or the operator misses it.
+  rows.sort((a, b) => inquiryActivityAt(b).localeCompare(inquiryActivityAt(a)));
   const [msgMap, outcomes] = await Promise.all([
     listMessagesByInquiry(rows.map((r) => r.id)),
     resolveOutcomes(operatorId, rows),
@@ -442,10 +462,20 @@ export async function getInquiries(operatorId: string): Promise<{
   const list = rows.map((r) => ({ ...rowToListItem(r), outcome: outcomes.get(r.id) ?? noOutcome }));
   const details: Record<string, InquiryDetail> = {};
   for (const r of rows) {
-    details[r.id] = { ...rowToDetail(r, msgMap.get(r.id) ?? []), outcome: outcomes.get(r.id) ?? noOutcome };
+    details[r.id] = {
+      ...rowToDetail(r, msgMap.get(r.id) ?? []),
+      outcome: outcomes.get(r.id) ?? noOutcome,
+      owner: r.owner,
+    };
   }
-  const needsYou = list.filter((l) => l.status === "needs_review").length;
-  return { list, filters: { all: list.length, needsYou, auto: list.length - needsYou }, details };
+  // Owner-keyed filters (inbox-plan "Needs you / AI-handled / Mine").
+  const needsYou = list.filter((l) => l.owner === "needs_human").length;
+  const mine = list.filter((l) => l.owner === "human").length;
+  return {
+    list,
+    filters: { all: list.length, needsYou, ai: list.length - needsYou - mine, mine },
+    details,
+  };
 }
 
 /* ══════════════════════ Dashboard ══════════════════════ */
