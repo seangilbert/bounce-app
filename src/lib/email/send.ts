@@ -19,7 +19,8 @@ export interface EmailInput {
   fromName?: string;
 }
 
-/** Compose the From header: swap the display name on the configured sender.
+/** Compose the From header: swap the display name on the configured sender —
+ *  the customer sees the business they're renting from, not the platform.
  *  Pure + exported for tests. Falls back to the base sender when the name is
  *  empty after sanitizing or the base has no extractable address. */
 export function fromHeader(base: string, fromName?: string): string {
@@ -27,7 +28,7 @@ export function fromHeader(base: string, fromName?: string): string {
   if (!name) return base;
   const addr = base.match(/<([^<>\s]+@[^<>\s]+)>/)?.[1] ?? base.match(/^([^<>\s]+@[^<>\s]+)$/)?.[1];
   if (!addr) return base;
-  return `"${name} via Movables" <${addr}>`;
+  return `"${name}" <${addr}>`;
 }
 
 export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; skipped?: boolean }> {
