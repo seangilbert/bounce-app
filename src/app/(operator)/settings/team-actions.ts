@@ -23,7 +23,7 @@ function appBase(): string {
   const host = h.get("host");
   const proto = h.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
   if (host) return `${proto}://${host}`;
-  return process.env.NEXT_PUBLIC_APP_URL ?? "https://bounce-app.vercel.app";
+  return process.env.NEXT_PUBLIC_APP_URL ?? "https://movables.ai";
 }
 
 export async function inviteMemberAction(input: {

@@ -55,6 +55,10 @@ export interface Operator {
   esignSignerEmail: string | null;
   /** The operator's own SignWell template id; null = use the platform default. */
   signwellTemplateId: string | null;
+  /** When the operator hid the "Get set up" checklist. Null = still showing.
+   *  Step completion itself is derived (see lib/operator/setup.ts) — this is
+   *  the only piece of checklist state worth storing. */
+  setupDismissedAt: string | null;
 }
 
 /** Physical footprint in feet, used later for space/access checks. */

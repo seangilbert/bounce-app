@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSessionOperator } from "@/lib/operator/session";
+import { getSessionOperator, requireAdmin } from "@/lib/operator/session";
 import { geocodeLocation } from "@/lib/operator/geocode";
 import { createClient } from "@/utils/supabase/server";
 
 export type LocationResult = { ok: true; location: string } | { ok: false; error: string };
+export type SetupResult = { ok: true } | { ok: false; error: string };
 
 /** Geocode + save the operator's service area (sets lat/lon for weather). */
 export async function saveLocationAction(query: string): Promise<LocationResult> {
@@ -26,4 +27,22 @@ export async function saveLocationAction(query: string): Promise<LocationResult>
   revalidatePath("/onboarding");
   revalidatePath("/dashboard");
   return { ok: true, location: geo.label };
+}
+
+/** Hide (or bring back) the dashboard "Get set up" card. The guide itself stays
+ *  at /onboarding either way — dismissing is about the dashboard, not the work. */
+export async function setSetupDismissedAction(dismissed: boolean): Promise<SetupResult> {
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+
+  const { error } = await createClient()
+    .from("operators")
+    .update({ setup_dismissed_at: dismissed ? new Date().toISOString() : null })
+    .eq("id", g.membership.operator.id);
+  if (error) return { ok: false, error: "Could not update your setup guide." };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/onboarding");
+  revalidatePath("/settings");
+  return { ok: true };
 }

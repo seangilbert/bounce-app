@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://bounce-app.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://movables.ai";
 
 // Public, indexable pages. Per-operator storefronts (/s/[slug]) are intentionally
 // omitted for now — they'd need to be enumerated from the DB.

@@ -28,7 +28,9 @@ import {
   type AttentionItem,
 } from "@/lib/operator/data";
 import { getWeatherAdvisory, type WeatherAdvisory } from "@/lib/operator/weather";
+import { getSetupProgress, type SetupProgress } from "@/lib/operator/setup";
 import { ConnectBanner } from "@/components/operator/ConnectBanner";
+import { SetupCard } from "@/components/operator/setup/SetupCard";
 import { NewBookingButton } from "@/components/operator/bookings/NewBookingButton";
 import { CustomerSearchBox } from "@/components/operator/customers/CustomerSearchBox";
 
@@ -57,6 +59,9 @@ export default async function DashboardPage({
   const data = await getDashboard(op.id, op.timezone, scope);
   const weather = await getWeatherAdvisory(op, data.todayStops);
   const expiringDocs = isAdmin ? await getExpiringDocuments(op.id, operatorToday(op.timezone)) : [];
+  // Setup is admin work, and it's over once every step is done or the operator
+  // hides it — after that the dashboard stops asking (Settings keeps the link).
+  const setup = isAdmin && !op.setupDismissedAt ? await getSetupProgress(op) : null;
   const firstName = userDisplayName(membership).split(/\s+/)[0];
   return (
     <DashboardBody
@@ -66,6 +71,7 @@ export default async function DashboardPage({
       expiringDocs={expiringDocs}
       isAdmin={isAdmin}
       firstName={firstName}
+      setup={setup && !setup.complete ? setup : null}
     />
   );
 }
@@ -77,6 +83,7 @@ function DashboardBody({
   expiringDocs,
   isAdmin,
   firstName,
+  setup,
 }: {
   data: DashboardData;
   operator: Operator;
@@ -84,6 +91,7 @@ function DashboardBody({
   expiringDocs: ExpiringDocument[];
   isAdmin: boolean;
   firstName: string;
+  setup: SetupProgress | null;
 }) {
   const greeting = timeGreeting(operator.timezone);
   const scopeWord = data.scope === "day" ? "today" : data.scope === "month" ? "this month" : "this week";
@@ -103,7 +111,17 @@ function DashboardBody({
         </div>
       </div>
 
-      {!operator.connectChargesEnabled ? (
+      {setup ? (
+        <div className="px-5 pt-5 lg:px-8 lg:pt-6">
+          <SetupCard
+            progress={setup}
+            storefrontPath={operator.slug ? `/s/${operator.slug}` : "/book"}
+          />
+        </div>
+      ) : null}
+
+      {/* The setup card already carries "Get paid" — one nag, not two. */}
+      {!operator.connectChargesEnabled && !setup ? (
         <div className="px-5 pt-5 lg:px-8 lg:pt-6">
           <ConnectBanner />
         </div>

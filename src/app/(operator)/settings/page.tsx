@@ -4,6 +4,7 @@ import { getQuoteQuota } from "@/lib/usage/ai-quotes";
 import { planCapabilities } from "@/lib/plans";
 import { listApiKeys } from "@/lib/api-keys/repo";
 import { listMembers, listPendingInvites } from "@/lib/operator/members";
+import { getSetupProgress } from "@/lib/operator/setup";
 import { SettingsView } from "@/components/operator/settings/SettingsView";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +22,12 @@ export default async function SettingsPage() {
   const teamEnabled = planCapabilities(op).teamMembers;
   const members = await listMembers(op.id);
   const invites = await listPendingInvites(op.id);
+  // Settings is the way back to the setup guide once its dashboard card is
+  // hidden — so it only points there while there's something left to do.
+  const setup = await getSetupProgress(op);
   return (
     <SettingsView
+      setup={setup.complete ? null : { doneCount: setup.doneCount, total: setup.total }}
       role={membership.role}
       currentUserId={membership.userId}
       teamEnabled={teamEnabled}

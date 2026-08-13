@@ -11,7 +11,10 @@
  * current single-origin deploy until the env vars are set in Vercel.
  */
 
-const FALLBACK = "https://bounce-app.vercel.app";
+/** Last resort when neither host env var is set (local dev, mainly). Both ARE
+ *  set in Vercel Production — but if one ever goes missing, links should still
+ *  carry the real brand, not the pre-rename deploy URL. */
+const FALLBACK = "https://movables.ai";
 
 function toOrigin(v: string | undefined): string | null {
   if (!v) return null;

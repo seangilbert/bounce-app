@@ -51,6 +51,7 @@ interface OperatorRow {
   esign_signer_name: string | null;
   esign_signer_email: string | null;
   signwell_template_id: string | null;
+  setup_dismissed_at: string | null;
 }
 
 interface ItemRow {
@@ -124,6 +125,7 @@ function rowToOperator(r: OperatorRow): Operator {
     esignSignerName: r.esign_signer_name,
     esignSignerEmail: r.esign_signer_email,
     signwellTemplateId: r.signwell_template_id,
+    setupDismissedAt: r.setup_dismissed_at ?? null,
   };
 }
 

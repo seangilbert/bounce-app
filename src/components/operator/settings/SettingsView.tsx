@@ -19,6 +19,7 @@ import {
   Key,
   Copy,
   Robot,
+  Rocket,
   ArrowRight,
 } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -96,6 +97,7 @@ export function SettingsView({
   teamEnabled,
   members,
   invites,
+  setup,
 }: {
   operator: OperatorSettings;
   apiAccess: boolean;
@@ -105,10 +107,13 @@ export function SettingsView({
   teamEnabled: boolean;
   members: TeamMember[];
   invites: TeamInvite[];
+  /** Null once every setup step is done — nothing left to point at. */
+  setup: { doneCount: number; total: number } | null;
 }) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 py-6 lg:px-8">
       <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">Settings</h1>
+      {setup ? <SetupGuideSection doneCount={setup.doneCount} total={setup.total} /> : null}
       <ProfileSection operator={operator} />
       <BrandingSection operator={operator} />
       <PricingSection operator={operator} />
@@ -622,6 +627,26 @@ function NotificationsSection({ operator }: { operator: OperatorSettings }) {
   );
 }
 
+/** The way back to the setup guide once the dashboard card has been hidden. */
+function SetupGuideSection({ doneCount, total }: { doneCount: number; total: number }) {
+  return (
+    <Section title="Get set up" desc="The short list that turns Movables on for your business.">
+      <Link
+        href="/onboarding"
+        className="flex items-center gap-3 rounded-xl bg-brand-tint/50 px-4 py-3 hover:bg-brand-tint"
+      >
+        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+          <Rocket size={18} weight="fill" />
+        </span>
+        <span className="min-w-0 flex-1 text-[13.5px] font-semibold text-ink-soft">
+          {doneCount} of {total} steps done — pick up where you left off.
+        </span>
+        <ArrowRight size={16} weight="bold" className="flex-shrink-0 text-brand-deep" />
+      </Link>
+    </Section>
+  );
+}
+
 function AutomationsSection() {
   return (
     <Section
@@ -1065,7 +1090,7 @@ function DeveloperSection({
   // domain split is on. Fall back to the current origin when no split is set.
   const base =
     process.env.NEXT_PUBLIC_SITE_URL ??
-    (typeof window !== "undefined" ? window.location.origin : "https://bounce-app.vercel.app");
+    (typeof window !== "undefined" ? window.location.origin : "https://movables.ai");
   const snippet = pubKey ? `<script src="${base}/embed.js" data-key="${pubKey.plaintext}" async></script>` : "";
 
   async function copySnippet() {

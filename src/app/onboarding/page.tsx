@@ -1,22 +1,31 @@
 import { redirect } from "next/navigation";
-import { getSessionOperator } from "@/lib/operator/session";
-import { listItems } from "@/lib/inventory/repo";
-import { OnboardingWizard } from "@/components/operator/OnboardingWizard";
+import { getSessionMembership } from "@/lib/operator/session";
+import { getSetupProgress } from "@/lib/operator/setup";
+import { publicUrl } from "@/lib/urls";
+import { SetupGuide } from "@/components/operator/setup/SetupGuide";
 
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
-  const op = await getSessionOperator();
-  if (!op) redirect("/login");
-  const items = await listItems(op.id);
+  const membership = await getSessionMembership();
+  if (!membership) redirect("/login");
+  // Setting the business up is admin work (and the steps land on admin-only
+  // pages) — employees go straight to the dashboard.
+  if (membership.role !== "admin") redirect("/dashboard");
+  const op = membership.operator;
+
+  const progress = await getSetupProgress(op);
+  const storefrontPath = op.slug ? `/s/${op.slug}` : "/book";
 
   return (
-    <OnboardingWizard
+    <SetupGuide
       businessName={op.name}
-      slug={op.slug}
       location={op.location}
-      itemCount={items.length}
-      paymentsConnected={op.connectChargesEnabled}
+      storefrontPath={storefrontPath}
+      storefrontUrl={publicUrl(storefrontPath)}
+      brandColor={op.brandColor}
+      logoUrl={op.logoUrl}
+      progress={progress}
     />
   );
 }

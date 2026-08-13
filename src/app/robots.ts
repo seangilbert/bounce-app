@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://bounce-app.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://movables.ai";
 
 // Let crawlers index the public marketing + storefront surfaces; keep the
 // operator app and API out of the index (they redirect/require auth anyway).

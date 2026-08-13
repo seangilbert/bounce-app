@@ -644,7 +644,7 @@ async function runInquiryTurn(inquiry: Inquiry, operator: Operator): Promise<Con
 
     // Alert the operator to inquiries that need their review (best-effort).
     if (!auto && operator.contactEmail && operator.notifyNewInquiry) {
-      const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://bounce-app.vercel.app";
+      const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://movables.ai";
       try {
         await notifyOperatorNewInquiry({
           to: operator.contactEmail,
@@ -707,7 +707,7 @@ async function cappedInquiry(operator: Operator, inquiry: Inquiry): Promise<Conv
   }
 
   if (operator.contactEmail && operator.notifyNewInquiry) {
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://bounce-app.vercel.app";
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://movables.ai";
     try {
       await notifyOperatorNewInquiry({
         to: operator.contactEmail,
