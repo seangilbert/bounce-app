@@ -74,6 +74,11 @@ const OPERATOR = {
   name: "Bounce USA",
   timezone: "America/New_York",
   contactEmail: "owner@example.com",
+  // The sweep's plan gate runs planCapabilities(operator) — without these
+  // fields effectivePlanId resolves "free" and every lane silently skips.
+  plan: "solo",
+  subscriptionStatus: "active",
+  billingExempt: false,
   remindBalance: true,
   remindContract: true,
   remindQuote: true,
@@ -383,6 +388,41 @@ describe("doc-expiry lane", () => {
     expect(res.failed).toBe(1);
     expect(releaseDocReminder).toHaveBeenCalledWith("d1", "2030-06-10");
     expect(releaseDocReminder).toHaveBeenCalledWith("d2", "2030-06-05");
+  });
+});
+
+describe("plan gate — follow-up agents are Solo+", () => {
+  it("free operator with every toggle ON: booking lanes skip, doc lane still sends", async () => {
+    queue([balanceRow()], [contractRow()], [quoteRow()], [docRow()]);
+    getOperatorById.mockResolvedValue({ ...OPERATOR, plan: "free", subscriptionStatus: null });
+    const res = await runReminderSweep();
+    expect(res.balanceSent).toBe(0);
+    expect(res.contractSent).toBe(0);
+    expect(res.quoteSent).toBe(0);
+    expect(res.skipped).toBe(3);
+    expect(claimReminder).not.toHaveBeenCalled();
+    expect(res.docExpirySent).toBe(1); // operator-facing, never plan-gated
+  });
+
+  it("lapsed paid subscription is treated as free", async () => {
+    queue([balanceRow()], [], [], []);
+    getOperatorById.mockResolvedValue({ ...OPERATOR, plan: "growing", subscriptionStatus: "canceled" });
+    const res = await runReminderSweep();
+    expect(res.balanceSent).toBe(0);
+    expect(res.skipped).toBe(1);
+    expect(claimReminder).not.toHaveBeenCalled();
+  });
+
+  it("billing-exempt (comp) account sends regardless of billing state", async () => {
+    queue([balanceRow()], [], [], []);
+    getOperatorById.mockResolvedValue({
+      ...OPERATOR,
+      plan: "free",
+      subscriptionStatus: null,
+      billingExempt: true,
+    });
+    const res = await runReminderSweep();
+    expect(res.balanceSent).toBe(1);
   });
 });
 

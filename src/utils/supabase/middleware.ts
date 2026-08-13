@@ -29,6 +29,7 @@ export const OPERATOR_PREFIXES = [
   "/customers",
   "/documents",
   "/promos",
+  "/agents",
   "/settings",
   "/account",
   "/more",

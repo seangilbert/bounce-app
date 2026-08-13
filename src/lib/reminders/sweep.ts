@@ -16,6 +16,7 @@ import { inboundReplyAddress } from "@/lib/email/inbound";
 import { findInquiryIdByBooking } from "@/lib/inquiries/repo";
 import { DOC_TYPES, docTypeLabel, type DocType } from "@/lib/documents/types";
 import { draftReminderIntro, type ReminderFacts, type ReminderKind } from "@/lib/llm/assistant";
+import { planCapabilities } from "@/lib/plans";
 import { fallbackReminderIntro } from "./copy";
 import { claimReminder, releaseReminder, claimDocReminder, releaseDocReminder } from "./repo";
 import type { Operator } from "@/lib/inventory/types";
@@ -218,6 +219,9 @@ export async function runReminderSweep(): Promise<ReminderSweepResult> {
       continue;
     }
     const today = operatorToday(operator.timezone);
+    // Plan gate (Solo+): a downgraded operator's stale toggles must stop
+    // sending — the toggle action blocks NEW opt-ins, this blocks the sends.
+    const canFollowUp = planCapabilities(operator).followUpAgents;
     let operatorSent = 0;
 
     for (const { kind, row } of candidates) {
@@ -228,11 +232,12 @@ export async function runReminderSweep(): Promise<ReminderSweepResult> {
 
       // ── Cheap skips, before any claim. ──
       const enabled =
-        kind === "balance"
+        canFollowUp &&
+        (kind === "balance"
           ? operator.remindBalance
           : kind === "contract"
             ? operator.remindContract
-            : operator.remindQuote;
+            : operator.remindQuote);
       const balanceCents = (row.total ?? 0) - (row.deposit ?? 0);
       if (
         !enabled ||

@@ -33,7 +33,12 @@ export const PLANS: Record<PlanId, Plan> = {
     priceCents: 2900,
     stripeLookupKey: "solo_monthly",
     tagline: "For a solo operator",
-    features: ["Unlimited quotes", "Full catalog & calendar", "Payments + e-signature"],
+    features: [
+      "Unlimited quotes",
+      "Full catalog & calendar",
+      "Payments + e-signature",
+      "Automated follow-ups (quotes, balances, contracts)",
+    ],
   },
   growing: {
     id: "growing",
@@ -61,12 +66,16 @@ export interface PlanCapabilities {
   teamMembers: boolean;
   /** API keys + embeddable widget (bring-your-own-website). */
   apiAccess: boolean;
+  /** Automated customer-facing follow-up emails (balance / quote / contract
+   *  agents). Enforced in the UI, the toggle action, AND the cron sweep — a
+   *  downgrade stops sends even if the operator's toggles stay on. */
+  followUpAgents: boolean;
 }
 
 export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
-  free: { maxItems: 5, aiQuotesPerMonth: 20, teamMembers: false, apiAccess: false },
-  solo: { maxItems: Infinity, aiQuotesPerMonth: Infinity, teamMembers: false, apiAccess: false },
-  growing: { maxItems: Infinity, aiQuotesPerMonth: Infinity, teamMembers: true, apiAccess: true },
+  free: { maxItems: 5, aiQuotesPerMonth: 20, teamMembers: false, apiAccess: false, followUpAgents: false },
+  solo: { maxItems: Infinity, aiQuotesPerMonth: Infinity, teamMembers: false, apiAccess: false, followUpAgents: true },
+  growing: { maxItems: Infinity, aiQuotesPerMonth: Infinity, teamMembers: true, apiAccess: true, followUpAgents: true },
 };
 
 /** Subscription statuses that still entitle a paid plan (incl. past_due grace). */

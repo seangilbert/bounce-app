@@ -11,6 +11,7 @@ import {
   removeMemberAction,
   revokeInviteAction,
 } from "@/app/(operator)/settings/team-actions";
+import { UpgradeButton } from "@/components/operator/UpgradeButton";
 
 export function TeamSection({
   teamEnabled,
@@ -30,25 +31,8 @@ export function TeamSection({
   const [error, setError] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  const [upgrading, setUpgrading] = useState(false);
 
   const adminCount = members.filter((m) => m.role === "admin").length;
-
-  async function upgrade() {
-    setUpgrading(true);
-    try {
-      const res = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ plan: "growing" }),
-      });
-      const json = await res.json();
-      if (res.ok && json.url) window.location.href = json.url;
-      else setUpgrading(false);
-    } catch {
-      setUpgrading(false);
-    }
-  }
 
   async function copy(text: string, id: string) {
     try {
@@ -212,13 +196,7 @@ export function TeamSection({
           <div className="text-[13.5px] font-semibold text-ink-soft">
             Adding team members is a <b>Growing</b> plan feature. Invite admins + employees to help run your business.
           </div>
-          <button
-            onClick={upgrade}
-            disabled={upgrading}
-            className="mt-2 flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-white hover:bg-brand-deep disabled:opacity-60"
-          >
-            {upgrading ? <CircleNotch size={14} weight="bold" className="animate-spin" /> : null} Upgrade to Growing
-          </button>
+          <UpgradeButton plan="growing">Upgrade to Growing</UpgradeButton>
         </div>
       )}
 

@@ -84,6 +84,7 @@ const APP_PATH_PREFIXES = [
   "/customers",
   "/documents",
   "/promos",
+  "/agents",
   "/settings",
   "/account",
   "/more",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TIMEZONES } from "@/lib/operator/time";
 import { POLICY_MAX_CHARS, ASSISTANT_INSTRUCTIONS_MAX_CHARS } from "@/lib/operator/policies";
@@ -17,6 +18,8 @@ import {
   Sparkle,
   Key,
   Copy,
+  Robot,
+  ArrowRight,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   updateProfileAction,
@@ -27,7 +30,6 @@ import {
   updateAssistantInstructionsAction,
   updateContractIdentityAction,
   updateNotificationPrefsAction,
-  updateAutomationPrefsAction,
   updateBrandingAction,
   updateAvailabilityAction,
   type ActionResult,
@@ -42,6 +44,7 @@ import type { ApiKeyRecord } from "@/lib/api-keys/repo";
 import type { MemberRole } from "@/lib/operator/roles";
 import type { TeamMember, TeamInvite } from "@/lib/operator/members";
 import { TeamSection } from "./TeamSection";
+import { UpgradeButton } from "@/components/operator/UpgradeButton";
 import { ACCENT_COLORS, deriveShades } from "@/lib/branding/palette";
 
 interface OperatorSettings {
@@ -73,9 +76,6 @@ interface OperatorSettings {
   esignSignerName: string | null;
   esignSignerEmail: string | null;
   signwellTemplateId: string | null;
-  remindBalance: boolean;
-  remindContract: boolean;
-  remindQuote: boolean;
   notifyNewInquiry: boolean;
   notifyNewBooking: boolean;
   notifyBalancePaid: boolean;
@@ -121,7 +121,7 @@ export function SettingsView({
       <CustomerPoliciesSection operator={operator} />
       <ContractSection operator={operator} />
       <NotificationsSection operator={operator} />
-      <AutomationsSection operator={operator} />
+      <AutomationsSection />
       <TeamSection
         teamEnabled={teamEnabled}
         members={members}
@@ -624,55 +624,24 @@ function NotificationsSection({ operator }: { operator: OperatorSettings }) {
   );
 }
 
-function AutomationsSection({ operator }: { operator: OperatorSettings }) {
-  const { busy, saved, error, save } = useSaver();
-  const [prefs, setPrefs] = useState({
-    remindBalance: operator.remindBalance,
-    remindContract: operator.remindContract,
-    remindQuote: operator.remindQuote,
-  });
-  const toggle = (k: keyof typeof prefs) => setPrefs((s) => ({ ...s, [k]: !s[k] }));
-
-  const ROWS: { key: keyof typeof prefs; label: string; desc: string }[] = [
-    {
-      key: "remindBalance",
-      label: "Balance reminder",
-      desc: "Email customers with an unpaid balance a few days before their event, with a pay link. Sent once per booking.",
-    },
-    {
-      key: "remindContract",
-      label: "Contract reminder",
-      desc: "Nudge customers who haven't signed their rental agreement after 48 hours. Sent once per booking.",
-    },
-    {
-      key: "remindQuote",
-      label: "Quote follow-up",
-      desc: "Check in with customers who haven't booked a quote you sent after 3 days, with the link to reserve. Sent once per quote.",
-    },
-  ];
-
+function AutomationsSection() {
   return (
     <Section
       title="Automated follow-ups"
-      desc="Emails sent to your customers automatically, written in your business's voice — off by default."
+      desc="Emails sent to your customers automatically, written in your business's voice."
     >
-      <div className="divide-y divide-sand-line">
-        {ROWS.map((r) => (
-          <label key={r.key} className="flex cursor-pointer items-start gap-3 py-3 first:pt-0">
-            <input
-              type="checkbox"
-              checked={prefs[r.key]}
-              onChange={() => toggle(r.key)}
-              className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand"
-            />
-            <span className="min-w-0">
-              <span className="block text-[14px] font-bold text-ink-soft">{r.label}</span>
-              <span className="block text-[12.5px] font-medium text-ink-mute">{r.desc}</span>
-            </span>
-          </label>
-        ))}
-      </div>
-      <SaveBar busy={busy} saved={saved} error={error} onSave={() => save(() => updateAutomationPrefsAction(prefs))} />
+      <Link
+        href="/agents"
+        className="flex items-center gap-3 rounded-xl bg-brand-tint/50 px-4 py-3 hover:bg-brand-tint"
+      >
+        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+          <Robot size={18} weight="fill" />
+        </span>
+        <span className="min-w-0 flex-1 text-[13.5px] font-semibold text-ink-soft">
+          Your follow-up agents have moved — turn them on and see what they&apos;ve sent on the Agents page.
+        </span>
+        <ArrowRight size={16} weight="bold" className="flex-shrink-0 text-brand-deep" />
+      </Link>
     </Section>
   );
 }
@@ -1096,7 +1065,6 @@ function DeveloperSection({
   operatorSlug: string | null;
 }) {
   const router = useRouter();
-  const [upgrading, setUpgrading] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState<"publishable" | "secret">("publishable");
   const [origins, setOrigins] = useState("");
@@ -1114,22 +1082,6 @@ function DeveloperSection({
     process.env.NEXT_PUBLIC_SITE_URL ??
     (typeof window !== "undefined" ? window.location.origin : "https://bounce-app.vercel.app");
   const snippet = pubKey ? `<script src="${base}/embed.js" data-key="${pubKey.plaintext}" async></script>` : "";
-
-  async function upgrade() {
-    setUpgrading(true);
-    try {
-      const res = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ plan: "growing" }),
-      });
-      const json = await res.json();
-      if (res.ok && json.url) window.location.href = json.url;
-      else setUpgrading(false);
-    } catch {
-      setUpgrading(false);
-    }
-  }
 
   async function copySnippet() {
     if (!snippet) return;
@@ -1149,13 +1101,12 @@ function DeveloperSection({
           API keys + the embeddable storefront widget are available on the <b>Growing</b> plan — run
           your catalog, AI quote agent, and checkout on your own domain.
         </div>
-        <button
-          onClick={upgrade}
-          disabled={upgrading}
+        <UpgradeButton
+          plan="growing"
           className="mt-3 flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-white hover:bg-brand-deep disabled:opacity-60"
         >
-          {upgrading ? <CircleNotch size={14} weight="bold" className="animate-spin" /> : null} Upgrade to Growing
-        </button>
+          Upgrade to Growing
+        </UpgradeButton>
       </Section>
     );
   }
@@ -1332,23 +1283,6 @@ function DeveloperSection({
 
 function AccountSection({ operator }: { operator: OperatorSettings }) {
   const [connecting, setConnecting] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
-
-  async function upgrade() {
-    setUpgrading(true);
-    try {
-      const res = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ plan: "solo" }),
-      });
-      const json = await res.json();
-      if (res.ok && json.url) window.location.href = json.url;
-      else setUpgrading(false);
-    } catch {
-      setUpgrading(false);
-    }
-  }
   const planLabel = operator.billingExempt
     ? "Growing"
     : operator.plan
@@ -1411,14 +1345,12 @@ function AccountSection({ operator }: { operator: OperatorSettings }) {
                 {operator.aiQuotaUsed} / {operator.aiQuotaLimit} this month
               </span>
               {operator.aiQuotaUsed >= operator.aiQuotaLimit ? (
-                <button
-                  onClick={upgrade}
-                  disabled={upgrading}
+                <UpgradeButton
+                  plan="solo"
                   className="flex items-center gap-1.5 rounded-full bg-brand px-3 py-1 text-xs font-bold text-white hover:bg-brand-deep disabled:opacity-60"
                 >
-                  {upgrading ? <CircleNotch size={12} weight="bold" className="animate-spin" /> : null}
                   Upgrade to keep quoting
-                </button>
+                </UpgradeButton>
               ) : null}
             </span>
           )}

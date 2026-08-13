@@ -65,4 +65,12 @@ describe("planCapabilities", () => {
     expect(caps.apiAccess).toBe(false);
     expect(caps.aiQuotesPerMonth).toBe(Infinity);
   });
+
+  it("follow-up agents are Solo+ — off for free and lapsed-paid, on for paid + comp", () => {
+    expect(planCapabilities({ plan: "free", subscriptionStatus: null }).followUpAgents).toBe(false);
+    expect(planCapabilities({ plan: "solo", subscriptionStatus: "canceled" }).followUpAgents).toBe(false);
+    expect(planCapabilities({ plan: "solo", subscriptionStatus: "active" }).followUpAgents).toBe(true);
+    expect(planCapabilities({ plan: "growing", subscriptionStatus: "trialing" }).followUpAgents).toBe(true);
+    expect(planCapabilities({ plan: "free", subscriptionStatus: null, billingExempt: true }).followUpAgents).toBe(true);
+  });
 });

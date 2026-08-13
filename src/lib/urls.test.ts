@@ -15,6 +15,7 @@ describe("isAppPath", () => {
       "/customers/xyz",
       "/documents",
       "/promos",
+      "/agents",
       "/settings",
       "/account",
       "/more",

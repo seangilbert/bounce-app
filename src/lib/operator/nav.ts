@@ -7,6 +7,7 @@ import {
   AddressBook,
   Tag,
   Files,
+  Robot,
   GearSix,
   DotsThreeOutline,
 } from "@phosphor-icons/react/dist/ssr";
@@ -33,6 +34,7 @@ export const NAV: NavItem[] = [
   { href: "/inventory", label: "Inventory", icon: Package },
   { href: "/documents", label: "Documents", icon: Files, adminOnly: true },
   { href: "/promos", label: "Promos", icon: Tag, adminOnly: true },
+  { href: "/agents", label: "Agents", icon: Robot, adminOnly: true },
   { href: "/settings", label: "Settings", icon: GearSix, adminOnly: true },
 ];
 
@@ -44,4 +46,4 @@ export function navForRole(role: "admin" | "employee"): NavItem[] {
 /** Mobile bottom bar: four primary tabs + a "More" entry for the rest. */
 export const MOBILE_PRIMARY = NAV.slice(0, 4);
 export const MORE_TAB: NavItem = { href: "/more", label: "More", icon: DotsThreeOutline };
-export const MORE_ITEMS = NAV.slice(4); // Customers, Inventory, Documents, Promos, Settings
+export const MORE_ITEMS = NAV.slice(4); // Customers, Inventory, Documents, Promos, Agents, Settings
