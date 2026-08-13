@@ -159,6 +159,7 @@ const NotificationPrefsInput = z.object({
   notifyNewBooking: z.boolean(),
   notifyBalancePaid: z.boolean(),
   notifyContractSigned: z.boolean(),
+  notifyDocExpiry: z.boolean(),
 });
 
 export async function updateNotificationPrefsAction(input: unknown): Promise<ActionResult> {
@@ -174,6 +175,7 @@ export async function updateNotificationPrefsAction(input: unknown): Promise<Act
       notify_new_booking: p.data.notifyNewBooking,
       notify_balance_paid: p.data.notifyBalancePaid,
       notify_contract_signed: p.data.notifyContractSigned,
+      notify_doc_expiry: p.data.notifyDocExpiry,
     })
     .eq("id", op.id);
   if (error) return { ok: false, error: "Could not save notification settings." };
@@ -184,6 +186,7 @@ export async function updateNotificationPrefsAction(input: unknown): Promise<Act
 const AutomationPrefsInput = z.object({
   remindBalance: z.boolean(),
   remindContract: z.boolean(),
+  remindQuote: z.boolean(),
 });
 
 /** Customer-facing automation toggles (follow-up agent). Separate from the
@@ -200,6 +203,7 @@ export async function updateAutomationPrefsAction(input: unknown): Promise<Actio
     .update({
       remind_balance: p.data.remindBalance,
       remind_contract: p.data.remindContract,
+      remind_quote: p.data.remindQuote,
     })
     .eq("id", op.id);
   if (error) return { ok: false, error: "Could not save automation settings." };

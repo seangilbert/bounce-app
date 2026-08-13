@@ -12,6 +12,7 @@ import {
   reserveBooking,
   setBookingLoadout,
   setBookingTurnaround,
+  markQuoteSent,
 } from "@/lib/bookings/repo";
 import { getOrderByBookingId, setOrderStatusByPaymentId, recordCashPayment } from "@/lib/orders/repo";
 import { getPaymentProvider, type PaymentProviderName } from "@/lib/payments";
@@ -132,6 +133,13 @@ export async function createOperatorBookingAction(
       await notifyQuoteLink(booking, op, payUrl, depositAmount(booking.total, op.depositPercent), d.message);
     } catch (err) {
       console.error("[bookings] quote email failed:", err);
+    }
+    // Stamp the quote as sent either way — the operator also gets the link to
+    // share directly, and this is what arms the stale-quote nudge lane.
+    try {
+      await markQuoteSent(booking.id);
+    } catch (err) {
+      console.error("[bookings] markQuoteSent failed:", err);
     }
     revalidatePath("/inquiries");
     revalidatePath("/dashboard");

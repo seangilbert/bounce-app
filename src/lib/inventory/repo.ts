@@ -38,8 +38,10 @@ interface OperatorRow {
   notify_new_booking: boolean | null;
   notify_balance_paid: boolean | null;
   notify_contract_signed: boolean | null;
+  notify_doc_expiry: boolean | null;
   remind_balance: boolean | null;
   remind_contract: boolean | null;
+  remind_quote: boolean | null;
   tagline: string | null;
   about: string | null;
   assistant_instructions: string | null;
@@ -108,9 +110,11 @@ function rowToOperator(r: OperatorRow): Operator {
     notifyNewBooking: r.notify_new_booking ?? true,
     notifyBalancePaid: r.notify_balance_paid ?? true,
     notifyContractSigned: r.notify_contract_signed ?? true,
+    notifyDocExpiry: r.notify_doc_expiry ?? true,
     // Customer-facing automation is opt-IN (?? false), unlike notify_* above.
     remindBalance: r.remind_balance ?? false,
     remindContract: r.remind_contract ?? false,
+    remindQuote: r.remind_quote ?? false,
     tagline: r.tagline,
     about: r.about,
     assistantInstructions: r.assistant_instructions,

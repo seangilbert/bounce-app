@@ -303,6 +303,24 @@ export async function findLatestInquiryByIdentity(
   return (data as InquiryRow) ?? null;
 }
 
+/**
+ * The inbox thread linked to a booking, if any (linkInquiryToBooking sets it).
+ * The reminder sweep uses this to give a quote nudge a plus-addressed Reply-To,
+ * so the customer's reply lands back in the live inbox thread.
+ */
+export async function findInquiryIdByBooking(bookingId: string): Promise<string | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`findInquiryIdByBooking failed: ${error.message}`);
+  return (data as { id: string } | null)?.id ?? null;
+}
+
 /** Bootstrap an SMS thread: record the customer's phone + switch the inquiry to
  *  the `sms` channel (operator-scoped). Idempotent. */
 export async function setInquiryPhoneChannel(

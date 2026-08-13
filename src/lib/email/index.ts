@@ -355,6 +355,108 @@ export function buildContractReminderEmail(opts: {
   };
 }
 
+/**
+ * Automated stale-quote nudge to the customer (follow-up agent, cron). Pure
+ * builder — the sweep sends it. Mirrors notifyQuoteLink's breakdown so the
+ * customer sees the same numbers they were quoted; `replyTo` carries the
+ * inbox plus-address when the quote came from a thread, so a reply lands
+ * back in the live inbox.
+ */
+export function buildQuoteReminderEmail(opts: {
+  booking: Booking;
+  operator: Operator;
+  to: string;
+  payUrl: string;
+  intro: string;
+  replyTo?: string | null;
+}): EmailInput {
+  const { booking, operator } = opts;
+  const items = booking.items.map((li) => ({
+    label: `${li.quantity > 1 ? `${li.quantity}× ` : ""}${li.name}`,
+    value: money(li.lineTotal),
+  }));
+  const hasExtras = booking.deliveryFee > 0 || booking.taxAmount > 0 || booking.discount > 0;
+  const totals = [
+    ...(hasExtras ? [{ label: "Subtotal", value: money(booking.subtotal) }] : []),
+    ...(booking.discount > 0
+      ? [{ label: `Discount${booking.promoCode ? ` (${booking.promoCode})` : ""}`, value: `−${money(booking.discount)}` }]
+      : []),
+    ...(booking.deliveryFee > 0 ? [{ label: "Delivery", value: money(booking.deliveryFee) }] : []),
+    ...(booking.taxAmount > 0 ? [{ label: "Sales tax", value: money(booking.taxAmount) }] : []),
+    { label: "Total", value: money(booking.total), bold: true },
+  ];
+  const body =
+    p(esc(opts.intro).replace(/\n/g, "<br>")) +
+    `<div style="font-weight:700;font-size:14px;color:#3B7DF0;margin:14px 0 4px;">${esc(fmtRange(booking.startDate, booking.endDate))}</div>` +
+    lineTable(items) +
+    `<hr style="border:none;border-top:1px solid #F1E8DE;margin:8px 0;">` +
+    lineTable(totals) +
+    cta(opts.payUrl, "Review &amp; reserve") +
+    p(`<span style="color:#9A9186;font-size:13px;">Delivery, setup &amp; pickup included. This link holds nothing until you pay.</span>`) +
+    policiesBlock(operator);
+  return {
+    to: opts.to,
+    subject: `Your quote is still available — ${operator.name}`,
+    html: layout(operator.name, "Still thinking it over?", body),
+    replyTo: opts.replyTo ?? operator.contactEmail ?? undefined,
+    fromName: operator.name,
+  };
+}
+
+/**
+ * Operator-facing heads-up that business documents are expired or expiring
+ * soon (follow-up agent, cron). Deterministic copy — no AI: it's a utility
+ * notice to the operator, not customer correspondence. Sent from Movables
+ * (no fromName override), like the other operator notifications.
+ */
+export function buildDocExpiryEmail(opts: {
+  operatorName: string;
+  to: string;
+  docs: { label: string; expiresAt: string; daysLeft: number }[];
+  docsUrl: string;
+}): EmailInput {
+  const fmtDate = (iso: string) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  const status = (d: { daysLeft: number }) =>
+    d.daysLeft < 0
+      ? `expired ${-d.daysLeft} day${d.daysLeft === -1 ? "" : "s"} ago`
+      : d.daysLeft === 0
+        ? "expires today"
+        : `expires in ${d.daysLeft} day${d.daysLeft === 1 ? "" : "s"}`;
+  const rows = opts.docs
+    .map(
+      (d) =>
+        `<div style="padding:10px 0;border-bottom:1px solid #F1E8DE;">
+          <div style="font-weight:700;font-size:14px;color:#1A1A1A;">${esc(d.label)}</div>
+          <div style="font-size:13px;color:${d.daysLeft < 0 ? "#C4472E" : "#6B6259"};margin-top:2px;">${esc(
+            `${status(d)} — ${fmtDate(d.expiresAt)}`,
+          )}</div>
+        </div>`,
+    )
+    .join("");
+  const plural = opts.docs.length > 1;
+  const body =
+    p(
+      `${plural ? "Some of your business documents need" : "One of your business documents needs"} attention — renew ${
+        plural ? "them" : "it"
+      } and upload the new version${plural ? "s" : ""} so your records stay current.`,
+    ) +
+    rows +
+    cta(opts.docsUrl, "Review documents");
+  return {
+    to: opts.to,
+    subject: plural
+      ? `${opts.docs.length} documents expiring soon — ${opts.operatorName}`
+      : `Document expiring soon — ${opts.docs[0]!.label}`,
+    html: layout(opts.operatorName, plural ? "Documents expiring" : "Document expiring", body),
+  };
+}
+
 /** Alert to the operator that a new inquiry needs review. */
 export async function notifyOperatorNewInquiry(opts: {
   to: string;

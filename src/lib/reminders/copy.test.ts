@@ -36,6 +36,16 @@ describe("fallbackReminderIntro — the deterministic floor", () => {
     expect(s).toContain("waiting for your signature");
     expect(s).not.toContain("$200");
   });
+
+  it("quote copy checks in without pressure — no balance, no signature talk", () => {
+    const s = fallbackReminderIntro("quote", "Bounce USA", FACTS);
+    expect(s).toContain("Jane");
+    expect(s).toContain("Bounce USA");
+    expect(s).toContain("Saturday, June 1");
+    expect(s).toContain("still available");
+    expect(s).not.toContain("$200");
+    expect(s).not.toContain("signature");
+  });
 });
 
 describe("buildReminderSystemPrompt — auto-send hard rules", () => {
@@ -51,6 +61,7 @@ describe("buildReminderSystemPrompt — auto-send hard rules", () => {
   it("differs per kind on the point of the email", () => {
     expect(buildReminderSystemPrompt(op(), "balance")).toContain("remaining balance is due");
     expect(buildReminderSystemPrompt(op(), "contract")).toContain("signing email comes from SignWell");
+    expect(buildReminderSystemPrompt(op(), "quote")).toContain("never pressure");
   });
 
   it("appends operator tone guidance without letting it override the rules", () => {
@@ -63,5 +74,6 @@ describe("buildReminderSystemPrompt — auto-send hard rules", () => {
   it("never contains the copilot's [FILL IN] escape hatch", () => {
     expect(buildReminderSystemPrompt(op(), "balance")).not.toContain("[FILL IN]");
     expect(buildReminderSystemPrompt(op(), "contract")).not.toContain("[FILL IN]");
+    expect(buildReminderSystemPrompt(op(), "quote")).not.toContain("[FILL IN]");
   });
 });

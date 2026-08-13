@@ -324,6 +324,21 @@ export async function setBookingStatus(
   return getBooking(id);
 }
 
+/**
+ * Stamp the moment a quote email/link went to the customer (operator "link"
+ * mode). The quote-nudge lane only ever targets bookings with this set —
+ * a storefront `quoted` row abandoned pre-checkout was never SENT anything,
+ * so there's nothing to remind the customer of.
+ */
+export async function markQuoteSent(id: string): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from(BOOKINGS)
+    .update({ quote_sent_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(`markQuoteSent failed: ${error.message}`);
+}
+
 /** Persist the loadout checklist (checked required-equipment labels) for a booking. */
 export async function setBookingLoadout(id: string, labels: string[]): Promise<void> {
   const supabase = createAdminClient();

@@ -16,5 +16,8 @@ export function fallbackReminderIntro(
       facts.balanceLabel ? ` of ${facts.balanceLabel}` : ""
     }. You can take care of it online below in about a minute.`;
   }
+  if (kind === "quote") {
+    return `${hi} — just checking in from ${operatorName}. Your quote for ${facts.eventDateLabel} is still available, and you can review it and reserve online below whenever you're ready.`;
+  }
   return `${hi} — your rental agreement for ${facts.eventDateLabel} from ${operatorName} is still waiting for your signature.`;
 }

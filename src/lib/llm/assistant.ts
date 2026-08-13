@@ -388,7 +388,7 @@ export async function draftOperatorReply(
 
 /* ══════════════ Follow-up agent (cron reminders) ══════════════ */
 
-export type ReminderKind = "balance" | "contract";
+export type ReminderKind = "balance" | "contract" | "quote";
 
 export interface ReminderFacts {
   customerFirstName?: string;
@@ -397,6 +397,8 @@ export interface ReminderFacts {
   itemNames: string[];
   /** e.g. "$150" — balance kind only. */
   balanceLabel?: string;
+  /** e.g. "$450" — quote kind only (the quoted total). */
+  totalLabel?: string;
 }
 
 /** System prompt for the auto-sent reminder intro. Exported for prompt tests.
@@ -406,7 +408,9 @@ export function buildReminderSystemPrompt(operator: Operator, kind: ReminderKind
   const point =
     kind === "balance"
       ? "The point of the email: a remaining balance is due before their event, payable online via the button below your text."
-      : "The point of the email: their rental agreement still needs a signature; the signing email comes from SignWell.";
+      : kind === "contract"
+        ? "The point of the email: their rental agreement still needs a signature; the signing email comes from SignWell."
+        : "The point of the email: we sent them a quote a few days ago and their event date is coming up — they can review and reserve online via the button below your text. Check in warmly; never pressure.";
   return `You write the opening of a short reminder email sent automatically on behalf of ${operator.name}, a party & event rental business. Write 2-3 friendly sentences as the business ("we") — warm and helpful, never pushy. This goes straight to the customer with no human review.
 
 Hard rules:
@@ -440,6 +444,7 @@ export async function draftReminderIntro(
     `event date: ${facts.eventDateLabel}`,
     `items: ${facts.itemNames.join(", ") || "their rental"}`,
     ...(facts.balanceLabel ? [`balance due: ${facts.balanceLabel}`] : []),
+    ...(facts.totalLabel ? [`quoted total: ${facts.totalLabel}`] : []),
   ];
   const response = await client.messages.create({
     model: ASSISTANT_MODEL,

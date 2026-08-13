@@ -33,10 +33,12 @@ export interface Operator {
   notifyNewBooking: boolean;
   notifyBalancePaid: boolean;
   notifyContractSigned: boolean;
+  notifyDocExpiry: boolean;
   /** Customer-facing automation (follow-up agent): auto-email reminders.
    *  Opt-in — defaults false, unlike the operator-directed notify_* flags. */
   remindBalance: boolean;
   remindContract: boolean;
+  remindQuote: boolean;
   tagline: string | null;
   about: string | null;
   /** Operator-authored guidance injected into the AI quote assistant's system

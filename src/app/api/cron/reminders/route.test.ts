@@ -19,7 +19,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
   vi.stubEnv("CRON_SECRET", SECRET);
-  runReminderSweep.mockResolvedValue({ balanceSent: 2, contractSent: 1, skipped: 5, failed: 0 });
+  runReminderSweep.mockResolvedValue({
+    balanceSent: 2,
+    contractSent: 1,
+    quoteSent: 1,
+    docExpirySent: 1,
+    skipped: 5,
+    failed: 0,
+  });
 });
 
 describe("GET /api/cron/reminders", () => {
@@ -40,7 +47,14 @@ describe("GET /api/cron/reminders", () => {
   it("runs the sweep and returns its counts on a valid bearer", async () => {
     const res = await run(`Bearer ${SECRET}`);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ balanceSent: 2, contractSent: 1, skipped: 5, failed: 0 });
+    expect(await res.json()).toEqual({
+      balanceSent: 2,
+      contractSent: 1,
+      quoteSent: 1,
+      docExpirySent: 1,
+      skipped: 5,
+      failed: 0,
+    });
     expect(runReminderSweep).toHaveBeenCalledTimes(1);
   });
 

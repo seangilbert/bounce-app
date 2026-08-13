@@ -75,10 +75,12 @@ interface OperatorSettings {
   signwellTemplateId: string | null;
   remindBalance: boolean;
   remindContract: boolean;
+  remindQuote: boolean;
   notifyNewInquiry: boolean;
   notifyNewBooking: boolean;
   notifyBalancePaid: boolean;
   notifyContractSigned: boolean;
+  notifyDocExpiry: boolean;
   brandColor: string | null;
   logoUrl: string | null;
   tagline: string | null;
@@ -587,6 +589,7 @@ function NotificationsSection({ operator }: { operator: OperatorSettings }) {
     notifyNewBooking: operator.notifyNewBooking,
     notifyBalancePaid: operator.notifyBalancePaid,
     notifyContractSigned: operator.notifyContractSigned,
+    notifyDocExpiry: operator.notifyDocExpiry,
   });
   const toggle = (k: keyof typeof prefs) => setPrefs((s) => ({ ...s, [k]: !s[k] }));
 
@@ -595,6 +598,7 @@ function NotificationsSection({ operator }: { operator: OperatorSettings }) {
     { key: "notifyNewBooking", label: "New booking & payment", desc: "A customer booked and paid a deposit or in full." },
     { key: "notifyBalancePaid", label: "Balance paid", desc: "A customer paid their remaining balance online." },
     { key: "notifyContractSigned", label: "Contract signed", desc: "The rental agreement is fully signed." },
+    { key: "notifyDocExpiry", label: "Document expiring", desc: "A business document (insurance, license, permit) is expired or expiring within 2 weeks." },
   ];
 
   return (
@@ -625,6 +629,7 @@ function AutomationsSection({ operator }: { operator: OperatorSettings }) {
   const [prefs, setPrefs] = useState({
     remindBalance: operator.remindBalance,
     remindContract: operator.remindContract,
+    remindQuote: operator.remindQuote,
   });
   const toggle = (k: keyof typeof prefs) => setPrefs((s) => ({ ...s, [k]: !s[k] }));
 
@@ -638,6 +643,11 @@ function AutomationsSection({ operator }: { operator: OperatorSettings }) {
       key: "remindContract",
       label: "Contract reminder",
       desc: "Nudge customers who haven't signed their rental agreement after 48 hours. Sent once per booking.",
+    },
+    {
+      key: "remindQuote",
+      label: "Quote follow-up",
+      desc: "Check in with customers who haven't booked a quote you sent after 3 days, with the link to reserve. Sent once per quote.",
     },
   ];
 
