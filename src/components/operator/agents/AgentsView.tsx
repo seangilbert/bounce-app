@@ -14,6 +14,8 @@ import {
 } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
 import { setAgentToggleAction, type AgentToggleKey } from "@/app/(operator)/agents/actions";
+import { updateAssistantInstructionsAction } from "@/app/(operator)/settings/actions";
+import { ASSISTANT_INSTRUCTIONS_MAX_CHARS } from "@/lib/operator/policies";
 import type { AgentStats, AgentStat } from "@/lib/reminders/stats";
 import { UpgradeButton } from "@/components/operator/UpgradeButton";
 
@@ -33,6 +35,7 @@ interface AgentsViewProps {
   /** limit null = unlimited (Infinity doesn't cross the RSC boundary). */
   aiQuota: { used: number; limit: number | null };
   contractAutoSendLive: boolean;
+  assistantInstructions: string | null;
 }
 
 export function AgentsView({
@@ -41,6 +44,7 @@ export function AgentsView({
   stats,
   aiQuota,
   contractAutoSendLive,
+  assistantInstructions,
 }: AgentsViewProps) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-5 py-6 lg:px-8">
@@ -112,6 +116,74 @@ export function AgentsView({
         stat={stats.docExpiry}
         link={{ href: "/documents", label: "Manage documents" }}
       />
+
+      <VoicePanel initial={assistantInstructions} />
+    </div>
+  );
+}
+
+/* ── Voice & instructions — shared briefing for every customer-facing agent ── */
+
+function VoicePanel({ initial }: { initial: string | null }) {
+  const router = useRouter();
+  const [instructions, setInstructions] = useState(initial ?? "");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const over = instructions.length > ASSISTANT_INSTRUCTIONS_MAX_CHARS;
+
+  async function saveInstructions() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await updateAssistantInstructionsAction({ assistantInstructions: instructions });
+      if (!res.ok) setError(res.error);
+      else {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+        router.refresh();
+      }
+    } catch {
+      setError("Could not save your instructions.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-[20px] border border-sand-line bg-white p-5">
+      <div className="font-display text-[16px] font-bold text-ink">Voice &amp; instructions</div>
+      <p className="mt-1 text-[13.5px] font-medium text-ink-mute">
+        One briefing for the whole team — tone, what to recommend or upsell, and house rules. Every agent
+        that writes to your customers follows it: quotes, follow-ups, and drafted replies. Leave blank to
+        use the defaults.
+      </p>
+      <textarea
+        value={instructions}
+        onChange={(e) => setInstructions(e.target.value)}
+        rows={6}
+        placeholder="e.g. Keep replies upbeat and casual. Always suggest add-on tables & chairs with a bounce house. We don't deliver more than 30 miles out."
+        className="input mt-3 resize-y"
+      />
+      <div className={`mt-1 text-right text-[12px] font-semibold ${over ? "text-coral-deep" : "text-ink-faint"}`}>
+        {instructions.length.toLocaleString()} / {ASSISTANT_INSTRUCTIONS_MAX_CHARS.toLocaleString()}
+        {over ? " — too long, please trim" : ""}
+      </div>
+      <p className="text-[12.5px] font-medium text-ink-mute">
+        Agents always follow their core rules first — they never invent prices, items, or availability,
+        even if your instructions say otherwise.
+      </p>
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          onClick={saveInstructions}
+          disabled={busy || over}
+          className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-deep disabled:opacity-60"
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        {saved ? <span className="text-[13px] font-bold text-teal-deep">Saved</span> : null}
+        {error ? <span className="text-[13px] font-semibold text-coral-deep">{error}</span> : null}
+      </div>
     </div>
   );
 }
@@ -168,7 +240,7 @@ function QuoteAssistantCard({ quota }: { quota: { used: number; limit: number | 
         href="/settings"
         className="mt-3 inline-flex items-center gap-1 text-[13px] font-bold text-brand-deep hover:underline"
       >
-        Instructions &amp; auto-quote cap in Settings <ArrowRight size={13} weight="bold" />
+        Auto-quote cap in Settings <ArrowRight size={13} weight="bold" />
       </Link>
     </div>
   );

@@ -118,6 +118,7 @@ export async function updateAssistantInstructionsAction(input: unknown): Promise
     .eq("id", op.id);
   if (error) return { ok: false, error: "Could not save your assistant instructions." };
   revalidatePath("/settings");
+  revalidatePath("/agents"); // edited from the Agents page's Voice panel
   return { ok: true };
 }
 

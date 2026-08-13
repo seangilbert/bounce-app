@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TIMEZONES } from "@/lib/operator/time";
-import { POLICY_MAX_CHARS, ASSISTANT_INSTRUCTIONS_MAX_CHARS } from "@/lib/operator/policies";
+import { POLICY_MAX_CHARS } from "@/lib/operator/policies";
 import {
   CheckCircle,
   CircleNotch,
@@ -27,7 +27,6 @@ import {
   updatePricingAction,
   updateDeliveryPricingAction,
   updateCustomerPoliciesAction,
-  updateAssistantInstructionsAction,
   updateContractIdentityAction,
   updateNotificationPrefsAction,
   updateBrandingAction,
@@ -85,7 +84,6 @@ interface OperatorSettings {
   logoUrl: string | null;
   tagline: string | null;
   about: string | null;
-  assistantInstructions: string | null;
   availabilityConfig: unknown;
 }
 
@@ -117,7 +115,7 @@ export function SettingsView({
       <DeliverySection operator={operator} />
       <AvailabilitySection operator={operator} />
       <PolicySection operator={operator} />
-      <AssistantSection operator={operator} />
+      <AssistantSection />
       <CustomerPoliciesSection operator={operator} />
       <ContractSection operator={operator} />
       <NotificationsSection operator={operator} />
@@ -656,38 +654,25 @@ function PolicyCount({ value, max = POLICY_MAX_CHARS }: { value: string; max?: n
   );
 }
 
-function AssistantSection({ operator }: { operator: OperatorSettings }) {
-  const { busy, saved, error, save } = useSaver();
-  const [instructions, setInstructions] = useState(operator.assistantInstructions ?? "");
-
+function AssistantSection() {
   return (
     <Section
       title="Assistant instructions"
-      desc="Custom guidance for your AI quote assistant — tone, what to recommend or upsell, and house rules. Applies to every inquiry. Leave blank to use the defaults."
+      desc="How your AI agents talk to customers — tone, recommendations, house rules."
     >
-      <Field
-        label="Instructions"
-        hint="e.g. Keep replies upbeat and casual. Always suggest add-on tables & chairs with a bounce house. We don't deliver more than 30 miles out."
+      <Link
+        href="/agents"
+        className="flex items-center gap-3 rounded-xl bg-brand-tint/50 px-4 py-3 hover:bg-brand-tint"
       >
-        <textarea
-          value={instructions}
-          onChange={(e) => setInstructions(e.target.value)}
-          rows={7}
-          placeholder="Tell your assistant how to talk to customers and what to recommend…"
-          className="input resize-y"
-        />
-        <PolicyCount value={instructions} max={ASSISTANT_INSTRUCTIONS_MAX_CHARS} />
-      </Field>
-      <p className="mt-1 text-[12.5px] text-ink-mute">
-        The assistant always follows its core rules first — it never quotes prices itself, invents items,
-        or recommends unavailable inventory, even if your instructions say otherwise.
-      </p>
-      <SaveBar
-        busy={busy}
-        saved={saved}
-        error={error}
-        onSave={() => save(() => updateAssistantInstructionsAction({ assistantInstructions: instructions }))}
-      />
+        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+          <Robot size={18} weight="fill" />
+        </span>
+        <span className="min-w-0 flex-1 text-[13.5px] font-semibold text-ink-soft">
+          Voice &amp; instructions moved to the Agents page — they shape every agent that writes to your
+          customers, not just quotes.
+        </span>
+        <ArrowRight size={16} weight="bold" className="flex-shrink-0 text-brand-deep" />
+      </Link>
     </Section>
   );
 }

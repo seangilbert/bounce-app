@@ -33,6 +33,7 @@ export default async function AgentsPage() {
       // Infinity doesn't survive the RSC boundary — null = unlimited.
       aiQuota={{ used: quota.used, limit: Number.isFinite(quota.limit) ? quota.limit : null }}
       contractAutoSendLive={autoSendEnabled()}
+      assistantInstructions={op.assistantInstructions}
     />
   );
 }
