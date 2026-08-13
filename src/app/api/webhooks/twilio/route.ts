@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSmsProvider, smsEnabled } from "@/lib/sms";
 import { claimWebhookEvent } from "@/lib/orders/repo";
-import { findLatestInquiryByPhone } from "@/lib/inquiries/repo";
+import { findLatestInquiryByPhone, findLatestInquiryByIdentity } from "@/lib/inquiries/repo";
 import { ingestInbound } from "@/lib/inquiries/ingest";
 import { publicUrl } from "@/lib/urls";
 
@@ -69,9 +69,12 @@ export async function POST(req: Request) {
   if (!claimed) return twiml();
 
   try {
-    const inquiry = await findLatestInquiryByPhone(from);
-    // Unknown sender on the shared number — no thread to route to. (Cold inbound
-    // needs per-operator numbers; that's a follow-up.)
+    let inquiry = await findLatestInquiryByPhone(from);
+    // Identity fallback (inbox-plan Phase 2): the phone is known to the CRM
+    // (e.g. captured at booking checkout) but was never denormalized onto an
+    // inquiry — route to that customer's newest thread. True cold-start on the
+    // shared number still drops; per-operator numbers are the Phase 4 fix.
+    if (!inquiry) inquiry = await findLatestInquiryByIdentity("sms", from);
     if (!inquiry) return twiml();
 
     const result = await ingestInbound({ inquiry, text, channel: "sms", customerLabel: from });

@@ -37,6 +37,9 @@ export interface ThreadMsg {
   sender: "customer" | "operator" | "ai";
   body: string;
   time: string;
+  /** Per-message channel ('website' | 'sms' | 'email'); null on legacy rows. */
+  channel: string | null;
+  direction: "inbound" | "outbound" | null;
 }
 
 export interface InquiryDetail {

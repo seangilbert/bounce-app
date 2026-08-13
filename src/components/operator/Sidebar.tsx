@@ -8,6 +8,7 @@ import { roleLabel, type MemberRole } from "@/lib/operator/roles";
 import { OperatorSwitcher } from "./OperatorSwitcher";
 import type { OperatorOption } from "@/lib/operator/session";
 import { calFilters, type CatFilter } from "@/lib/operator/calendar";
+import { useNeedsHumanCount } from "@/components/operator/useNeedsHumanCount";
 import { createClient } from "@/utils/supabase/client";
 import type { Operator } from "@/lib/inventory/types";
 
@@ -56,6 +57,8 @@ export function Sidebar({
 }) {
   const mainNav = navForRole(role).filter((n) => n.href !== "/settings");
   const pathname = usePathname();
+  // Live badge: server value + realtime re-query on inquiry changes.
+  const liveNeedsCount = useNeedsHumanCount(operator?.id ?? null, needsCount);
   const router = useRouter();
   const searchParams = useSearchParams();
   const onCalendar = pathname === "/calendar" || pathname.startsWith("/calendar/");
@@ -113,7 +116,7 @@ export function Sidebar({
         {mainNav.map((item) => (
           <NavLink
             key={item.href}
-            item={item.href === "/inquiries" ? { ...item, badge: needsCount || undefined } : item}
+            item={item.href === "/inquiries" ? { ...item, badge: liveNeedsCount || undefined } : item}
           />
         ))}
       </nav>

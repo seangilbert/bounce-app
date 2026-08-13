@@ -12,6 +12,7 @@ import {
   ChatText,
   CaretLeft,
   CurrencyDollar,
+  Globe,
   PaperPlaneTilt,
   CircleNotch,
   ArrowSquareOut,
@@ -34,6 +35,8 @@ import {
   draftReplyAction,
 } from "@/app/(operator)/inquiries/actions";
 import { BookingBuilder } from "@/components/operator/bookings/BookingBuilder";
+import { useInboxRealtime } from "./useInboxRealtime";
+import { mergeThread } from "./live-thread";
 
 interface InquiriesProps {
   list: InquiryListItem[];
@@ -95,6 +98,11 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
 
   const selected = list.find((i) => i.id === selectedId) ?? list[0];
   const detail = selected ? details[selected.id] : undefined;
+  const { overlay, unreadIds, markRead } = useInboxRealtime({
+    operatorId,
+    selectedId: selected?.id ?? "",
+    details,
+  });
   const shown = list.filter((i) =>
     filter === "all"
       ? true
@@ -113,11 +121,16 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
     const d = details[selectedId];
     setSmsPhone(d?.phone ?? "");
     setDeliverBy(smsEnabled && (d?.channel === "sms" || d?.phone) ? "sms" : "email");
-  }, [selectedId, details, smsEnabled]);
+    // Intentionally keyed on selectedId only: `details` gets a new object
+    // identity on every router.refresh(), and the live inbox refreshes in the
+    // background constantly — resetting then would wipe a half-typed reply.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   const open = (id: string) => {
     setSelectedId(id);
     setMobileDetail(true);
+    markRead(id);
   };
 
   async function sendReply() {
@@ -224,6 +237,7 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
                 key={item.id}
                 item={item}
                 active={item.id === selectedId}
+                unread={unreadIds.has(item.id)}
                 onClick={() => open(item.id)}
               />
             ))
@@ -333,7 +347,7 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
               Conversation
             </div>
             <div className="mt-3 flex flex-col gap-3">
-              {detail.thread.map((m) => (
+              {mergeThread(detail.thread, overlay.get(selected.id) ?? []).map((m) => (
                 <ThreadBubble key={m.id} msg={m} />
               ))}
             </div>
@@ -528,9 +542,17 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
   );
 }
 
+/** Per-message channel chip; null/unknown channels render nothing (legacy rows). */
+const CHANNEL_CHIP: Record<string, { label: string; Icon: typeof ChatText }> = {
+  sms: { label: "Text", Icon: ChatText },
+  email: { label: "Email", Icon: EnvelopeSimple },
+  website: { label: "Web chat", Icon: Globe },
+};
+
 function ThreadBubble({ msg }: { msg: ThreadMsg }) {
   const isCustomer = msg.sender === "customer";
   const isAi = msg.sender === "ai";
+  const chip = msg.channel ? CHANNEL_CHIP[msg.channel] : undefined;
   return (
     <div className={`max-w-[85%] ${isCustomer ? "self-start" : "ml-auto"}`}>
       <div
@@ -545,6 +567,11 @@ function ThreadBubble({ msg }: { msg: ThreadMsg }) {
         {msg.body}
       </div>
       <div className={`mt-1 text-xs font-medium text-ink-mute ${isCustomer ? "" : "text-right"}`}>
+        {chip ? (
+          <span className="mr-1.5 inline-flex items-center gap-1 rounded-full bg-sand px-1.5 py-0.5 align-middle text-[10px] font-bold text-ink-soft">
+            <chip.Icon size={10} weight="fill" /> {chip.label}
+          </span>
+        ) : null}
         {isAi ? "AI auto-answer · " : isCustomer ? "" : "You · "}
         {msg.time}
       </div>
@@ -587,10 +614,12 @@ function FilterPill({
 function InquiryCard({
   item,
   active,
+  unread,
   onClick,
 }: {
   item: InquiryListItem;
   active: boolean;
+  unread?: boolean;
   onClick: () => void;
 }) {
   const s = STATUS[item.status];
@@ -611,7 +640,10 @@ function InquiryCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-[15px] font-extrabold text-ink">{item.name}</span>
-            <span className="flex-shrink-0 text-xs font-medium text-ink-mute">{item.time}</span>
+            <span className="flex flex-shrink-0 items-center gap-1.5 text-xs font-medium text-ink-mute">
+              {unread ? <span aria-label="New message" className="h-2 w-2 rounded-full bg-brand" /> : null}
+              {item.time}
+            </span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <span

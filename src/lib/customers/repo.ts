@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
+import { recordChannelIdentity } from "./identities";
 
 export interface Customer {
   id: string;
@@ -112,6 +113,16 @@ export async function upsertCustomer(
     existing = (data as CustomerRow) ?? null;
   }
 
+  // Single exit: every resolved customer id also records channel identities
+  // (inbox-plan Phase 2) — the one choke point covering inquiries, contact
+  // capture, SMS bootstrap, booking linkage, and saves. recordChannelIdentity
+  // never throws, so no flow can fail over an identity write.
+  const finish = async (id: string): Promise<string> => {
+    if (email) await recordChannelIdentity(operatorId, id, "email", email);
+    if (phone) await recordChannelIdentity(operatorId, id, "sms", phone);
+    return id;
+  };
+
   if (existing) {
     const patch: Record<string, unknown> = { last_seen: new Date().toISOString() };
     if (name && !existing.name) patch.name = name;
@@ -120,7 +131,7 @@ export async function upsertCustomer(
     // Note what is NOT patched: `source` and `account_id`. Both are first-touch
     // and must never be overwritten on a later interaction — see the doc above.
     await supabase.from("customers").update(patch).eq("id", existing.id);
-    return existing.id;
+    return finish(existing.id);
   }
 
   const { data, error } = await supabase
@@ -144,11 +155,11 @@ export async function upsertCustomer(
         .eq("operator_id", operatorId)
         .eq("email", email)
         .maybeSingle();
-      if (won) return won.id as string;
+      if (won) return finish(won.id as string);
     }
     throw new Error(`upsertCustomer failed: ${error.message}`);
   }
-  return data.id as string;
+  return finish(data.id as string);
 }
 
 interface StatBooking {

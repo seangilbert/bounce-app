@@ -8,7 +8,11 @@ import {
   isAutoResponder,
   extractReplyText,
 } from "@/lib/email/inbound";
-import { getInquiryById, setInquiryContact } from "@/lib/inquiries/repo";
+import {
+  getInquiryById,
+  setInquiryContact,
+  findLatestInquiryByIdentity,
+} from "@/lib/inquiries/repo";
 import { ingestInbound } from "@/lib/inquiries/ingest";
 import { sendEmail, buildAiInquiryReplyEmail } from "@/lib/email";
 import { publicUrl } from "@/lib/urls";
@@ -71,14 +75,25 @@ export async function POST(req: Request) {
       ...(event.data.to ?? []),
       ...(event.data.cc ?? []),
     ]);
-    if (!inquiryId) {
-      console.warn("[email-inbound] no reply+<id> recipient:", event.data.to);
-      return ok({ ignored: "unroutable" });
-    }
-    const inquiry = await getInquiryById(inquiryId);
+    let inquiry = inquiryId ? await getInquiryById(inquiryId) : null;
+    // Identity fallback (inbox-plan Phase 2): plus address missing/mangled or
+    // pointing at a vanished row — route by the sender's known identity. The
+    // identity IS the sender, so this path arrives pre-verified.
+    let routedByIdentity = false;
     if (!inquiry) {
-      console.warn("[email-inbound] unknown inquiry id:", inquiryId);
-      return ok({ ignored: "unknown inquiry" });
+      const envelopeSender = parseEmailAddress(event.data.from ?? "");
+      if (envelopeSender) {
+        inquiry = await findLatestInquiryByIdentity("email", envelopeSender.email);
+        routedByIdentity = !!inquiry;
+      }
+      if (!inquiry) {
+        console.warn(
+          "[email-inbound] unroutable (no reply+<id>, no identity):",
+          event.data.to,
+          event.data.from,
+        );
+        return ok({ ignored: "unroutable" });
+      }
     }
 
     // The webhook is metadata-only; the body lives behind a second call. A
@@ -103,7 +118,12 @@ export async function POST(req: Request) {
     const sender = parseEmailAddress(body.from);
     if (!sender) return ok({ ignored: "unparseable sender" });
     if (inquiry.customer_email) {
-      if (inquiry.customer_email.toLowerCase() !== sender.email) {
+      if (inquiry.customer_email.toLowerCase() !== sender.email && !routedByIdentity) {
+        // Plus-addressed path: the uuid is a capability token and the
+        // from-match is its second factor — a mismatch drops. Identity-routed
+        // mail is exempt: we selected this thread BECAUSE the sender's
+        // identity maps to its customer, so a differing customer_email just
+        // means the customer has two known addresses.
         console.warn(
           `[email-inbound] sender mismatch for ${inquiry.id}: ${sender.email} != ${inquiry.customer_email}`,
         );

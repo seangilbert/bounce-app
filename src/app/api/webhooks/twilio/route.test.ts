@@ -11,6 +11,7 @@ const {
   smsEnabled,
   claimWebhookEvent,
   findLatestInquiryByPhone,
+  findLatestInquiryByIdentity,
   appendInquiryMessage,
   listMessagesByInquiry,
   setInquiryStatus,
@@ -23,6 +24,7 @@ const {
   smsEnabled: vi.fn(),
   claimWebhookEvent: vi.fn(),
   findLatestInquiryByPhone: vi.fn(),
+  findLatestInquiryByIdentity: vi.fn(),
   appendInquiryMessage: vi.fn(),
   listMessagesByInquiry: vi.fn(),
   setInquiryStatus: vi.fn(),
@@ -39,6 +41,7 @@ vi.mock("@/lib/sms", () => ({
 vi.mock("@/lib/orders/repo", () => ({ claimWebhookEvent }));
 vi.mock("@/lib/inquiries/repo", () => ({
   findLatestInquiryByPhone,
+  findLatestInquiryByIdentity,
   appendInquiryMessage,
   listMessagesByInquiry,
   setInquiryStatus,
@@ -73,6 +76,7 @@ async function run() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  findLatestInquiryByIdentity.mockResolvedValue(null);
   smsEnabled.mockReturnValue(true);
   verifyWebhook.mockResolvedValue({ from: "+15551230000", body: "is it available?", messageSid: "SM1" });
   claimWebhookEvent.mockResolvedValue(true);
@@ -148,7 +152,17 @@ describe("ai-owned thread (normal loop)", () => {
     findLatestInquiryByPhone.mockResolvedValue(null);
     const res = await run();
     expect(await res.text()).toBe(EMPTY_TWIML);
+    expect(findLatestInquiryByIdentity).toHaveBeenCalledWith("sms", "+15551230000");
     expect(handleInquiry).not.toHaveBeenCalled();
     expect(recordCustomerInbound).not.toHaveBeenCalled();
+  });
+
+  it("identity fallback: phone not on any inquiry but known to the CRM → routes", async () => {
+    findLatestInquiryByPhone.mockResolvedValue(null);
+    findLatestInquiryByIdentity.mockResolvedValue(inquiry({ owner: "ai" }));
+    handleInquiry.mockResolvedValue({ reply: "Welcome back!", status: "gathering" });
+    const res = await run();
+    expect(await res.text()).toContain("Welcome back!");
+    expect(recordCustomerInbound).toHaveBeenCalledWith("inq-1", "is it available?", "sms");
   });
 });

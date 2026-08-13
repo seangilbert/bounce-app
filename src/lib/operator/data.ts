@@ -316,12 +316,23 @@ function inquiryActivityAt(r: InquiryRow): string {
 function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, "outcome" | "owner"> {
   const source: ThreadMessage[] = msgs.length
     ? msgs
-    : [{ id: `${r.id}-inbound`, sender: "customer", body: r.inbound_message, createdAt: r.created_at }];
+    : [
+        {
+          id: `${r.id}-inbound`,
+          sender: "customer",
+          body: r.inbound_message,
+          createdAt: r.created_at,
+          channel: r.channel,
+          direction: "inbound",
+        },
+      ];
   const thread = source.map((m) => ({
     id: m.id,
     sender: m.sender,
     body: m.body,
     time: relTime(m.createdAt),
+    channel: m.channel ?? null,
+    direction: m.direction ?? null,
   }));
   const channelLabel =
     r.channel === "sms"

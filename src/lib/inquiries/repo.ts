@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 import { upsertCustomer } from "@/lib/customers/repo";
+import { findCustomersByIdentity } from "@/lib/customers/identities";
 
 export interface InquiryQuoteLine {
   itemId: string;
@@ -49,12 +50,16 @@ export type InquiryOwner = "ai" | "needs_human" | "human";
 
 export type MessageDirection = "inbound" | "outbound";
 
-/** One message in an inquiry's conversation thread (see `inquiry_messages`). */
+/** One message in an inquiry's conversation thread (see `inquiry_messages`).
+ *  channel/direction are optional so other producers (storefront resume in
+ *  conversations.ts) compile unchanged; null on pre-0060 rows. */
 export interface ThreadMessage {
   id: string;
   sender: InquirySender;
   body: string;
   createdAt: string;
+  channel?: string | null;
+  direction?: MessageDirection | null;
 }
 
 /** A row from the `inquiries` table (snake_case, as stored). */
@@ -269,6 +274,35 @@ export async function findLatestInquiryByPhone(phone: string): Promise<InquiryRo
   return (data as InquiryRow) ?? null;
 }
 
+/**
+ * Identity-based inbound routing fallback (inbox-plan Phase 2): the newest
+ * non-dismissed inquiry belonging to any customer known to hold this handle
+ * (channel_identities). Global — same shared-number trust posture as
+ * findLatestInquiryByPhone. Unlike the plus-address path, dismissed threads
+ * are excluded (no capability token → stay conservative). Service-role.
+ */
+export async function findLatestInquiryByIdentity(
+  channel: "sms" | "email",
+  externalId: string,
+): Promise<InquiryRow | null> {
+  const holders = await findCustomersByIdentity(channel, externalId);
+  if (holders.length === 0) return null;
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .select("*")
+    .in(
+      "customer_id",
+      holders.map((h) => h.customerId),
+    )
+    .neq("status", "dismissed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`findLatestInquiryByIdentity failed: ${error.message}`);
+  return (data as InquiryRow) ?? null;
+}
+
 /** Bootstrap an SMS thread: record the customer's phone + switch the inquiry to
  *  the `sms` channel (operator-scoped). Idempotent. */
 export async function setInquiryPhoneChannel(
@@ -315,11 +349,19 @@ export async function listMessagesByInquiry(
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("inquiry_messages")
-    .select("id, inquiry_id, sender, body, created_at")
+    .select("id, inquiry_id, sender, body, created_at, channel, direction")
     .in("inquiry_id", inquiryIds)
     .order("created_at", { ascending: true });
   if (error) throw new Error(`listMessagesByInquiry failed: ${error.message}`);
-  const rows = (data ?? []) as { id: string; inquiry_id: string; sender: InquirySender; body: string; created_at: string }[];
+  const rows = (data ?? []) as {
+    id: string;
+    inquiry_id: string;
+    sender: InquirySender;
+    body: string;
+    created_at: string;
+    channel: string | null;
+    direction: MessageDirection | null;
+  }[];
   // Tiebreaker for same-timestamp messages (backfill seeded customer + AI at the
   // inquiry's created_at): always show customer → ai → operator.
   const rank: Record<InquirySender, number> = { customer: 0, ai: 1, operator: 2 };
@@ -328,7 +370,14 @@ export async function listMessagesByInquiry(
   );
   for (const r of rows) {
     const arr = map.get(r.inquiry_id) ?? [];
-    arr.push({ id: r.id, sender: r.sender, body: r.body, createdAt: r.created_at });
+    arr.push({
+      id: r.id,
+      sender: r.sender,
+      body: r.body,
+      createdAt: r.created_at,
+      channel: r.channel,
+      direction: r.direction,
+    });
     map.set(r.inquiry_id, arr);
   }
   return map;

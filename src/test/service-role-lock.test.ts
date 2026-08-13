@@ -37,6 +37,7 @@ const ALLOWLIST = new Set<string>([
   "src/lib/bookings/expire.ts", // expireStaleCheckouts cron-style job
   "src/lib/reminders/repo.ts", // reminder send-log claim/release (cron job, no session)
   "src/lib/reminders/sweep.ts", // cross-tenant reminder sweep (cron job, no session)
+  "src/lib/customers/identities.ts", // channel-identity upsert/lookup (webhook + storefront paths, no session)
 
   // — Provisioning / auth: runs before (or to create) the session. —
   "src/app/api/auth/signup/route.ts", // creates the operator + first member

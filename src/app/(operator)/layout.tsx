@@ -55,7 +55,7 @@ export default async function OperatorLayout({
       <div className="flex min-h-dvh w-full min-w-0 flex-col overflow-x-hidden bg-cream lg:h-dvh lg:min-h-0 lg:overflow-y-auto">
         <main className="flex flex-1 flex-col pb-20 lg:pb-0">{children}</main>
       </div>
-      <BottomNav needsCount={needsCount} />
+      <BottomNav needsCount={needsCount} operatorId={operator?.id ?? null} />
     </div>
   );
 }

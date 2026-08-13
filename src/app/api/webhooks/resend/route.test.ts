@@ -13,6 +13,7 @@ const {
   releaseWebhookEvent,
   getInquiryById,
   setInquiryContact,
+  findLatestInquiryByIdentity,
   ingestInbound,
   sendEmail,
 } = vi.hoisted(() => ({
@@ -22,13 +23,18 @@ const {
   releaseWebhookEvent: vi.fn(),
   getInquiryById: vi.fn(),
   setInquiryContact: vi.fn(),
+  findLatestInquiryByIdentity: vi.fn(),
   ingestInbound: vi.fn(),
   sendEmail: vi.fn(),
 }));
 
 vi.mock("@/lib/email/resend-webhook", () => ({ verifyResendWebhook, fetchInboundEmail }));
 vi.mock("@/lib/orders/repo", () => ({ claimWebhookEvent, releaseWebhookEvent }));
-vi.mock("@/lib/inquiries/repo", () => ({ getInquiryById, setInquiryContact }));
+vi.mock("@/lib/inquiries/repo", () => ({
+  getInquiryById,
+  setInquiryContact,
+  findLatestInquiryByIdentity,
+}));
 vi.mock("@/lib/inquiries/ingest", () => ({ ingestInbound }));
 vi.mock("@/lib/email", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/email")>()),
@@ -82,6 +88,7 @@ beforeEach(() => {
   vi.unstubAllEnvs();
   vi.stubEnv("RESEND_INBOUND_DOMAIN", DOMAIN);
   vi.stubEnv("RESEND_WEBHOOK_SECRET", "whsec_dGVzdA==");
+  findLatestInquiryByIdentity.mockResolvedValue(null);
   verifyResendWebhook.mockReturnValue(event());
   claimWebhookEvent.mockResolvedValue(true);
   getInquiryById.mockResolvedValue(inquiry());
@@ -123,11 +130,31 @@ describe("gates before any work", () => {
 });
 
 describe("routing + guards", () => {
-  it("no plus-addressed recipient → 200, no ingest", async () => {
+  it("no plus-addressed recipient and no identity → 200, no ingest", async () => {
     verifyResendWebhook.mockReturnValue(event({ to: ["hello@inbox.movables.ai"] }));
     const res = await run();
     expect(res.status).toBe(200);
+    expect(findLatestInquiryByIdentity).toHaveBeenCalledWith("email", "jane@example.com");
     expect(ingestInbound).not.toHaveBeenCalled();
+  });
+
+  it("identity fallback: no plus address but the sender is known → routes and replies", async () => {
+    verifyResendWebhook.mockReturnValue(event({ to: ["hello@inbox.movables.ai"] }));
+    findLatestInquiryByIdentity.mockResolvedValue(inquiry());
+    const res = await run();
+    expect(res.status).toBe(200);
+    expect(ingestInbound).toHaveBeenCalled();
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("identity-routed mail is exempt from the customer_email mismatch drop", async () => {
+    // The identity IS the sender — a differing customer_email just means the
+    // customer has two known addresses.
+    verifyResendWebhook.mockReturnValue(event({ to: ["hello@inbox.movables.ai"] }));
+    findLatestInquiryByIdentity.mockResolvedValue(inquiry({ customer_email: "other@example.com" }));
+    const res = await run();
+    expect(res.status).toBe(200);
+    expect(ingestInbound).toHaveBeenCalled();
   });
 
   it("prefers received_for (envelope) over to", async () => {
