@@ -208,9 +208,14 @@ describe("draftOperatorReply — AI-as-copilot", () => {
     expect(draft).toBe("Hi Jane — the Castle is free that day. Want me to hold it?");
 
     const req = create.mock.calls[0]![0];
-    // Grounded exactly like the customer agent, with the copilot switch appended.
-    expect(req.system.endsWith(buildDraftInstruction("Bounce USA"))).toBe(true);
-    expect(req.system).toContain("How to behave:");
+    // Grounded exactly like the customer agent, with the copilot switch as its
+    // own block AFTER the cache breakpoint — block 1 must stay byte-identical
+    // to the quote agent's system prompt so the two calls share a cache entry.
+    expect(req.system).toHaveLength(2);
+    expect(req.system[0].cache_control).toEqual({ type: "ephemeral" });
+    expect(req.system[0].text).toContain("How to behave:");
+    expect(req.system[1].text).toBe(buildDraftInstruction("Bounce USA"));
+    expect(req.system[1].cache_control).toBeUndefined();
     // A thread ending on an assistant turn would be a prefill (400) — the call
     // must always end on a user instruction turn.
     const last = req.messages[req.messages.length - 1];

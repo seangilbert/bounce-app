@@ -21,8 +21,19 @@ import { listAssistantPromos } from "@/lib/promos/repo";
 import { buildOperatorConfig } from "./operator-config";
 import type { Operator } from "@/lib/inventory/types";
 
-/** Model for the quote assistant. Haiku is a valid cost swap (spec 7.2). */
-const ASSISTANT_MODEL = "claude-opus-4-8";
+/**
+ * Per-task models — three independent cost dials (docs/pricing-plan.md, 2026-08-17).
+ * The customer-facing quote agent stays on the strongest tier: those
+ * conversations are the product demo and the wedge, and the model carries the
+ * judgment calls (escalate vs guess, respect constraints, safety over sales) —
+ * prices are computed by the system regardless of model. The copilot draft is
+ * operator-reviewed before it sends, so it can step down first if cost ever
+ * matters. The reminder intro is a two-sentence copywriting task from supplied
+ * facts — Haiku is indistinguishable there at ~1/5 the price.
+ */
+const QUOTE_MODEL = "claude-opus-4-8";
+const DRAFT_MODEL = "claude-opus-4-8";
+const REMINDER_MODEL = "claude-haiku-4-5";
 
 // Auto-quote cap + minimum lead time are now per-operator settings (see Settings).
 
@@ -370,11 +381,22 @@ export async function draftOperatorReply(
 
   const client = getAnthropicClient();
   const response = await client.messages.create({
-    model: ASSISTANT_MODEL,
+    model: DRAFT_MODEL,
     max_tokens: 512,
-    system:
-      buildSystemPrompt(operator, today, catalogForPrompt(promptItems, hintStart), Boolean(hintStart), config) +
-      buildDraftInstruction(operator.name),
+    // Two system blocks, deliberately: block 1 is the byte-identical grounded
+    // prompt the quote agent caches (same model → same cache), so a draft
+    // requested minutes after an AI turn reads that entry instead of paying
+    // full price; the mode-switch rides after the breakpoint as its own block.
+    // NOTE: if DRAFT_MODEL ever diverges from QUOTE_MODEL, the sharing stops
+    // (caches are model-scoped) but each call still caches for itself.
+    system: [
+      {
+        type: "text",
+        text: buildSystemPrompt(operator, today, catalogForPrompt(promptItems, hintStart), Boolean(hintStart), config),
+        cache_control: { type: "ephemeral" },
+      },
+      { type: "text", text: buildDraftInstruction(operator.name) },
+    ],
     // Always end on a user turn: the thread can end with an ai/operator message,
     // and a trailing assistant turn is a prefill (400 on this model family).
     // Consecutive same-role user turns are valid — the API merges them.
@@ -446,8 +468,10 @@ export async function draftReminderIntro(
     ...(facts.balanceLabel ? [`balance due: ${facts.balanceLabel}`] : []),
     ...(facts.totalLabel ? [`quoted total: ${facts.totalLabel}`] : []),
   ];
+  // No cache_control here: the prompt is far below Haiku's minimum cacheable
+  // prefix (4096 tokens) and each reminder is a one-shot send anyway.
   const response = await client.messages.create({
-    model: ASSISTANT_MODEL,
+    model: REMINDER_MODEL,
     max_tokens: 300,
     system: buildReminderSystemPrompt(operator, kind),
     messages: [
@@ -484,9 +508,24 @@ async function runInquiryTurn(inquiry: Inquiry, operator: Operator): Promise<Con
 
   const client = getAnthropicClient();
   const response = await client.messages.parse({
-    model: ASSISTANT_MODEL,
+    model: QUOTE_MODEL,
     max_tokens: 1024,
-    system: buildSystemPrompt(operator, today, catalogForPrompt(promptItems, hintStart), Boolean(hintStart), config),
+    // Prompt caching: the grounded system prompt (core rules + operator
+    // instructions + catalog + config) is the bulk of every turn's input and is
+    // byte-identical across the turns of a conversation — the breakpoint makes
+    // turns 2..n read it at ~10% of the input rate (5-min TTL comfortably
+    // covers a live chat). The copilot draft call shares this exact prefix, so
+    // a draft minutes after an AI turn reads the same entry. Invalidation is
+    // the correct behavior here: a new day, a settings edit, or a catalog
+    // change alters the bytes and simply re-caches. Below the model's minimum
+    // cacheable prefix (a tiny catalog) it silently doesn't cache — harmless.
+    system: [
+      {
+        type: "text",
+        text: buildSystemPrompt(operator, today, catalogForPrompt(promptItems, hintStart), Boolean(hintStart), config),
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     output_config: { format: zodOutputFormat(ModelOutputSchema) },
     messages: inquiry.messages,
   });
