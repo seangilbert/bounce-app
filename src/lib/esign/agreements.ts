@@ -1,6 +1,7 @@
 import { getESignatureProvider } from "./index";
 import { setOrderEsignDocument } from "@/lib/orders/repo";
 import { getBooking, setBookingStatus } from "@/lib/bookings/repo";
+import type { Booking } from "@/lib/bookings/types";
 import { getOperatorById } from "@/lib/inventory/repo";
 import { planCapabilities } from "@/lib/plans";
 import type { Operator } from "@/lib/inventory/types";
@@ -40,11 +41,13 @@ export async function sendAgreementForOrder(order: Order): Promise<void> {
 
   // Resolve the operator so the agreement is between the *operator* and their
   // customer — not the platform. Falls back to the platform identity if we can't
-  // load the operator or they have no contact email on file.
+  // load the operator or they have no contact email on file. The booking is kept
+  // too: it carries the customer's name for the signer block below.
   let operator: Operator | null = null;
+  let booking: Booking | null = null;
   if (order.bookingId) {
     try {
-      const booking = await getBooking(order.bookingId);
+      booking = await getBooking(order.bookingId);
       operator = booking ? await getOperatorById(booking.operatorId) : null;
     } catch (e) {
       console.error("[esign] loading operator for agreement failed; using platform identity:", e);
@@ -103,7 +106,9 @@ export async function sendAgreementForOrder(order: Order): Promise<void> {
       : [{ id: "1", name: companyName, email: companyEmail, placeholderName: "Document Sender" }]),
     {
       id: "2",
-      name: order.customerEmail,
+      // Sign as the customer's actual name when the booking carries one — a
+      // legal document shouldn't identify the signer by email address alone.
+      name: booking?.customerName?.trim() || order.customerEmail,
       email: order.customerEmail,
       placeholderName: "Client",
     },

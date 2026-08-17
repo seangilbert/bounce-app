@@ -62,14 +62,29 @@ export async function createContractTemplateFromDocument(
         { id: "2", name: "Client" },
       ];
 
-  const tmpl = await provider.createDraftTemplate({
-    name: `${operatorName} — Rental Agreement`,
-    fileName: doc.file_name ?? "rental-agreement.pdf",
-    fileBase64,
-    placeholders,
-    apiApplicationId,
-    metadata: { operator_id: operatorId, document_id: documentId },
-  });
+  let tmpl;
+  try {
+    tmpl = await provider.createDraftTemplate({
+      name: `${operatorName} — Rental Agreement`,
+      fileName: doc.file_name ?? "rental-agreement.pdf",
+      fileBase64,
+      placeholders,
+      apiApplicationId,
+      metadata: { operator_id: operatorId, document_id: documentId },
+    });
+  } catch (e) {
+    // Known limitation: SignWell's pay-as-you-go API plan blocks template
+    // CREATION (401 not_authorized) even though document sending works — see
+    // the B2 item in docs/ROADMAP.md. Surface that honestly instead of a raw
+    // provider error; the white-glove path (we build the template) still works.
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("(401)") || msg.includes("not_authorized")) {
+      throw new Error(
+        "Custom contract uploads aren't available yet — the e-signature plan we're on doesn't include the embedded editor. Email hello@movables.ai and we'll set up your rental agreement for you.",
+      );
+    }
+    throw e;
+  }
 
   return { templateId: tmpl.id, embeddedEditUrl: tmpl.embeddedEditUrl };
 }
