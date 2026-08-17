@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripeClient } from "@/lib/payments/stripe";
 import { requireAdmin } from "@/lib/operator/session";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { PLANS, TRIAL_DAYS, isPaidPlan, type PlanId } from "@/lib/plans";
+import { PLANS, TRIAL_DAYS, isPaidPlan, type BillingInterval, type PlanId } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -33,16 +33,23 @@ export async function POST(req: Request) {
   // from the subscription on `subscription.created`, but we also persist it now
   // so the operator's entitlement flips as soon as the trial subscription lands.
   let targetPlanId = operator.plan as PlanId;
+  let interval: BillingInterval = "month";
   try {
-    const body = (await req.json()) as { plan?: string } | null;
+    const body = (await req.json()) as { plan?: string; interval?: string } | null;
     if (body?.plan && body.plan in PLANS) targetPlanId = body.plan as PlanId;
+    if (body?.interval === "year") interval = "year";
   } catch {
-    // No/invalid JSON body — fall back to the operator's current plan.
+    // No/invalid JSON body — fall back to the operator's current plan, monthly.
   }
 
   const plan = PLANS[targetPlanId];
   if (!plan || !isPaidPlan(plan.id) || !plan.stripeLookupKey) {
     return NextResponse.json({ error: "This plan doesn't require billing." }, { status: 400 });
+  }
+  // Annual = 2 months free (10× monthly), resolved by its own lookup_key.
+  const lookupKey = interval === "year" ? plan.stripeYearlyLookupKey : plan.stripeLookupKey;
+  if (!lookupKey) {
+    return NextResponse.json({ error: "This plan has no annual price." }, { status: 400 });
   }
   if (targetPlanId !== operator.plan) {
     await createAdminClient().from("operators").update({ plan: targetPlanId }).eq("id", operator.id);
@@ -54,7 +61,7 @@ export async function POST(req: Request) {
   try {
     // Resolve the price by lookup_key (set up in scripts/setup_billing.mjs).
     const prices = await stripe.prices.list({
-      lookup_keys: [plan.stripeLookupKey],
+      lookup_keys: [lookupKey],
       active: true,
       limit: 1,
     });

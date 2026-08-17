@@ -4,6 +4,7 @@ import { claimWebhookEvent } from "@/lib/orders/repo";
 import { findLatestInquiryByPhone, findLatestInquiryByIdentity } from "@/lib/inquiries/repo";
 import { ingestInbound } from "@/lib/inquiries/ingest";
 import { publicUrl } from "@/lib/urls";
+import { planCapabilities } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 // The AI turn makes a Claude call — give it headroom.
@@ -79,6 +80,17 @@ export async function POST(req: Request) {
 
     const result = await ingestInbound({ inquiry, text, channel: "sms", customerLabel: from });
     if (result.kind === "silent") return twiml(); // human-owned: saved, no auto-reply
+
+    // Plan gate on the billable outbound (docs/pricing-plan.md R2): a Free plan
+    // can never bootstrap an SMS thread, so this only fires on the downgrade
+    // edge — a thread opened while paid, replied to after the plan lapsed. The
+    // message is already saved in the thread (and escalation/alerts already ran
+    // inside ingest), so the operator sees it; we just don't send a Twilio
+    // message on the platform's dime.
+    if (result.operator && !planCapabilities(result.operator).smsChannel) {
+      console.warn(`[sms] operator ${result.operator.id} has no SMS entitlement; reply suppressed.`);
+      return twiml();
+    }
 
     let reply = result.reply;
     // Delivery decoration, deliberately channel-side and not persisted: a ready

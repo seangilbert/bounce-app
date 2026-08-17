@@ -6,10 +6,21 @@ import { Package, Plus, CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { bookableUnits, outOfServiceUnits, type Item } from "@/lib/inventory/types";
 import { ItemDrawer } from "./ItemDrawer";
 import { catMeta, money, unitLabel } from "./shared";
+import { UpgradeButton } from "@/components/operator/UpgradeButton";
 
-export function InventoryManager({ items, isAdmin }: { items: Item[]; isAdmin: boolean }) {
+export function InventoryManager({
+  items,
+  isAdmin,
+  itemLimit,
+}: {
+  items: Item[];
+  isAdmin: boolean;
+  /** Plan catalog cap; null = unlimited. */
+  itemLimit: number | null;
+}) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
+  const atCap = itemLimit !== null && items.length >= itemLimit;
 
   return (
     <div className="flex w-full flex-col">
@@ -18,7 +29,9 @@ export function InventoryManager({ items, isAdmin }: { items: Item[]; isAdmin: b
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">Inventory</h1>
           <p className="mt-0.5 text-sm font-medium text-ink-mute">
-            {items.length} {items.length === 1 ? "item" : "items"} in your catalog
+            {itemLimit !== null
+              ? `${items.length} of ${itemLimit} items on the Free plan`
+              : `${items.length} ${items.length === 1 ? "item" : "items"} in your catalog`}
           </p>
         </div>
         {isAdmin ? (
@@ -31,6 +44,20 @@ export function InventoryManager({ items, isAdmin }: { items: Item[]; isAdmin: b
           </button>
         ) : null}
       </div>
+
+      {/* Cap runway: surface the Free-plan catalog limit BEFORE the create
+          action rejects, with the way out. Shown from one-item-short onward. */}
+      {isAdmin && itemLimit !== null && items.length >= itemLimit - 1 ? (
+        <div className="mx-5 mt-4 rounded-xl bg-brand-tint/50 px-4 py-3 lg:mx-8">
+          <p className="text-[13.5px] font-semibold text-ink-soft">
+            {atCap
+              ? `You've used all ${itemLimit} catalog items on the Free plan.`
+              : `You're one item away from the Free plan's ${itemLimit}-item catalog cap.`}{" "}
+            Upgrade to Solo for an unlimited catalog, unlimited AI quotes, and a 0% platform fee.
+          </p>
+          <UpgradeButton plan="solo">Upgrade to Solo</UpgradeButton>
+        </div>
+      ) : null}
 
       <div className="px-5 py-5 lg:px-8 lg:py-6">
         {items.length === 0 ? (

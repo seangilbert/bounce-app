@@ -52,12 +52,16 @@ export default function SignupPage() {
   }>({ businessName: "", ownerName: "", email: "", password: "", plan: "solo" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [yearly, setYearly] = useState(false);
 
-  // Preselect the plan the visitor clicked on the marketing/pricing pages
-  // (e.g. /signup?plan=growing). Ignored if the param isn't a real plan.
+  // Preselect the plan + billing interval the visitor clicked on the
+  // marketing/pricing pages (e.g. /signup?plan=growing&interval=year). Ignored
+  // if the params aren't real values.
   useEffect(() => {
-    const p = new URLSearchParams(window.location.search).get("plan");
+    const params = new URLSearchParams(window.location.search);
+    const p = params.get("plan");
     if (p && p in PLANS) setForm((f) => ({ ...f, plan: p as PlanId }));
+    if (params.get("interval") === "year") setYearly(true);
   }, []);
 
   const field =
@@ -95,7 +99,11 @@ export default function SignupPage() {
 
       // Paid plan → Stripe subscription checkout (14-day trial). Free → dashboard.
       if (paid) {
-        const bRes = await fetch("/api/billing/checkout", { method: "POST" });
+        const bRes = await fetch("/api/billing/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ interval: yearly ? "year" : "month" }),
+        });
         const bJson = await bRes.json();
         if (bRes.ok && bJson.url) {
           window.location.href = bJson.url;
@@ -145,7 +153,18 @@ export default function SignupPage() {
             </div>
             {paid ? (
               <p className="mt-2 text-xs font-medium text-ink-mute">
-                14-day free trial, then ${PLANS[form.plan].priceCents / 100}/mo. Cancel anytime.
+                14-day free trial, then{" "}
+                {yearly && PLANS[form.plan].yearlyPriceCents !== null
+                  ? `$${PLANS[form.plan].yearlyPriceCents! / 100}/yr (2 months free)`
+                  : `$${PLANS[form.plan].priceCents / 100}/mo`}
+                . Cancel anytime.{" "}
+                <button
+                  type="button"
+                  onClick={() => setYearly((y) => !y)}
+                  className="font-bold text-brand hover:text-brand-deep"
+                >
+                  {yearly ? "Switch to monthly" : "Switch to annual"}
+                </button>
               </p>
             ) : null}
           </div>

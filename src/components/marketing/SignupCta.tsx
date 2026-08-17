@@ -11,16 +11,20 @@ import { signupsOpen, earlyAccessHref } from "@/lib/signups";
  */
 export function SignupCta({
   plan = "free",
+  interval,
   className,
   children,
 }: {
   plan?: string;
+  /** Billing interval to preselect; "year" carries through signup → checkout. */
+  interval?: "month" | "year";
   className?: string;
   children: React.ReactNode;
 }) {
   if (signupsOpen()) {
+    const query = `plan=${plan}${interval === "year" ? "&interval=year" : ""}`;
     return (
-      <Link href={`/signup?plan=${plan}`} className={className}>
+      <Link href={`/signup?${query}`} className={className}>
         {children}
       </Link>
     );

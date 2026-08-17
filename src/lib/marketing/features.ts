@@ -26,7 +26,7 @@ import { smsEnabled } from "@/lib/sms";
  */
 
 /** Boolean entitlements a row can be gated on (keys of `PlanCapabilities`). */
-export type GateKey = "teamMembers" | "apiAccess" | "followUpAgents" | "esignContracts";
+export type GateKey = "teamMembers" | "apiAccess" | "followUpAgents" | "esignContracts" | "smsChannel";
 
 /** Numeric limits a row can render per-plan (keys of `PlanCapabilities`). */
 export type QuotaKey = "maxItems" | "aiQuotesPerMonth" | "platformFeeBps";
@@ -170,7 +170,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "Shared inbox for every conversation" },
       { label: "Storefront web chat" },
       { label: "Email replies threaded into the conversation" },
-      { label: "Two-way text messaging", live: textingLive },
+      { label: "Two-way text messaging", gate: "smsChannel", live: textingLive },
       { label: "AI answers first, day or night" },
       { label: "Take over a thread (the AI stands down)" },
       { label: "Hand the thread back to the AI" },

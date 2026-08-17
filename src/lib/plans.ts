@@ -11,9 +11,14 @@ export interface Plan {
   name: string;
   priceCents: number; // per month
   stripeLookupKey: string | null; // null for Free
+  /** Annual price (2 months free — 10× monthly). Null for Free. */
+  yearlyPriceCents: number | null;
+  stripeYearlyLookupKey: string | null;
   tagline: string;
   features: string[];
 }
+
+export type BillingInterval = "month" | "year";
 
 /** Free trial length (days) for paid plans. */
 export const TRIAL_DAYS = 14;
@@ -24,6 +29,8 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Free",
     priceCents: 0,
     stripeLookupKey: null,
+    yearlyPriceCents: null,
+    stripeYearlyLookupKey: null,
     tagline: "Try it out",
     features: ["Up to 20 quotes / month", "AI quote assistant", "Storefront + checkout"],
   },
@@ -32,6 +39,8 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Solo",
     priceCents: 3900,
     stripeLookupKey: "solo_monthly",
+    yearlyPriceCents: 39000,
+    stripeYearlyLookupKey: "solo_yearly",
     tagline: "For a solo operator",
     features: [
       "Unlimited quotes",
@@ -45,6 +54,8 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Growing",
     priceCents: 7900,
     stripeLookupKey: "growing_monthly",
+    yearlyPriceCents: 79000,
+    stripeYearlyLookupKey: "growing_yearly",
     tagline: "For a growing team",
     features: ["Everything in Solo", "Team members & driver logins", "Priority support"],
   },
@@ -70,6 +81,10 @@ export interface PlanCapabilities {
    *  agents). Enforced in the UI, the toggle action, AND the cron sweep — a
    *  downgrade stops sends even if the operator's toggles stay on. */
   followUpAgents: boolean;
+  /** Two-way SMS with customers (paid-plan capability — Twilio bills per
+   *  message and per number). Enforced at the operator bootstrap action, the
+   *  composer's channel toggle, and the inbound webhook's billable reply. */
+  smsChannel: boolean;
   /** E-signed rental agreements (paid-plan capability — every live SignWell
    *  document is a per-doc platform cost). Enforced at the send choke point
    *  (`sendAgreementForOrder`), so the webhook / any future caller inherits it. */
@@ -89,6 +104,7 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
     teamMembers: false,
     apiAccess: false,
     followUpAgents: false,
+    smsChannel: false,
     esignContracts: false,
     platformFeeBps: 200,
   },
@@ -98,6 +114,7 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
     teamMembers: false,
     apiAccess: false,
     followUpAgents: true,
+    smsChannel: true,
     esignContracts: true,
     platformFeeBps: 0,
   },
@@ -107,6 +124,7 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
     teamMembers: true,
     apiAccess: true,
     followUpAgents: true,
+    smsChannel: true,
     esignContracts: true,
     platformFeeBps: 0,
   },

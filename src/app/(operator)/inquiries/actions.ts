@@ -15,6 +15,7 @@ import { draftOperatorReply } from "@/lib/llm/assistant";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { notifyInquiryReply } from "@/lib/email";
 import { sendSms, smsEnabled } from "@/lib/sms";
+import { planCapabilities } from "@/lib/plans";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -24,10 +25,24 @@ export async function replyInquiryAction(id: string, reply: string): Promise<Act
   const text = (reply ?? "").trim();
   if (!text) return { ok: false, error: "Write a reply first." };
   try {
+    // Plan gate on the SMS channel (per-message cost): a downgraded operator
+    // with an existing text thread falls back to email delivery when the
+    // customer left one — and is told up front (BEFORE anything persists) when
+    // they didn't, rather than recording a reply the customer never receives.
+    const smsAllowed = planCapabilities(op).smsChannel;
+    if (!smsAllowed) {
+      const existing = await getInquiryForOperator(op.id, id);
+      if (existing?.channel === "sms" && !existing.customer_email) {
+        return {
+          ok: false,
+          error: "This customer is on a text thread. Texting is a Solo plan feature — upgrade to reply by text.",
+        };
+      }
+    }
     const inq = await replyToInquiry(op.id, id, text);
     // Deliver on the channel the customer used: SMS when it's a text thread with
     // a phone on file, otherwise email.
-    if (inq?.channel === "sms" && inq.customerPhone) {
+    if (inq?.channel === "sms" && inq.customerPhone && smsAllowed) {
       await sendSms(inq.customerPhone, text);
     } else if (inq?.customerEmail) {
       try {
@@ -67,6 +82,9 @@ export async function sendInquirySmsAction(
   const op = await getSessionOperator();
   if (!op) return { ok: false, error: "Not signed in." };
   if (!smsEnabled()) return { ok: false, error: "Texting isn't set up yet (Twilio not configured)." };
+  if (!planCapabilities(op).smsChannel) {
+    return { ok: false, error: "Texting customers is a Solo plan feature. Upgrade to start SMS threads." };
+  }
   const text = (message ?? "").trim();
   if (!text) return { ok: false, error: "Write a message first." };
   const num = (phone ?? "").trim().replace(/[\s()-]/g, "");

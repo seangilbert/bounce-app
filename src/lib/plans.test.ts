@@ -66,6 +66,16 @@ describe("planCapabilities", () => {
     expect(caps.aiQuotesPerMonth).toBe(Infinity);
   });
 
+  it("SMS + e-sign are Solo+ (per-use platform costs stay off Free)", () => {
+    expect(PLAN_CAPABILITIES.free.smsChannel).toBe(false);
+    expect(PLAN_CAPABILITIES.free.esignContracts).toBe(false);
+    expect(planCapabilities({ plan: "solo", subscriptionStatus: "active" }).smsChannel).toBe(true);
+    expect(planCapabilities({ plan: "solo", subscriptionStatus: "active" }).esignContracts).toBe(true);
+    // The downgrade edge both gates exist for: a lapsed subscription loses them.
+    expect(planCapabilities({ plan: "solo", subscriptionStatus: "canceled" }).smsChannel).toBe(false);
+    expect(planCapabilities({ plan: "growing", subscriptionStatus: "canceled" }).esignContracts).toBe(false);
+  });
+
   it("follow-up agents are Solo+ — off for free and lapsed-paid, on for paid + comp", () => {
     expect(planCapabilities({ plan: "free", subscriptionStatus: null }).followUpAgents).toBe(false);
     expect(planCapabilities({ plan: "solo", subscriptionStatus: "canceled" }).followUpAgents).toBe(false);

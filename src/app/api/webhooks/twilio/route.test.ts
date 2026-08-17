@@ -86,6 +86,10 @@ beforeEach(() => {
     slug: "bounce-usa",
     contactEmail: "owner@example.com",
     notifyNewInquiry: true,
+    // SMS is a paid-plan channel — the webhook suppresses the billable reply
+    // for a non-entitled operator, so the default mock is an entitled one.
+    plan: "solo",
+    subscriptionStatus: "active",
   });
 });
 
@@ -137,6 +141,23 @@ describe("ai-owned thread (normal loop)", () => {
     // The route must NOT double-write the escalation — handleInquiry owns it now.
     expect(setInquiryStatus).not.toHaveBeenCalledWith("inq-1", "needs_review");
     expect(notifyOperatorNewInquiry).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses the billable reply for a non-entitled (Free/lapsed) operator", async () => {
+    getOperatorById.mockResolvedValue({
+      name: "Bounce USA",
+      slug: "bounce-usa",
+      contactEmail: "owner@example.com",
+      notifyNewInquiry: true,
+      plan: "solo",
+      subscriptionStatus: "canceled", // lapsed → effective plan Free → no SMS
+    });
+    findLatestInquiryByPhone.mockResolvedValue(inquiry({ owner: "ai" }));
+    handleInquiry.mockResolvedValue({ reply: "The Castle is free that day!", status: "quoted" });
+    const res = await run();
+    // Message ingested (AI turn ran), but no <Message> goes back out on Twilio.
+    expect(handleInquiry).toHaveBeenCalledTimes(1);
+    expect(await res.text()).not.toContain("<Message>");
   });
 
   it("appends a reserve link on a quoted reply and keeps the thread auto", async () => {
