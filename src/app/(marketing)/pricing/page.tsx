@@ -2,28 +2,33 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
 import { SignupCta } from "@/components/marketing/SignupCta";
+import { PLANS } from "@/lib/plans";
+
+const solo = PLANS.solo.priceCents / 100;
+const growing = PLANS.growing.priceCents / 100;
 
 export const metadata: Metadata = {
   title: "Pricing — Movables",
-  description: "Start free. Solo at $29/mo and Growing at $59/mo unlock unlimited quotes, team members, and more.",
+  // Derived from lib/plans so the advertised numbers can't drift from billing.
+  description: `Start free. Solo at $${solo}/mo and Growing at $${growing}/mo unlock unlimited quotes, e-signed contracts, team members, and more.`,
 };
 
 const FAQ = [
   {
     q: "Is there really a free plan?",
-    a: "Yes. The Free plan lets you run your storefront and take bookings with up to 20 AI quotes a month and 5 catalog items — no credit card required. Upgrade whenever you outgrow it.",
+    a: "Yes. The Free plan lets you run your storefront and take bookings with up to 20 AI quotes a month and 5 catalog items, no credit card required. Upgrade whenever you outgrow it.",
   },
   {
     q: "What happens after the trial?",
-    a: "Paid plans include a 14-day free trial. You won't be charged until it ends, and you can cancel anytime before then. If a subscription lapses, your account simply moves back to the Free plan — you keep your data and storefront.",
+    a: "Paid plans include a 14-day free trial. You won't be charged until it ends, and you can cancel anytime before then. If a subscription lapses, your account simply moves back to the Free plan, and you keep your data and storefront.",
   },
   {
     q: "How do payments to me work?",
-    a: "Movables uses Stripe Connect, so customer payments go directly to your own bank account. You connect your account once during setup.",
+    a: "Movables uses Stripe Connect, so customer payments go directly to your own bank account. You connect your account once during setup. Standard card processing is 2.9% + 30¢ per charge on every plan; Free-plan bookings also carry a 2% platform fee, which drops to 0% on Solo and Growing.",
   },
   {
     q: "Do my customers need an account?",
-    a: "No. Customers just visit your storefront link, get a quote from the AI assistant, and check out — no login required.",
+    a: "No. Customers just visit your storefront link, get a quote from the AI assistant, and check out. No login required.",
   },
   {
     q: "Can I use Movables on my existing website?",

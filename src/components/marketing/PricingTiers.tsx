@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { Check } from "@phosphor-icons/react/dist/ssr";
-import { PLAN_LIST, type PlanId } from "@/lib/plans";
+import { PLAN_LIST, PLAN_CAPABILITIES, type PlanId } from "@/lib/plans";
+import { processingFeeLabel } from "@/lib/fees";
 import { SignupCta } from "@/components/marketing/SignupCta";
 
 /** Plan the pricing grid highlights as the default choice. */
@@ -15,10 +15,14 @@ function ctaLabel(id: PlanId): string {
 }
 
 /** The three plans as cards, sourced from lib/plans so they mirror real billing.
- *  Every CTA lands on signup with the plan preselected. */
+ *  Every CTA lands on signup with the plan preselected. The fee line below the
+ *  grid derives from lib/fees + PLAN_CAPABILITIES so it can't drift from what
+ *  checkout actually charges. */
 export function PricingTiers() {
+  const freeFeePct = PLAN_CAPABILITIES.free.platformFeeBps / 100;
   return (
-    <div className="grid gap-5 md:grid-cols-3">
+    <div>
+      <div className="grid gap-5 md:grid-cols-3">
       {PLAN_LIST.map((plan) => {
         const popular = plan.id === POPULAR;
         return (
@@ -62,6 +66,11 @@ export function PricingTiers() {
           </div>
         );
       })}
+      </div>
+      <p className="mt-5 text-center text-[13px] font-semibold text-ink-mute">
+        Every plan pays standard card processing ({processingFeeLabel()} per charge). Free-plan
+        bookings carry a {freeFeePct}% platform fee; Solo and Growing pay none.
+      </p>
     </div>
   );
 }

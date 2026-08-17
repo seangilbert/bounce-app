@@ -10,7 +10,7 @@ export function MarketingHeader() {
         <Wordmark />
         <nav className="flex items-center gap-1 sm:gap-2">
           <Link
-            href="/#features"
+            href="/features"
             className="hidden rounded-full px-3.5 py-2 text-sm font-bold text-ink-soft hover:text-ink sm:block"
           >
             Features

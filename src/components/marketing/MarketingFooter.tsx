@@ -18,7 +18,7 @@ export function MarketingFooter() {
             <div>
               <div className="text-[13px] font-bold text-ink">Product</div>
               <ul className="mt-3 space-y-2 text-sm font-medium text-ink-mute">
-                <li><Link href="/#features" className="hover:text-ink">Features</Link></li>
+                <li><Link href="/features" className="hover:text-ink">Features</Link></li>
                 <li><Link href="/pricing" className="hover:text-ink">Pricing</Link></li>
                 <li><SignupCta plan="free" className="hover:text-ink">Start free</SignupCta></li>
                 <li><Link href="/login" className="hover:text-ink">Log in</Link></li>

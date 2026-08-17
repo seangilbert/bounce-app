@@ -30,23 +30,23 @@ export const PLANS: Record<PlanId, Plan> = {
   solo: {
     id: "solo",
     name: "Solo",
-    priceCents: 2900,
+    priceCents: 3900,
     stripeLookupKey: "solo_monthly",
     tagline: "For a solo operator",
     features: [
       "Unlimited quotes",
-      "Full catalog & calendar",
-      "Payments + e-signature",
+      "0% platform fee on bookings",
+      "E-signed rental agreements",
       "Automated follow-ups (quotes, balances, contracts)",
     ],
   },
   growing: {
     id: "growing",
     name: "Growing",
-    priceCents: 5900,
+    priceCents: 7900,
     stripeLookupKey: "growing_monthly",
     tagline: "For a growing team",
-    features: ["Everything in Solo", "Team members", "Priority support"],
+    features: ["Everything in Solo", "Team members & driver logins", "Priority support"],
   },
 };
 
@@ -70,12 +70,46 @@ export interface PlanCapabilities {
    *  agents). Enforced in the UI, the toggle action, AND the cron sweep — a
    *  downgrade stops sends even if the operator's toggles stay on. */
   followUpAgents: boolean;
+  /** E-signed rental agreements (paid-plan capability — every live SignWell
+   *  document is a per-doc platform cost). Enforced at the send choke point
+   *  (`sendAgreementForOrder`), so the webhook / any future caller inherits it. */
+  esignContracts: boolean;
+  /** Platform surcharge on customer bookings, in basis points, charged ON TOP of
+   *  the processing pass-through (see `lib/fees.ts`). The Free tier's 2% is what
+   *  makes free riders self-funding; dropping to 0% on paid plans is the upgrade
+   *  math ("Solo pays for itself at ~$1,450/mo in bookings"). Decided in
+   *  docs/pricing-plan.md (2026-08-17). */
+  platformFeeBps: number;
 }
 
 export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
-  free: { maxItems: 5, aiQuotesPerMonth: 20, teamMembers: false, apiAccess: false, followUpAgents: false },
-  solo: { maxItems: Infinity, aiQuotesPerMonth: Infinity, teamMembers: false, apiAccess: false, followUpAgents: true },
-  growing: { maxItems: Infinity, aiQuotesPerMonth: Infinity, teamMembers: true, apiAccess: true, followUpAgents: true },
+  free: {
+    maxItems: 5,
+    aiQuotesPerMonth: 20,
+    teamMembers: false,
+    apiAccess: false,
+    followUpAgents: false,
+    esignContracts: false,
+    platformFeeBps: 200,
+  },
+  solo: {
+    maxItems: Infinity,
+    aiQuotesPerMonth: Infinity,
+    teamMembers: false,
+    apiAccess: false,
+    followUpAgents: true,
+    esignContracts: true,
+    platformFeeBps: 0,
+  },
+  growing: {
+    maxItems: Infinity,
+    aiQuotesPerMonth: Infinity,
+    teamMembers: true,
+    apiAccess: true,
+    followUpAgents: true,
+    esignContracts: true,
+    platformFeeBps: 0,
+  },
 };
 
 /** Subscription statuses that still entitle a paid plan (incl. past_due grace). */

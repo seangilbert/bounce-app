@@ -2,6 +2,7 @@ import { getESignatureProvider } from "./index";
 import { setOrderEsignDocument } from "@/lib/orders/repo";
 import { getBooking, setBookingStatus } from "@/lib/bookings/repo";
 import { getOperatorById } from "@/lib/inventory/repo";
+import { planCapabilities } from "@/lib/plans";
 import type { Operator } from "@/lib/inventory/types";
 import type { Order } from "@/lib/orders/types";
 
@@ -48,6 +49,18 @@ export async function sendAgreementForOrder(order: Order): Promise<void> {
     } catch (e) {
       console.error("[esign] loading operator for agreement failed; using platform identity:", e);
     }
+  }
+
+  // Plan gate: e-sign is a paid-plan capability — every live SignWell document
+  // is a per-doc platform cost (docs/pricing-plan.md, R2). Fail CLOSED when the
+  // operator can't be resolved: an unattributable billable document is exactly
+  // what this gate exists to prevent. Skipping is best-effort like the rest of
+  // the agreement path — the booking still confirms without a contract.
+  if (!operator || !planCapabilities(operator).esignContracts) {
+    console.warn(
+      `[esign] order ${order.id}: operator ${operator?.id ?? "unresolved"} has no e-sign entitlement; skipping agreement.`,
+    );
+    return;
   }
 
   // Use the operator's own rental-agreement template when they've set one, else

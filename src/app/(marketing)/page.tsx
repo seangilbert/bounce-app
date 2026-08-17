@@ -200,7 +200,8 @@ export default function MarketingHome() {
                 <p className="mt-1.5 text-sm font-medium text-ink-mute">{f.body}</p>
               </div>
             ))}
-            {/* Full-width banner tile to break the grid rhythm. */}
+            {/* Full-width banner tile to break the grid rhythm. Doubles as the
+                way into the deep feature page. */}
             <div className="flex flex-col gap-5 rounded-3xl border border-sand-line bg-gradient-to-r from-cream-2 to-brand/5 p-7 sm:flex-row sm:items-center md:col-span-6">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand text-white">
                 <featBanner.icon size={24} weight="fill" />
@@ -210,6 +211,14 @@ export default function MarketingHome() {
                 <p className="mt-1 max-w-2xl text-sm font-medium text-ink-soft">{featBanner.body}</p>
               </div>
             </div>
+          </div>
+          <div className="mt-8">
+            <Link
+              href="/features"
+              className="inline-flex items-center gap-2 rounded-full border border-sand bg-white px-6 py-3 text-sm font-bold text-ink transition-colors hover:bg-cream"
+            >
+              See everything it does <ArrowRight size={16} weight="bold" />
+            </Link>
           </div>
         </div>
       </section>

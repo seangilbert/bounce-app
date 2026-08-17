@@ -7,6 +7,8 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://movables.ai";
 export default function sitemap(): MetadataRoute.Sitemap {
   const routes = [
     { path: "", priority: 1 },
+    { path: "/features", priority: 0.9 },
+    { path: "/features/all", priority: 0.7 },
     { path: "/pricing", priority: 0.8 },
     { path: "/terms", priority: 0.3 },
     { path: "/privacy", priority: 0.3 },

@@ -90,9 +90,25 @@ export const stripeProvider: PaymentProvider = {
 
   async refund(paymentId: string, amount?: Money): Promise<RefundResult> {
     // `paymentId` is treated as a PaymentIntent id.
+    //
+    // Destination charge: the funds already transferred to the operator's
+    // connected account, so the refund must pull them back (`reverse_transfer`,
+    // prorated on partial refunds) — without it, Stripe refunds the customer out
+    // of the PLATFORM's balance while the operator keeps the transfer. The
+    // application fee is deliberately NOT refunded (`refund_application_fee`
+    // defaults to false): processing costs were incurred either way, matching
+    // Stripe's own keep-the-fee-on-refund behavior. Non-connected charges have
+    // no transfer, where `reverse_transfer` would error — hence the lookup.
+    const intent = await client().paymentIntents.retrieve(paymentId, {
+      expand: ["latest_charge"],
+    });
+    const charge = intent.latest_charge;
+    const hasTransfer =
+      typeof charge === "object" && charge !== null && Boolean(charge.transfer_data);
     const refund = await client().refunds.create({
       payment_intent: paymentId,
       ...(amount ? { amount: amount.amount } : {}),
+      ...(hasTransfer ? { reverse_transfer: true } : {}),
     });
     return { id: refund.id, status: refund.status ?? "unknown" };
   },
