@@ -1,6 +1,8 @@
 # Movables — Launch Checklist
 
-_Assembled 2026-08-17 from the go-live checklist ([ROADMAP.md](ROADMAP.md)), the pricing work ([pricing-plan.md](pricing-plan.md)), and the business-readiness review. Six tracks; A and B start today and run in parallel. The critical path to taking money is **A → B (entity + counsel) → C → D**. Everything in Tracks A–D is config or paperwork — there is no code between here and launch._
+_Assembled 2026-08-17 from the go-live checklist ([ROADMAP.md](ROADMAP.md)), the pricing work ([pricing-plan.md](pricing-plan.md)), and the business-readiness review. Updated 2026-08-18: operating agreement drafted (64/18/18, partner cash $3,000 each); counsel engagement expanded to five documents + two exhibits._
+
+_Original framing: Six tracks; A and B start today and run in parallel. The critical path to taking money is **A → B (entity + counsel) → C → D**. Everything in Tracks A–D is config or paperwork — there is no code between here and launch._
 
 ---
 
@@ -15,11 +17,13 @@ _Assembled 2026-08-17 from the go-live checklist ([ROADMAP.md](ROADMAP.md)), the
 
 | Done | Item | Lead time | Notes |
 |---|---|---|---|
-| ☐ | **Form the legal entity** (LLC/corp) | days–weeks | **Step zero.** Gates `company.ts`, Stripe live verification, counsel, insurance, and the mailing address. You're about to be merchant of record adjacent to an injury-prone industry. |
+| ☐ | **Partner sign-off on the operating agreement** — 64/18/18 adopted, $3,000 cash each (12-month budget, counsel costs excluded), Exhibit G comp policy; fill the Exhibit F blanks (partner names, legal name, pre-formation expense total, venue city, registered agent) | days | Draft ready: `~/Documents/movables-legal/operating-agreement-draft.docx` (kept outside the repo — inter-member material) + private artifact. Two prepared negotiation notes inside: founder-vesting (§ 2.2) and the $2k/$1k cash tranches (§ 3.1). |
+| ☐ | **Form the legal entity** — Massachusetts LLC (Certificate of Organization, $500; annual report $500/yr) | days–weeks | **Step zero.** Gates `company.ts`, Stripe live verification, counsel, insurance, and the mailing address. You're about to be merchant of record adjacent to an injury-prone industry. |
 | ☐ | **Insurance** — general liability + E&O/cyber quotes | 1–2 weeks | Platform under bounce-house bookings, holder of customer PII. |
 | ☐ | **Trademark screen** on "Movables" | days | Cheap search now beats a rebrand after traction. Low urgency, high regret-avoidance. |
 | ☐ | **Fill `src/lib/legal/company.ts`** — 5 values: entity name, governing law, contact email, mailing address, effective date | 10 min (after entity) | Single source of truth; `/terms` and `/privacy` update everywhere from it. Address should be a registered agent / virtual office, not home. |
-| ☐ | **One counsel engagement, four documents**: ① Terms of Service + DPA (you're processor for renter data), ② Privacy Policy, ③ rental agreement text + whether it should recite booking specifics (items/dates/total), ④ follow-up-email compliance (is Quote Follow-up commercial? address + opt-out requirements) | 1–3 weeks | Bundle it — one engagement, not four conversations. Brief them on the six merge fields (`company_*`, policies) so the contract text is written to use them. |
+| ☐ | **One counsel engagement, five documents + two exhibits**: ① Operating Agreement review (in the counsel bundle — flagged inline for them: § 24L member non-compete, consent-or-buy deadlock clause, § 704(b) riders) plus drafting Exhibit C (IP Assignment) and Exhibit D (Spousal Consent), ② Terms of Service + DPA (you're processor for renter data), ③ Privacy Policy, ④ rental agreement text + whether it should recite booking specifics (items/dates/total), ⑤ follow-up-email compliance (is Quote Follow-up commercial? address + opt-out requirements) | 1–3 weeks | Bundle it — one engagement, not five conversations. Brief them on the six merge fields (`company_*`, policies) so the contract text is written to use them. |
+| ☑ | **Assemble the counsel bundle** — done 2026-08-18: `~/Documents/movables-legal/counsel-bundle/` — kept outside the repo (cover memo, operating-agreement .docx, product overview, money-flow summary, merge-field spec, marketing-claims inventory, company facts sheet, current rental-agreement template .pdf/.docx) | done | One folder to attach the day a lawyer is picked. TBDs inside auto-resolve with the Exhibit F blanks. |
 | ☐ | **Code follow-ups once company.ts is filled** _(Claude, ~1 hr)_: mailing address rendered in email footers from `LEGAL`; opt-out line on the Quote Follow-up nudge | after ↑ | Small, already scoped. |
 | ☐ | **Define "priority support"** (e.g. 1-business-day response) or drop the bullet from Growing | 10 min | It's advertised on the pricing page; nothing defines it. |
 
