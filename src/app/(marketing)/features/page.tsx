@@ -418,7 +418,7 @@ function TheDay({ group }: { group?: FeatureGroup }) {
           alt="The day's delivery route on a phone: timed stops with map, call, and text shortcuts"
           width={840}
           height={1720}
-          caption="The route sheet your driver actually uses, on the phone already in their pocket."
+          caption="The day's route on the phone already in your pocket. On Growing, drivers get their own logins."
           className="mx-auto mt-12 w-full max-w-[340px]"
           imgClassName="rounded-3xl"
         />

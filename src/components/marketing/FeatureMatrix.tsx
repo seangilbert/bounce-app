@@ -9,6 +9,11 @@ import { capabilityCell, type FeatureGroup } from "@/lib/marketing/features";
  *
  * Plan columns are resolved by `capabilityCell` out of `PLAN_CAPABILITIES`, so
  * this table cannot claim a feature on a plan that doesn't grant it.
+ *
+ * Most rows are included on every plan (that's the product's posture), so the
+ * rows where plans actually differ carry a tint + brand checks while universal
+ * rows keep muted checks — otherwise the 20 real differences drown in a wall
+ * of identical checkmarks and Free reads as "same as paid".
  */
 export function FeatureMatrix({ groups }: { groups: FeatureGroup[] }) {
   return (
@@ -18,7 +23,7 @@ export function FeatureMatrix({ groups }: { groups: FeatureGroup[] }) {
           <table className="w-full min-w-[560px] border-collapse text-left">
             <thead>
               <tr className="border-b border-sand">
-                <th scope="col" className="pb-2.5 font-display text-lg font-bold text-ink">
+                <th scope="col" className="pb-2.5 pl-3 font-display text-lg font-bold text-ink">
                   {group.nav}
                 </th>
                 {PLAN_LIST.map((plan) => (
@@ -33,36 +38,51 @@ export function FeatureMatrix({ groups }: { groups: FeatureGroup[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-sand-line">
-              {group.capabilities.map((cap) => (
-                <tr key={cap.label}>
-                  <th scope="row" className="py-2.5 pr-4 text-sm font-medium text-ink-soft">
-                    {cap.label}
-                    {cap.detail ? (
-                      <span className="mt-0.5 block text-[12.5px] text-ink-soft">{cap.detail}</span>
-                    ) : null}
-                  </th>
-                  {PLAN_LIST.map((plan) => {
-                    const cell = capabilityCell(cap, plan.id);
-                    return (
-                      <td key={plan.id} className="py-2.5 text-center align-top">
-                        {cell.kind === "yes" ? (
-                          <>
-                            <Check size={17} weight="bold" className="mx-auto text-brand" aria-hidden />
-                            <span className="sr-only">Included</span>
-                          </>
-                        ) : cell.kind === "no" ? (
-                          <>
-                            <Minus size={17} weight="bold" className="mx-auto text-ink-faint" aria-hidden />
-                            <span className="sr-only">Not included</span>
-                          </>
-                        ) : (
-                          <span className="text-[13px] font-bold text-ink">{cell.text}</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {group.capabilities.map((cap) => {
+                const differs = Boolean(cap.gate || cap.quota || cap.plans);
+                return (
+                  <tr key={cap.label} className={differs ? "bg-brand/[0.045]" : undefined}>
+                    <th
+                      scope="row"
+                      className={`py-2.5 pl-3 pr-4 text-sm ${
+                        differs ? "font-semibold text-ink" : "font-medium text-ink-soft"
+                      }`}
+                    >
+                      {cap.label}
+                      {cap.detail ? (
+                        <span className="mt-0.5 block text-[12.5px] font-normal text-ink-soft">
+                          {cap.detail}
+                        </span>
+                      ) : null}
+                    </th>
+                    {PLAN_LIST.map((plan) => {
+                      const cell = capabilityCell(cap, plan.id);
+                      return (
+                        <td key={plan.id} className="py-2.5 text-center align-top">
+                          {cell.kind === "yes" ? (
+                            <>
+                              <Check
+                                size={17}
+                                weight="bold"
+                                className={`mx-auto ${differs ? "text-brand" : "text-ink-mute"}`}
+                                aria-hidden
+                              />
+                              <span className="sr-only">Included</span>
+                            </>
+                          ) : cell.kind === "no" ? (
+                            <>
+                              <Minus size={17} weight="bold" className="mx-auto text-ink-faint" aria-hidden />
+                              <span className="sr-only">Not included</span>
+                            </>
+                          ) : (
+                            <span className="text-[13px] font-bold text-ink">{cell.text}</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
