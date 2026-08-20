@@ -29,6 +29,7 @@ const browser = await puppeteer.launch({
   executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   headless: "new",
 });
+try {
 
 const page = await browser.newPage();
 await page.evaluateOnNewDocument(() => {
@@ -66,15 +67,24 @@ await view(1000, 760);
 await page.goto(`${BASE}/agents`, { waitUntil: "networkidle2" });
 await shot("agents");
 
-// ---- Route sheet on a phone (the showcase-seeded Saturday) -----------------
-const nextSat = (() => {
-  const d = new Date();
-  d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
-  if ((d - new Date()) / 864e5 < 3) d.setDate(d.getDate() + 7);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-})();
+// ---- Route sheet on a phone (whatever day the showcase seed staged) --------
+// Ask the DB rather than re-deriving "next Saturday": duplicating the date
+// math once put the seed and the camera on different Saturdays and shipped
+// an empty route screenshot.
+const { data: routeBooking } = await db
+  .from("bookings")
+  .select("start_date")
+  .eq("operator_id", opRow.id)
+  .like("notes", "%[showcase]%")
+  .gte("start_date", new Date().toISOString().slice(0, 10))
+  .order("start_date")
+  .limit(1)
+  .single();
+if (!routeBooking) throw new Error("no upcoming showcase bookings — run seed_showcase.mjs first");
 await view(420, 860);
-await page.goto(`${BASE}/deliveries?d=${nextSat}`, { waitUntil: "networkidle2" });
+await page.goto(`${BASE}/deliveries?d=${routeBooking.start_date}`, { waitUntil: "networkidle2" });
+// Real stop cards, not the empty state.
+await page.waitForFunction(() => document.body.innerText.includes("Mark delivered"), { timeout: 15000 });
 await shot("routes");
 
 // ---- Customer profile ------------------------------------------------------
@@ -127,6 +137,8 @@ try {
 }
 
 
-await browser.close();
-await db.from("operators").update({ name: opRow.name, logo_url: opRow.logo_url }).eq("id", opRow.id);
-console.log(`operator restored to "${opRow.name}"`);
+} finally {
+  await browser.close().catch(() => {});
+  await db.from("operators").update({ name: opRow.name, logo_url: opRow.logo_url }).eq("id", opRow.id);
+  console.log(`operator restored to "${opRow.name}"`);
+}

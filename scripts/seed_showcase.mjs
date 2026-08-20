@@ -23,9 +23,13 @@ const item = (part) => {
 
 // Next Saturday (at least 3 days out so nothing trips lead-time rules).
 const nextSat = (() => {
+  // Whole calendar days, so the "bump a week" boundary can't flap on the
+  // milliseconds between runs (it did once: seed picked one Saturday, the
+  // shot script's identical formula picked the other, and the route
+  // screenshot captured an empty day).
   const d = new Date();
-  d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
-  if ((d - new Date()) / 864e5 < 3) d.setDate(d.getDate() + 7);
+  const daysToSat = (6 - d.getDay() + 7) % 7 || 7;
+  d.setDate(d.getDate() + (daysToSat < 3 ? daysToSat + 7 : daysToSat));
   // Local calendar date, not UTC — toISOString would roll past midnight.
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 })();
