@@ -37,7 +37,7 @@ export function PricingTiers() {
               key={opt.value}
               onClick={() => setInterval(opt.value)}
               className={`rounded-full px-4 py-1.5 text-[13px] font-bold transition-colors ${
-                interval === opt.value ? "bg-brand text-white" : "text-ink-soft hover:text-ink"
+                interval === opt.value ? "bg-ink text-cream" : "text-ink-soft hover:text-ink"
               }`}
             >
               {opt.label}
@@ -55,28 +55,28 @@ export function PricingTiers() {
             <div
               key={plan.id}
               className={`relative flex flex-col rounded-3xl border bg-white p-6 ${
-                popular ? "border-brand shadow-lg shadow-brand/5 ring-1 ring-brand" : "border-sand-line"
+                popular ? "border-ink shadow-lg shadow-ink/5 ring-1 ring-ink" : "border-sand-line"
               }`}
             >
               {popular ? (
-                <span className="absolute -top-3 left-6 rounded-full bg-brand px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+                <span className="absolute -top-3 left-6 rounded-full bg-ink px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
                   Most popular
                 </span>
               ) : null}
               <div className="font-display text-lg font-bold text-ink">{plan.name}</div>
-              <p className="mt-0.5 text-[13.5px] font-medium text-ink-mute">{plan.tagline}</p>
+              <p className="mt-0.5 text-[13.5px] text-ink-soft">{plan.tagline}</p>
               <div className="mt-4 flex items-baseline gap-1">
                 <span className="font-display text-4xl font-extrabold tracking-tight text-ink">
                   {paid ? `$${Math.round(cents / 100)}` : "$0"}
                 </span>
-                <span className="text-sm font-semibold text-ink-mute">
+                <span className="text-sm font-semibold text-ink-soft">
                   {paid && yearly ? "/yr" : "/mo"}
                 </span>
               </div>
 
               <ul className="mt-5 space-y-2.5">
                 {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm font-medium text-ink-soft">
+                  <li key={f} className="flex items-start gap-2 text-sm text-ink-soft">
                     <Check size={17} weight="bold" className="mt-0.5 shrink-0 text-brand" />
                     {f}
                   </li>
@@ -88,7 +88,7 @@ export function PricingTiers() {
                 interval={paid ? interval : undefined}
                 className={`mt-6 flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-bold ${
                   popular
-                    ? "bg-brand text-white hover:bg-brand-deep"
+                    ? "bg-ink text-cream hover:bg-ink-deep"
                     : "border border-sand bg-white text-ink hover:bg-cream"
                 }`}
               >
@@ -98,7 +98,7 @@ export function PricingTiers() {
           );
         })}
       </div>
-      <p className="mt-5 text-center text-[13px] font-semibold text-ink-mute">
+      <p className="mt-5 text-center text-[13px] font-medium text-ink-soft">
         Every plan pays standard card processing ({processingFeeLabel()} per charge). Free-plan
         bookings carry a {freeFeePct}% platform fee; Solo and Growing pay none.
       </p>

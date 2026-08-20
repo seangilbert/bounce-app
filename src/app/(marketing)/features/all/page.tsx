@@ -70,14 +70,14 @@ export default function AllFeaturesPage() {
             <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink">
               Start on the free plan
             </h2>
-            <p className="mt-1.5 text-[15px] font-medium text-ink-mute">
+            <p className="mt-1.5 text-[15px] text-ink-soft">
               Your storefront, the quote assistant, and real bookings, with no card.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <SignupCta
               plan="free"
-              className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep active:translate-y-px"
+              className="inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-bold text-cream transition-colors hover:bg-ink-deep active:translate-y-px"
             >
               Start free <ArrowRight size={16} weight="bold" />
             </SignupCta>

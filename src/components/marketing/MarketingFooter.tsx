@@ -10,14 +10,14 @@ export function MarketingFooter() {
         <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-xs">
             <Wordmark />
-            <p className="mt-3 text-sm font-medium text-ink-mute">
+            <p className="mt-3 text-sm text-ink-soft">
               The all-in-one platform for party & equipment rental operators.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-8 sm:gap-14">
             <div>
               <div className="text-[13px] font-bold text-ink">Product</div>
-              <ul className="mt-3 space-y-2 text-sm font-medium text-ink-mute">
+              <ul className="mt-3 space-y-2 text-sm text-ink-soft">
                 <li><Link href="/features" className="hover:text-ink">Features</Link></li>
                 <li><Link href="/pricing" className="hover:text-ink">Pricing</Link></li>
                 <li><SignupCta plan="free" className="hover:text-ink">Start free</SignupCta></li>
@@ -26,14 +26,14 @@ export function MarketingFooter() {
             </div>
             <div>
               <div className="text-[13px] font-bold text-ink">Legal</div>
-              <ul className="mt-3 space-y-2 text-sm font-medium text-ink-mute">
+              <ul className="mt-3 space-y-2 text-sm text-ink-soft">
                 <li><Link href="/terms" className="hover:text-ink">Terms</Link></li>
                 <li><Link href="/privacy" className="hover:text-ink">Privacy</Link></li>
               </ul>
             </div>
           </div>
         </div>
-        <div className="mt-10 border-t border-sand-line pt-6 text-[13px] font-medium text-ink-faint">
+        <div className="mt-10 border-t border-sand-line pt-6 text-[13px] text-ink-soft">
           © {new Date().getFullYear()} Movables. All rights reserved.
         </div>
       </div>

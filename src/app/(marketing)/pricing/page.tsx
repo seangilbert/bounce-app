@@ -8,7 +8,7 @@ const solo = PLANS.solo.priceCents / 100;
 const growing = PLANS.growing.priceCents / 100;
 
 export const metadata: Metadata = {
-  title: "Pricing — Movables",
+  title: "Pricing | Movables",
   // Derived from lib/plans so the advertised numbers can't drift from billing.
   description: `Start free. Solo at $${solo}/mo and Growing at $${growing}/mo unlock unlimited quotes, e-signed contracts, team members, and more.`,
 };
@@ -44,7 +44,7 @@ export default function PricingPage() {
           <h1 className="font-display text-4xl font-extrabold tracking-tighter text-ink sm:text-5xl">
             Pricing built for operators
           </h1>
-          <p className="mt-4 text-lg font-medium text-ink-mute">
+          <p className="mt-4 text-lg text-ink-mute">
             Start free and upgrade as you grow. Every plan includes your storefront, the AI quote
             assistant, and direct payouts.
           </p>
@@ -52,7 +52,7 @@ export default function PricingPage() {
         <div className="mt-14">
           <PricingTiers />
         </div>
-        <p className="mt-6 text-center text-[13px] font-semibold text-ink-mute">
+        <p className="mt-6 text-center text-[13px] font-medium text-ink-soft">
           Paid plans include a 14-day free trial. Cancel anytime.
         </p>
       </section>
@@ -65,14 +65,28 @@ export default function PricingPage() {
           {FAQ.map((item) => (
             <div key={item.q} className="p-6">
               <h3 className="font-display text-lg font-bold text-ink">{item.q}</h3>
-              <p className="mt-1.5 text-sm font-medium text-ink-mute">{item.a}</p>
+              <p className="mt-1.5 text-sm text-ink-soft">{item.a}</p>
             </div>
           ))}
         </div>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "FAQPage",
+              mainEntity: FAQ.map((item) => ({
+                "@type": "Question",
+                name: item.q,
+                acceptedAnswer: { "@type": "Answer", text: item.a },
+              })),
+            }),
+          }}
+        />
         <div className="mt-12 text-center">
           <SignupCta
             plan="free"
-            className="inline-flex items-center rounded-full bg-brand px-7 py-3.5 text-sm font-bold text-white hover:bg-brand-deep"
+            className="inline-flex items-center rounded-full bg-ink px-7 py-3.5 text-sm font-bold text-cream hover:bg-ink-deep"
           >
             Get started free
           </SignupCta>

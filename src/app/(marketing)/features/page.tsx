@@ -18,7 +18,7 @@ import { SETUP_STEPS } from "@/components/operator/setup/steps";
 import type { SetupStepKey } from "@/lib/operator/setup";
 
 export const metadata: Metadata = {
-  title: "Features — Movables",
+  title: "Features | Movables",
   description:
     "Every part of Movables: AI quoting from your live catalog, one inbox for every channel, a branded storefront, oversell-proof bookings, payments and payouts, delivery routing, automated follow-ups, and a customer record that builds itself.",
   openGraph: {
@@ -128,14 +128,14 @@ function Hero({ groups }: { groups: FeatureGroup[] }) {
           <h1 className="font-display text-4xl font-extrabold leading-[1.05] tracking-tighter text-ink sm:text-5xl lg:text-6xl">
             Everything it takes to run a rental business.
           </h1>
-          <p className="mt-5 max-w-lg text-lg font-medium text-ink-soft">
+          <p className="mt-5 max-w-lg text-lg text-ink-soft">
             Quoting, booking, payments, delivery, and follow-up, automated by an assistant that knows
             your inventory.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <SignupCta
               plan="free"
-              className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep active:translate-y-px"
+              className="inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-bold text-cream transition-colors hover:bg-ink-deep active:translate-y-px"
             >
               Start free <ArrowRight size={16} weight="bold" />
             </SignupCta>
@@ -192,7 +192,7 @@ function Heading({
       <h2 className={`font-display text-3xl font-extrabold tracking-tighter sm:text-4xl ${head}`}>
         {group.headline}
       </h2>
-      <p className={`mt-3 max-w-xl text-lg font-medium ${body}`}>{group.body}</p>
+      <p className={`mt-3 max-w-xl text-lg ${body}`}>{group.body}</p>
     </div>
   );
 }
@@ -212,7 +212,7 @@ function Quoting({ group }: { group?: FeatureGroup }) {
         {/* TODO: screenshot slot, storefront chat with a priced quote card, ~900x620. */}
         <div className="divide-y divide-brand/10 lg:col-span-7">
           {group.highlights.map((h) => (
-            <p key={h.title} className="py-5 text-[15px] font-medium leading-relaxed text-ink-soft first:pt-0 last:pb-0">
+            <p key={h.title} className="py-5 text-[15px] leading-relaxed text-ink-soft first:pt-0 last:pb-0">
               <b className="font-display text-base font-bold text-ink">{h.title}. </b>
               {h.body}
             </p>
@@ -256,7 +256,7 @@ function Inbox({ group }: { group?: FeatureGroup }) {
                   </span>
                 ) : null}
                 <h3 className="font-display text-xl font-bold text-ink">{h.title}</h3>
-                <p className="mt-1.5 max-w-2xl text-sm font-medium text-ink-soft">{h.body}</p>
+                <p className="mt-1.5 max-w-2xl text-sm text-ink-soft">{h.body}</p>
               </div>
             );
           })}
@@ -278,7 +278,7 @@ function Storefront({ group }: { group?: FeatureGroup }) {
           {group.highlights.map((h) => (
             <div key={h.title} className="grid gap-2 py-6 md:grid-cols-12 md:gap-8">
               <dt className="font-display text-xl font-bold text-ink md:col-span-4">{h.title}</dt>
-              <dd className="text-[15px] font-medium leading-relaxed text-ink-soft md:col-span-8">{h.body}</dd>
+              <dd className="text-[15px] leading-relaxed text-ink-soft md:col-span-8">{h.body}</dd>
             </div>
           ))}
         </dl>
@@ -299,7 +299,7 @@ function Bookings({ group }: { group?: FeatureGroup }) {
           {group.highlights.map((h, i) => (
             <div key={h.title} className={i < wide ? "sm:col-span-2" : ""}>
               <h3 className="font-display text-lg font-bold text-white">{h.title}</h3>
-              <p className={`mt-1.5 text-sm font-medium text-cream/70 ${i < wide ? "max-w-2xl" : ""}`}>{h.body}</p>
+              <p className={`mt-1.5 text-sm text-cream/70 ${i < wide ? "max-w-2xl" : ""}`}>{h.body}</p>
             </div>
           ))}
         </div>
@@ -325,14 +325,14 @@ function Payments({ group }: { group?: FeatureGroup }) {
                 <CreditCard size={22} weight="fill" />
               </span>
               <h3 className="mt-4 font-display text-xl font-bold text-ink">{h.title}</h3>
-              <p className="mt-1.5 text-sm font-medium text-ink-soft">{h.body}</p>
+              <p className="mt-1.5 text-sm text-ink-soft">{h.body}</p>
             </div>
           ))}
         </div>
         {banner ? (
           <div className="mt-10 rounded-3xl border border-sand-line bg-gradient-to-r from-cream-2 to-brand/5 p-7">
             <h3 className="font-display text-xl font-bold text-ink">{banner.title}</h3>
-            <p className="mt-1.5 max-w-2xl text-sm font-medium text-ink-soft">{banner.body}</p>
+            <p className="mt-1.5 max-w-2xl text-sm text-ink-soft">{banner.body}</p>
           </div>
         ) : null}
       </div>
@@ -357,7 +357,7 @@ function TheDay({ group }: { group?: FeatureGroup }) {
           {group.highlights.map((h) => (
             <div key={h.title} className="lg:px-6 lg:first:pl-0 lg:last:pr-0">
               <h3 className="font-display text-lg font-bold text-ink">{h.title}</h3>
-              <p className="mt-1.5 text-sm font-medium text-ink-soft">{h.body}</p>
+              <p className="mt-1.5 text-sm text-ink-soft">{h.body}</p>
             </div>
           ))}
         </div>
@@ -381,13 +381,13 @@ function Agents({ group }: { group?: FeatureGroup }) {
             {roster.map((h) => (
               <div key={h.title} className="grid gap-2 p-6 sm:grid-cols-12 sm:gap-6 sm:p-7">
                 <h3 className="font-display text-lg font-bold text-ink sm:col-span-4">{h.title}</h3>
-                <p className="text-sm font-medium text-ink-soft sm:col-span-8">{h.body}</p>
+                <p className="text-sm text-ink-soft sm:col-span-8">{h.body}</p>
               </div>
             ))}
           </div>
           <div className="border-t border-sand-line bg-cream-2 p-6 sm:p-7">
             <h3 className="font-display text-lg font-bold text-ink">{rules.title}</h3>
-            <p className="mt-1.5 max-w-3xl text-sm font-medium text-ink-soft">{rules.body}</p>
+            <p className="mt-1.5 max-w-3xl text-sm text-ink-soft">{rules.body}</p>
           </div>
         </div>
       </div>
@@ -410,13 +410,13 @@ function Customers({ group }: { group?: FeatureGroup }) {
               <UsersThree size={24} weight="fill" />
             </span>
             <h3 className="mt-5 font-display text-2xl font-bold tracking-tight text-ink">{lead.title}</h3>
-            <p className="mt-2 text-[15px] font-medium leading-relaxed text-ink-soft">{lead.body}</p>
+            <p className="mt-2 text-[15px] leading-relaxed text-ink-soft">{lead.body}</p>
           </div>
           <div className="divide-y divide-sand lg:col-span-5">
             {rest.map((h) => (
               <div key={h.title} className="py-5 first:pt-0 last:pb-0">
                 <h3 className="font-display text-lg font-bold text-ink">{h.title}</h3>
-                <p className="mt-1 text-sm font-medium text-ink-soft">{h.body}</p>
+                <p className="mt-1 text-sm text-ink-soft">{h.body}</p>
               </div>
             ))}
           </div>
@@ -439,7 +439,7 @@ function Paperwork({ group }: { group?: FeatureGroup }) {
           <Heading group={group} className="mt-5" />
           <div className="mt-8 divide-y divide-sand-line">
             {group.highlights.map((h) => (
-              <p key={h.title} className="py-4 text-[15px] font-medium leading-relaxed text-ink-soft first:pt-0 last:pb-0">
+              <p key={h.title} className="py-4 text-[15px] leading-relaxed text-ink-soft first:pt-0 last:pb-0">
                 <b className="font-display text-base font-bold text-ink">{h.title}. </b>
                 {h.body}
               </p>
@@ -459,7 +459,7 @@ function Paperwork({ group }: { group?: FeatureGroup }) {
                 </li>
               ))}
             </ul>
-            <p className="mt-5 text-sm font-medium text-ink-mute">
+            <p className="mt-5 text-sm text-ink-soft">
               Insurance, licenses, inspections, and permits are the four we watch for expiry.
             </p>
           </div>
@@ -481,7 +481,7 @@ function Team({ group }: { group?: FeatureGroup }) {
             {group.highlights.map((h) => (
               <div key={h.title}>
                 <h3 className="font-display text-lg font-bold text-ink">{h.title}</h3>
-                <p className="mt-1.5 text-sm font-medium text-ink-soft">{h.body}</p>
+                <p className="mt-1.5 text-sm text-ink-soft">{h.body}</p>
               </div>
             ))}
           </div>
@@ -511,7 +511,7 @@ function Security({ group }: { group?: FeatureGroup }) {
         <Heading group={group} />
         <div className="mt-8 space-y-5">
           {group.highlights.map((h) => (
-            <p key={h.title} className="text-[15px] font-medium leading-relaxed text-ink-soft">
+            <p key={h.title} className="text-[15px] leading-relaxed text-ink-soft">
               <b className="font-display text-base font-bold text-ink">{h.title}. </b>
               {h.body}
             </p>
@@ -533,13 +533,13 @@ function Matrix({ groups }: { groups: FeatureGroup[] }) {
           <h2 className="font-display text-3xl font-extrabold tracking-tighter text-ink sm:text-4xl">
             The whole list, plan by plan
           </h2>
-          <p className="mt-3 max-w-xl text-lg font-medium text-ink-mute">
+          <p className="mt-3 max-w-xl text-lg text-ink-mute">
             All {rows} capabilities, grouped and compared across the three plans.
           </p>
         </div>
         <Link
           href="/features/all"
-          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep active:translate-y-px"
+          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-bold text-cream transition-colors hover:bg-ink-deep active:translate-y-px"
         >
           See the full list <ArrowRight size={16} weight="bold" />
         </Link>
@@ -558,14 +558,14 @@ function Close() {
             <h2 className="font-display text-3xl font-extrabold tracking-tighter text-ink sm:text-4xl">
               Three plans, one of them free
             </h2>
-            <p className="mt-3 text-lg font-medium text-ink-mute">
+            <p className="mt-3 text-lg text-ink-mute">
               Start free and upgrade when you&apos;re booking more than you can count.
             </p>
           </div>
           <div className="mt-12">
             <PricingTiers />
           </div>
-          <p className="mt-6 text-center text-[13px] font-semibold text-ink-mute">
+          <p className="mt-6 text-center text-[13px] font-medium text-ink-soft">
             Paid plans include a 14-day free trial. No credit card on Free.
           </p>
           <div className="mt-4 text-center">
@@ -585,7 +585,7 @@ function Close() {
             {FAQ.map((item) => (
               <div key={item.q} className="p-6">
                 <h3 className="font-display text-lg font-bold text-ink">{item.q}</h3>
-                <p className="mt-1.5 text-sm font-medium text-ink-mute">{item.a}</p>
+                <p className="mt-1.5 text-sm text-ink-soft">{item.a}</p>
               </div>
             ))}
           </div>
@@ -597,12 +597,12 @@ function Close() {
           <h2 className="mx-auto max-w-2xl font-display text-3xl font-extrabold tracking-tighter text-white sm:text-4xl">
             Put the whole thing to work this weekend
           </h2>
-          <p className="mx-auto mt-3 max-w-xl text-lg font-medium text-cream/70">
+          <p className="mx-auto mt-3 max-w-xl text-lg text-cream/70">
             Your catalog, your storefront, and an assistant that answers while you&apos;re on a job.
           </p>
           <SignupCta
             plan="free"
-            className="mt-8 inline-flex items-center gap-2 rounded-full bg-brand px-7 py-3.5 text-sm font-bold text-white transition-colors hover:bg-brand-deep active:translate-y-px"
+            className="mt-8 inline-flex items-center gap-2 rounded-full bg-cream px-7 py-3.5 text-sm font-bold text-ink transition-colors hover:bg-white active:translate-y-px"
           >
             Start free <ArrowRight size={16} weight="bold" />
           </SignupCta>

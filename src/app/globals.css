@@ -36,3 +36,43 @@ body {
     );
   }
 }
+
+@layer utilities {
+  /* Hero chat demo (marketing home): message entrance + typing dots. */
+  @keyframes chat-pop {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .animate-chat-pop {
+    animation: chat-pop 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes chat-dot {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-3px);
+      opacity: 1;
+    }
+  }
+  .animate-chat-dot {
+    animation: chat-dot 1.1s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-chat-pop,
+    .animate-chat-dot {
+      animation: none;
+    }
+  }
+}

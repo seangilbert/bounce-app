@@ -12,6 +12,7 @@ const config: Config = {
         // Ink (text) — warm near-black to light muted brown.
         ink: {
           DEFAULT: "#2A2320",
+          deep: "#1B1613", // pressed/hover state for ink CTAs
           soft: "#6B5F57",
           mute: "#8C8079",
           faint: "#B4A79C",

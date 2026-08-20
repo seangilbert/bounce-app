@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Wordmark } from "./Wordmark";
+import { MobileMenu } from "@/components/marketing/MobileMenu";
 import { SignupCta } from "@/components/marketing/SignupCta";
 
 /** Sticky public header for the marketing pages. Server component — no client JS. */
@@ -23,16 +24,17 @@ export function MarketingHeader() {
           </Link>
           <Link
             href="/login"
-            className="rounded-full px-3.5 py-2 text-sm font-bold text-ink-soft hover:text-ink"
+            className="hidden rounded-full px-3.5 py-2 text-sm font-bold text-ink-soft hover:text-ink sm:block"
           >
             Log in
           </Link>
           <SignupCta
             plan="free"
-            className="rounded-full bg-brand px-4 py-2 text-sm font-bold text-white hover:bg-brand-deep"
+            className="rounded-full bg-ink px-4 py-2 text-sm font-bold text-cream hover:bg-ink-deep"
           >
             Start free
           </SignupCta>
+          <MobileMenu />
         </nav>
       </div>
     </header>

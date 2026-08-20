@@ -38,7 +38,7 @@ export function FeatureMatrix({ groups }: { groups: FeatureGroup[] }) {
                   <th scope="row" className="py-2.5 pr-4 text-sm font-medium text-ink-soft">
                     {cap.label}
                     {cap.detail ? (
-                      <span className="mt-0.5 block text-[12.5px] font-medium text-ink-faint">{cap.detail}</span>
+                      <span className="mt-0.5 block text-[12.5px] text-ink-soft">{cap.detail}</span>
                     ) : null}
                   </th>
                   {PLAN_LIST.map((plan) => {
