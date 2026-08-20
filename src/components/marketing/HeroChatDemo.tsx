@@ -117,7 +117,7 @@ export function HeroChatDemo() {
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand text-white">
           <ChatCircleText size={16} weight="fill" />
         </span>
-        <div className="text-sm font-bold text-ink">Sunny Party Rentals</div>
+        <div className="text-sm font-bold text-ink">Sunny Rentals</div>
         <span className="ml-auto flex items-center gap-1 text-[11px] font-bold text-teal">
           <span className="h-1.5 w-1.5 rounded-full bg-teal" /> Online
         </span>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -40,9 +41,10 @@ export const metadata: Metadata = {
  * - Every section is a different layout family on purpose. Nothing here is a
  *   three-equal-cards grid.
  * - Server components throughout, so the page stays statically prerendered.
- * - IMAGERY: this ships as a typographic v1. The eight screenshot slots worth
- *   filling are marked with TODO comments below. Real product shots go in those
- *   places, sized and captioned. Do not replace them with div mockups.
+ * - IMAGERY: real product screenshots (public/marketing/, captured against the
+ *   dev demo operator by scripts/marketing_shots.mjs after scripts/
+ *   seed_showcase.mjs stages the data). Re-run those two scripts to refresh —
+ *   do not replace the shots with div mockups.
  */
 
 /** Nine setup steps, titles pulled from the in-app checklist so they can't drift. */
@@ -209,7 +211,6 @@ function Quoting({ group }: { group?: FeatureGroup }) {
           </span>
           <Heading group={group} className="mt-5" />
         </div>
-        {/* TODO: screenshot slot, storefront chat with a priced quote card, ~900x620. */}
         <div className="divide-y divide-brand/10 lg:col-span-7">
           {group.highlights.map((h) => (
             <p key={h.title} className="py-5 text-[15px] leading-relaxed text-ink-soft first:pt-0 last:pb-0">
@@ -218,8 +219,46 @@ function Quoting({ group }: { group?: FeatureGroup }) {
             </p>
           ))}
         </div>
+        <Shot
+          src="/marketing/quote-chat.png"
+          alt="A storefront chat where the AI answers an availability question with a priced quote card"
+          width={1800}
+          height={1800}
+          caption="A live storefront quote: item matched, date checked, deposit computed."
+          className="mx-auto mt-2 w-full max-w-2xl lg:col-span-12"
+        />
       </div>
     </section>
+  );
+}
+
+
+/** A real product screenshot in the standard marketing frame. Dimensions are
+ *  the PNG's intrinsic 2x pixels; captions are plain and functional. */
+function Shot({
+  src,
+  alt,
+  width,
+  height,
+  caption,
+  className = "",
+  imgClassName = "",
+}: {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  caption: string;
+  className?: string;
+  imgClassName?: string;
+}) {
+  return (
+    <figure className={className}>
+      <div className="overflow-hidden rounded-3xl border border-sand-line bg-white shadow-xl shadow-ink/5">
+        <Image src={src} alt={alt} width={width} height={height} className={`w-full ${imgClassName}`} />
+      </div>
+      <figcaption className="mt-3 text-center text-[13px] font-medium text-ink-soft">{caption}</figcaption>
+    </figure>
   );
 }
 
@@ -237,8 +276,15 @@ function Inbox({ group }: { group?: FeatureGroup }) {
     <section id={group.id} className="scroll-mt-24">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
         <Heading group={group} />
-        {/* TODO: screenshot slot, inbox list plus thread with channel labels, ~1200x760. */}
-        <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-2">
+        <Shot
+          src="/marketing/inbox.png"
+          alt="The Movables inbox: inquiry list beside an open thread the AI is handling"
+          width={2880}
+          height={1600}
+          caption="One inbox: the AI answers, flags what needs you, and you can take over any thread."
+          className="mt-12"
+        />
+        <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2">
           {group.highlights.map((h, i) => {
             const isWide = i < wide;
             return (
@@ -273,8 +319,15 @@ function Storefront({ group }: { group?: FeatureGroup }) {
     <section id={group.id} className="scroll-mt-24 border-y border-sand-line bg-cream-2">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
         <Heading group={group} />
-        {/* TODO: screenshot slot, storefront catalog on desktop and phone, ~1200x800. */}
-        <dl className="mt-12 divide-y divide-sand">
+        <Shot
+          src="/marketing/storefront.png"
+          alt="A branded storefront with the AI chat beside a browsable catalog with live availability"
+          width={2400}
+          height={1600}
+          caption="Your storefront: chat on the left, catalog with live availability on the right."
+          className="mt-12"
+        />
+        <dl className="mt-8 divide-y divide-sand">
           {group.highlights.map((h) => (
             <div key={h.title} className="grid gap-2 py-6 md:grid-cols-12 md:gap-8">
               <dt className="font-display text-xl font-bold text-ink md:col-span-4">{h.title}</dt>
@@ -352,7 +405,6 @@ function TheDay({ group }: { group?: FeatureGroup }) {
             <Truck size={24} weight="fill" />
           </span>
         </div>
-        {/* TODO: screenshot slot, route sheet on a phone at real size, ~420x860. */}
         <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-0 lg:divide-x lg:divide-sand">
           {group.highlights.map((h) => (
             <div key={h.title} className="lg:px-6 lg:first:pl-0 lg:last:pr-0">
@@ -361,6 +413,15 @@ function TheDay({ group }: { group?: FeatureGroup }) {
             </div>
           ))}
         </div>
+        <Shot
+          src="/marketing/routes.png"
+          alt="The day's delivery route on a phone: timed stops with map, call, and text shortcuts"
+          width={840}
+          height={1720}
+          caption="The route sheet your driver actually uses, on the phone already in their pocket."
+          className="mx-auto mt-12 w-full max-w-[340px]"
+          imgClassName="rounded-3xl"
+        />
       </div>
     </section>
   );
@@ -375,8 +436,15 @@ function Agents({ group }: { group?: FeatureGroup }) {
     <section id={group.id} className="scroll-mt-24">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
         <Heading group={group} />
-        {/* TODO: screenshot slot, the Agents page with toggles and activity counts, ~1000x760. */}
-        <div className="mt-12 overflow-hidden rounded-3xl border border-sand-line bg-white">
+        <Shot
+          src="/marketing/agents.png"
+          alt="The Agents page: each automation with its activity count and an on/off toggle"
+          width={2000}
+          height={1520}
+          caption="Each agent shows its work — and any of them can be switched off."
+          className="mx-auto mt-12 max-w-3xl"
+        />
+        <div className="mt-10 overflow-hidden rounded-3xl border border-sand-line bg-white">
           <div className="divide-y divide-sand-line">
             {roster.map((h) => (
               <div key={h.title} className="grid gap-2 p-6 sm:grid-cols-12 sm:gap-6 sm:p-7">
@@ -403,8 +471,15 @@ function Customers({ group }: { group?: FeatureGroup }) {
     <section id={group.id} className="scroll-mt-24 border-y border-sand-line bg-cream-2">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
         <Heading group={group} />
-        {/* TODO: screenshot slot, customer profile with stats and timeline, ~1100x720. */}
-        <div className="mt-12 grid gap-10 lg:grid-cols-12">
+        <Shot
+          src="/marketing/customer.png"
+          alt="A customer profile with booking totals, private notes, and rental history"
+          width={2200}
+          height={1440}
+          caption="A repeat customer's record: totals, private notes, and every past rental."
+          className="mt-12"
+        />
+        <div className="mt-10 grid gap-10 lg:grid-cols-12">
           <div className="rounded-3xl border border-brand/15 bg-gradient-to-br from-brand/[0.08] to-brand/[0.02] p-8 lg:col-span-7">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand text-white">
               <UsersThree size={24} weight="fill" />
