@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionMembership } from "@/lib/operator/session";
 import { planCapabilities } from "@/lib/plans";
-import { getQuoteQuota } from "@/lib/usage/ai-quotes";
+import { getAiQuoteUsage, getQuoteQuota } from "@/lib/usage/ai-quotes";
 import { getAgentStats } from "@/lib/reminders/stats";
 import { autoSendEnabled } from "@/lib/esign/agreements";
 import { AgentsView } from "@/components/operator/agents/AgentsView";
@@ -18,7 +18,13 @@ export default async function AgentsPage() {
   if (membership.role !== "admin") redirect("/dashboard");
   const op = membership.operator;
 
-  const [stats, quota] = await Promise.all([getAgentStats(op.id), getQuoteQuota(op)]);
+  // getQuoteQuota skips the usage read on unlimited plans (hot-path gating
+  // optimization), so read the display count directly.
+  const [stats, quota, aiUsed] = await Promise.all([
+    getAgentStats(op.id),
+    getQuoteQuota(op),
+    getAiQuoteUsage(op.id),
+  ]);
 
   return (
     <AgentsView
@@ -31,7 +37,7 @@ export default async function AgentsPage() {
       }}
       stats={stats}
       // Infinity doesn't survive the RSC boundary — null = unlimited.
-      aiQuota={{ used: quota.used, limit: Number.isFinite(quota.limit) ? quota.limit : null }}
+      aiQuota={{ used: aiUsed, limit: Number.isFinite(quota.limit) ? quota.limit : null }}
       contractAutoSendLive={autoSendEnabled()}
       assistantInstructions={op.assistantInstructions}
     />

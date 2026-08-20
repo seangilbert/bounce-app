@@ -16,7 +16,6 @@ import {
 } from "@/lib/inquiries/repo";
 import { notifyOperatorNewInquiry } from "@/lib/email";
 import { getQuoteQuota, incrementAiQuoteUsage } from "@/lib/usage/ai-quotes";
-import { planCapabilities } from "@/lib/plans";
 import { listAssistantPromos } from "@/lib/promos/repo";
 import { buildOperatorConfig } from "./operator-config";
 import type { Operator } from "@/lib/inventory/types";
@@ -497,7 +496,6 @@ async function runInquiryTurn(inquiry: Inquiry, operator: Operator): Promise<Con
   // an in-progress thread continues so we don't abandon a customer mid-chat. The
   // count is bumped once below, when the inbox inquiry is first persisted. Paid
   // plans are unlimited and getQuoteQuota short-circuits without a DB read.
-  const metered = Number.isFinite(planCapabilities(operator).aiQuotesPerMonth);
   if (!inquiry.inquiryId) {
     const quota = await getQuoteQuota(operator);
     if (quota.atLimit) return cappedInquiry(operator, inquiry);
@@ -667,15 +665,14 @@ async function runInquiryTurn(inquiry: Inquiry, operator: Operator): Promise<Con
         quote: { lineItems: lines, subtotal, deliveryFee: bd.deliveryFee, tax: bd.tax, total: bd.total, suggestedDeposit, currency: "usd" },
       });
       inquiryId = created.id;
-      // Count this conversation once against the operator's monthly AI-quote
-      // cap (metered plans only). Best-effort — a metering miss shouldn't fail
-      // a quote the customer already received.
-      if (metered) {
-        try {
-          await incrementAiQuoteUsage(operator.id);
-        } catch (err) {
-          console.error("[usage] AI-quote increment failed:", err);
-        }
+      // Count this conversation once for every plan — the Free cap gates on it,
+      // and paid operators see the number on the Agents page ("shows its work").
+      // Best-effort — a metering miss shouldn't fail a quote the customer
+      // already received.
+      try {
+        await incrementAiQuoteUsage(operator.id);
+      } catch (err) {
+        console.error("[usage] AI-quote increment failed:", err);
       }
     } catch (err) {
       console.error("[inquiries] failed to persist inquiry:", err);
