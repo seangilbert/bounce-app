@@ -60,6 +60,7 @@ const ALLOWLIST = new Set<string>([
   //   that select only safe columns in code (RLS is row-level; a policy would
   //   expose sensitive columns — see Phase 3 decision). —
   "src/lib/inventory/repo.ts", // getOperatorBySlug + shared listItems (public catalog)
+  "src/lib/import/repo.ts", // catalog-import job rows — admin-only server actions, multi-row write machinery (deny-all RLS table)
   "src/lib/inventory/availability.ts", // reserved_peak RPC (aggregate, no PII)
   "src/lib/bookings/repo.ts", // guest checkout writes + shared booking mutations
   "src/lib/orders/repo.ts", // order writes are all webhook/checkout

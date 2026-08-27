@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Package, Plus, CaretRight } from "@phosphor-icons/react/dist/ssr";
+import { Package, Plus, CaretRight, FileCsv } from "@phosphor-icons/react/dist/ssr";
 import { bookableUnits, outOfServiceUnits, type Item } from "@/lib/inventory/types";
 import { ItemDrawer } from "./ItemDrawer";
 import { catMeta, money, unitLabel } from "./shared";
@@ -37,13 +37,21 @@ export function InventoryManager({
           </p>
         </div>
         {isAdmin ? (
-          <button
-            onClick={() => setCreating(true)}
-            className="flex flex-shrink-0 items-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep"
-          >
-            <Plus size={16} weight="bold" /> <span className="hidden sm:inline">Add item</span>
-            <span className="sm:hidden">Add</span>
-          </button>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <button
+              onClick={() => router.push("/inventory/import")}
+              className="hidden items-center gap-2 rounded-full border border-sand-line bg-white px-5 py-3 text-sm font-bold text-ink-soft transition-colors hover:border-sand sm:flex"
+            >
+              <FileCsv size={16} weight="bold" /> Import
+            </button>
+            <button
+              onClick={() => setCreating(true)}
+              className="flex items-center gap-2 rounded-full bg-brand px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-deep"
+            >
+              <Plus size={16} weight="bold" /> <span className="hidden sm:inline">Add item</span>
+              <span className="sm:hidden">Add</span>
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -72,12 +80,20 @@ export function InventoryManager({
               Add your first rental item so customers can browse and book it on your storefront.
             </p>
             {isAdmin ? (
-              <button
-                onClick={() => setCreating(true)}
-                className="mt-2 flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-deep"
-              >
-                <Plus size={15} weight="bold" /> Add your first item
-              </button>
+              <div className="mt-2 flex flex-col items-center gap-2 sm:flex-row">
+                <button
+                  onClick={() => setCreating(true)}
+                  className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-deep"
+                >
+                  <Plus size={15} weight="bold" /> Add your first item
+                </button>
+                <button
+                  onClick={() => router.push("/inventory/import")}
+                  className="flex items-center gap-2 rounded-full border border-sand-line bg-white px-5 py-2.5 text-sm font-bold text-ink-soft hover:border-sand"
+                >
+                  <FileCsv size={15} weight="bold" /> Import from a spreadsheet
+                </button>
+              </div>
             ) : null}
           </div>
         ) : (
