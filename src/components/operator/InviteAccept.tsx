@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CircleNotch } from "@phosphor-icons/react/dist/ssr";
 import { createClient } from "@/utils/supabase/client";
+import { signOutResilient } from "@/lib/auth/sign-out-client";
 import { roleLabel, type MemberRole } from "@/lib/operator/roles";
 import { acceptInviteAction, acceptInviteWithSignupAction } from "@/app/invite/actions";
 
@@ -29,7 +30,7 @@ export function InviteAccept({
   const wrongAccount = !!sessionEmail && !isInvitedPerson;
 
   async function signOutAndReload() {
-    await createClient().auth.signOut();
+    await signOutResilient();
     router.refresh();
   }
   const [password, setPassword] = useState("");

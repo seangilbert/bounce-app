@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CircleNotch, CheckCircle, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { createClient } from "@/utils/supabase/client";
+import { signOutResilient } from "@/lib/auth/sign-out-client";
 
 function Card({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
@@ -75,7 +76,7 @@ export function AccountManager({
   }
 
   async function signOut() {
-    await createClient().auth.signOut();
+    await signOutResilient();
     router.push("/login");
     router.refresh();
   }

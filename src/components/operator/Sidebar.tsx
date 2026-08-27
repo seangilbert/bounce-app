@@ -9,7 +9,7 @@ import { OperatorSwitcher } from "./OperatorSwitcher";
 import type { OperatorOption } from "@/lib/operator/session";
 import { calFilters, type CatFilter } from "@/lib/operator/calendar";
 import { useNeedsHumanCount } from "@/components/operator/useNeedsHumanCount";
-import { createClient } from "@/utils/supabase/client";
+import { signOutResilient } from "@/lib/auth/sign-out-client";
 import type { Operator } from "@/lib/inventory/types";
 
 function initialsOf(name: string): string {
@@ -77,7 +77,7 @@ export function Sidebar({
   };
 
   async function signOut() {
-    await createClient().auth.signOut();
+    await signOutResilient();
     router.push("/login");
     router.refresh();
   }
