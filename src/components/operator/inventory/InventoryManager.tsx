@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Package, Plus, CaretRight, FileCsv } from "@phosphor-icons/react/dist/ssr";
 import { bookableUnits, outOfServiceUnits, type Item } from "@/lib/inventory/types";
 import { ItemDrawer } from "./ItemDrawer";
+import { ChooseLiveDialog } from "./ChooseLiveDialog";
 import { catMeta, money, unitLabel } from "./shared";
 import { UpgradeButton } from "@/components/operator/UpgradeButton";
 
@@ -20,9 +21,13 @@ export function InventoryManager({
 }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
+  const [choosingLive, setChoosingLive] = useState(false);
   const liveCount = items.filter((i) => i.active).length;
   const hiddenCount = items.length - liveCount;
   const atCap = itemLimit !== null && liveCount >= itemLimit;
+  /** Downgrade aftermath: more items live than the plan serves — the read-time
+   *  guard is already trimming the storefront; the operator should choose. */
+  const overCap = itemLimit !== null && liveCount > itemLimit;
 
   return (
     <div className="flex w-full flex-col">
@@ -55,9 +60,27 @@ export function InventoryManager({
         ) : null}
       </div>
 
+      {/* Over cap after a downgrade: the storefront is serving only the oldest
+          {itemLimit} live items — make choosing deliberate, not silent. */}
+      {isAdmin && overCap && itemLimit !== null ? (
+        <div className="mx-5 mt-4 rounded-xl bg-amber-tint/60 px-4 py-3 lg:mx-8">
+          <p className="text-[13.5px] font-semibold text-ink-soft">
+            Your plan includes {itemLimit} live items, and {liveCount} are marked live — right now
+            your storefront shows only your {itemLimit} oldest. Pick which ones stay live; the rest
+            are saved as hidden.
+          </p>
+          <button
+            onClick={() => setChoosingLive(true)}
+            className="mt-2 rounded-full bg-ink px-4 py-2 text-[13px] font-bold text-white hover:bg-ink/80"
+          >
+            Choose live items
+          </button>
+        </div>
+      ) : null}
+
       {/* Cap runway: surface the Free-plan live-item limit BEFORE the action
           rejects, with the way out. Shown from one-slot-short onward. */}
-      {isAdmin && itemLimit !== null && liveCount >= itemLimit - 1 ? (
+      {isAdmin && !overCap && itemLimit !== null && liveCount >= itemLimit - 1 ? (
         <div className="mx-5 mt-4 rounded-xl bg-brand-tint/50 px-4 py-3 lg:mx-8">
           <p className="text-[13.5px] font-semibold text-ink-soft">
             {atCap
@@ -154,6 +177,17 @@ export function InventoryManager({
           onClose={() => setCreating(false)}
           onSaved={() => {
             setCreating(false);
+            router.refresh();
+          }}
+        />
+      ) : null}
+      {choosingLive && itemLimit !== null ? (
+        <ChooseLiveDialog
+          items={items}
+          itemLimit={itemLimit}
+          onClose={() => setChoosingLive(false)}
+          onDone={() => {
+            setChoosingLive(false);
             router.refresh();
           }}
         />

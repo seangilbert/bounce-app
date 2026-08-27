@@ -13,6 +13,7 @@ import {
 import { type EquipmentItem, type Item } from "@/lib/inventory/types";
 import { createItemAction, updateItemAction, deleteItemAction } from "@/app/(operator)/inventory/actions";
 import { CATS, catMeta, Field, type Category } from "./shared";
+import { SwapDialog } from "./SwapDialog";
 
 interface DraftForm {
   name: string;
@@ -119,6 +120,9 @@ export function ItemDrawer({
   const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Set when the live-item cap blocked the save — unlocks the swap/save-hidden ways out. */
+  const [capBlocked, setCapBlocked] = useState(false);
+  const [swapping, setSwapping] = useState(false);
 
   const set = <K extends keyof DraftForm>(k: K, v: DraftForm[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const priceCents = Math.round(parseFloat(draft.price || "0") * 100);
@@ -159,9 +163,10 @@ export function ItemDrawer({
   const makePrimary = (url: string) =>
     setDraft((d) => ({ ...d, images: [url, ...d.images.filter((u) => u !== url)] }));
 
-  async function save() {
+  async function save(overrideActive?: boolean) {
     setSubmitting(true);
     setError(null);
+    setCapBlocked(false);
     const payload = {
       name: draft.name.trim(),
       category: draft.category,
@@ -178,12 +183,13 @@ export function ItemDrawer({
       footprint: { w: footFt(draft.footW), l: footFt(draft.footL), h: footFt(draft.footH) },
       powerRequired: draft.powerRequired,
       images: draft.images,
-      active: draft.active,
+      active: overrideActive ?? draft.active,
     };
     const res = item ? await updateItemAction(item.id, payload) : await createItemAction(payload);
     if (res.ok) onSaved();
     else {
       setError(res.error);
+      setCapBlocked(res.code === "live_cap");
       setSubmitting(false);
     }
   }
@@ -460,6 +466,25 @@ export function ItemDrawer({
               {error}
             </div>
           ) : null}
+          {capBlocked ? (
+            <div className="flex flex-wrap gap-2">
+              {item ? (
+                <button
+                  onClick={() => setSwapping(true)}
+                  className="rounded-full border border-sand bg-white px-4 py-2 text-[13px] font-bold text-ink-soft hover:border-brand"
+                >
+                  Swap with a live item
+                </button>
+              ) : null}
+              <button
+                onClick={() => void save(false)}
+                disabled={submitting}
+                className="rounded-full border border-sand bg-white px-4 py-2 text-[13px] font-bold text-ink-soft hover:border-brand disabled:opacity-50"
+              >
+                Save as hidden instead
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-3 border-t border-sand px-5 py-4">
@@ -474,7 +499,7 @@ export function ItemDrawer({
             </button>
           ) : null}
           <button
-            onClick={save}
+            onClick={() => void save()}
             disabled={!valid || submitting || deleting}
             className="flex flex-1 items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-sand disabled:text-ink-mute"
           >
@@ -490,6 +515,18 @@ export function ItemDrawer({
           </button>
         </div>
       </div>
+      {swapping && item ? (
+        <SwapDialog
+          activateId={item.id}
+          activateName={draft.name || item.name}
+          onClose={() => setSwapping(false)}
+          onDone={() => {
+            // Slots are traded server-side; persist the rest of the edits live.
+            setSwapping(false);
+            void save(true);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

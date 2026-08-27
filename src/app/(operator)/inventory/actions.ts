@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/operator/session";
-import { createItem, updateItem, deleteItem, countItems, getItem } from "@/lib/inventory/repo";
+import { createItem, updateItem, deleteItem, countItems, getItem, listItems } from "@/lib/inventory/repo";
 import { getItemImages, removeItemPhotos } from "@/lib/inventory/photos";
 import { MAX_TOTAL_ITEMS } from "@/lib/inventory/live-cap";
 import { planCapabilities, effectivePlanId } from "@/lib/plans";
@@ -35,14 +35,24 @@ const ItemInput = z.object({
   active: z.boolean().optional(),
 });
 
-export type ActionResult = { ok: true } | { ok: false; error: string };
+export type ActionResult =
+  | { ok: true }
+  | { ok: false; error: string; /** set when the live-item cap blocked the write, so the UI can offer a swap */ code?: "live_cap" };
 
 /** Plan caps apply to LIVE items only (hidden items are always safe to keep),
  *  so the message points at the two ways out: hide something, or upgrade. */
-function liveCapError(op: { plan: string | null; subscriptionStatus: string | null; billingExempt?: boolean | null }, cap: number): string {
-  return effectivePlanId(op) === "free"
-    ? `The Free plan is limited to ${cap} live items. Hide another item first, or upgrade — hidden items stay saved.`
-    : `Your plan is limited to ${cap} live items. Hide another item first.`;
+function liveCapError(
+  op: { plan: string | null; subscriptionStatus: string | null; billingExempt?: boolean | null },
+  cap: number,
+): { ok: false; error: string; code: "live_cap" } {
+  return {
+    ok: false,
+    code: "live_cap",
+    error:
+      effectivePlanId(op) === "free"
+        ? `The Free plan is limited to ${cap} live items. Hide another item first, or upgrade — hidden items stay saved.`
+        : `Your plan is limited to ${cap} live items. Hide another item first.`,
+  };
 }
 
 export async function createItemAction(input: unknown): Promise<ActionResult> {
@@ -64,7 +74,7 @@ export async function createItemAction(input: unknown): Promise<ActionResult> {
     return { ok: false, error: `Catalogs are limited to ${MAX_TOTAL_ITEMS} items.` };
   }
   if (willBeLive && Number.isFinite(cap) && live >= cap) {
-    return { ok: false, error: liveCapError(op, cap) };
+    return liveCapError(op, cap);
   }
   try {
     await createItem({
@@ -98,7 +108,7 @@ export async function updateItemAction(id: string, input: unknown): Promise<Acti
         !current.active &&
         (await countItems(op.id, { activeOnly: true })) >= cap
       ) {
-        return { ok: false, error: liveCapError(op, cap) };
+        return liveCapError(op, cap);
       }
     }
   }
@@ -120,6 +130,71 @@ export async function updateItemAction(id: string, input: unknown): Promise<Acti
     }
     return { ok: false, error: msg };
   }
+}
+
+/** The operator's live items, trimmed for the swap picker. */
+export async function listSwapCandidatesAction(): Promise<
+  { ok: true; items: { id: string; name: string; basePrice: number }[] } | { ok: false; error: string }
+> {
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const items = await listItems(g.membership.operator.id, { activeOnly: true });
+  return {
+    ok: true,
+    items: items.map((i) => ({ id: i.id, name: i.name, basePrice: i.basePrice })),
+  };
+}
+
+/** Trade a live slot: hide one live item, make a hidden one live. Deactivates
+ *  first so the pair never exceeds the cap; the activate is re-checked against
+ *  the cap in case something changed underneath. */
+export async function swapLiveAction(activateId: string, deactivateId: string): Promise<ActionResult> {
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
+  if (activateId === deactivateId) return { ok: false, error: "Pick two different items." };
+
+  const [toActivate, toDeactivate] = await Promise.all([getItem(activateId), getItem(deactivateId)]);
+  if (!toActivate || toActivate.operatorId !== op.id || toActivate.active) {
+    return { ok: false, error: "That item can't be made live." };
+  }
+  if (!toDeactivate || toDeactivate.operatorId !== op.id || !toDeactivate.active) {
+    return { ok: false, error: "That item isn't live anymore — refresh and try again." };
+  }
+
+  await updateItem(op.id, deactivateId, { active: false });
+  const cap = planCapabilities(op).maxItems;
+  if (Number.isFinite(cap) && (await countItems(op.id, { activeOnly: true })) >= cap) {
+    return liveCapError(op, cap); // freed slot was taken concurrently; first item stays hidden
+  }
+  await updateItem(op.id, activateId, { active: true });
+  revalidatePath("/inventory");
+  return { ok: true };
+}
+
+/** Set exactly which items are live — the "pick your live items" moment after
+ *  a downgrade leaves more items live than the plan allows. */
+export async function chooseLiveItemsAction(ids: unknown): Promise<ActionResult> {
+  const g = await requireAdmin();
+  if (!g.ok) return { ok: false, error: g.error };
+  const op = g.membership.operator;
+  const p = z.array(z.string().uuid()).max(9999).safeParse(ids);
+  if (!p.success) return { ok: false, error: "Invalid selection." };
+  const chosen = new Set(p.data);
+  const cap = planCapabilities(op).maxItems;
+  if (Number.isFinite(cap) && chosen.size > cap) {
+    return { ok: false, error: `Your plan allows ${cap} live items — you picked ${chosen.size}.` };
+  }
+  const items = await listItems(op.id);
+  // Deactivate first so activations always have room.
+  for (const i of items) {
+    if (i.active && !chosen.has(i.id)) await updateItem(op.id, i.id, { active: false });
+  }
+  for (const i of items) {
+    if (!i.active && chosen.has(i.id)) await updateItem(op.id, i.id, { active: true });
+  }
+  revalidatePath("/inventory");
+  return { ok: true };
 }
 
 export async function deleteItemAction(id: string): Promise<ActionResult> {
