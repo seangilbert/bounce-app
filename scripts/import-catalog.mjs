@@ -1,17 +1,25 @@
-// Catalog import: extract inventory items from an operator's spreadsheet into
-// Movables item drafts — the concierge-migration tool and the future import
-// agent's engine. One structured-output model call maps arbitrary CSV shapes
-// (any column names, messy dimension strings, dollar prices) onto the item
-// schema; nothing is written unless --commit is passed.
+// Catalog import: extract inventory items from an operator's spreadsheet
+// and/or their public website into Movables item drafts — the concierge-
+// migration tool and the future import agent's engine. One structured-output
+// model call maps arbitrary CSV shapes (any column names, messy dimension
+// strings, dollar prices) and crawled catalog pages onto the item schema;
+// nothing is written unless --commit is passed.
 //
-//   node --env-file=.env.local scripts/import-catalog.mjs <file.csv> [options]
+//   node --env-file=.env.local scripts/import-catalog.mjs [<file.csv>] [options]
 //
 // Options:
+//   --site <url>          crawl the operator's public catalog from this URL
+//                         (same-host, depth 2, capped) and merge: the sheet is
+//                         authority for quantities, the site for photos + copy
 //   --operator <id|slug>  operator to import into (required with --commit)
 //   --commit              insert the staged items (default: dry run)
 //   --out <path>          staged-JSON path (default: <file>.staged.json)
+//   --max-pages <n>       crawl page cap (default 50)
 //
-// Dry run writes staged JSON for review; --commit also fetches any http image
+// The crawl is for operator-requested migration of the operator's OWN site:
+// public pages only, sequential with a delay, identified user-agent.
+//
+// Dry run writes staged JSON for review; --commit also fetches staged image
 // URLs into the item-photos bucket so imported items never depend on the old
 // site staying up. Items whose name already exists for the operator are
 // skipped, so reruns don't duplicate.
@@ -40,9 +48,11 @@ const has = (name) => {
 const commit = has("--commit");
 const operatorRef = flag("--operator");
 const outPath = flag("--out");
-const csvPath = args[0];
-if (!csvPath) {
-  console.error("usage: node --env-file=.env.local scripts/import-catalog.mjs <file.csv> [--operator <id|slug>] [--commit] [--out <path>]");
+const siteUrl = flag("--site");
+const maxPages = Number(flag("--max-pages") ?? 50);
+const csvPath = args[0] ?? null;
+if (!csvPath && !siteUrl) {
+  console.error("usage: node --env-file=.env.local scripts/import-catalog.mjs [<file.csv>] [--site <url>] [--operator <id|slug>] [--commit] [--out <path>]");
   process.exit(1);
 }
 
@@ -68,6 +78,90 @@ function parseCsv(text) {
   row.push(field);
   if (row.some((f) => f !== "")) rows.push(row);
   return rows;
+}
+
+// ---- site crawl -------------------------------------------------------------
+// Same-host BFS from the start URL, depth <= 2, sequential + delayed — the
+// polite shape for "the operator asked us to read their own catalog". Pages
+// are reduced to {url, title, images, text} so 50 pages fit one model call.
+const SKIP_EXT = /\.(pdf|jpe?g|png|webp|gif|svg|css|js|ico|xml|zip|mp4)$/i;
+const SKIP_PATH = /(cart|checkout|login|account|privacy|terms|policy|blog|contact|about|review|faq|coupon|sitemap)/i;
+
+function extractPage(html, baseUrl) {
+  const title = html.match(/<title[^>]*>([^<]*)</i)?.[1]?.trim() ?? "";
+  const images = new Set();
+  const og =
+    html.match(/property=["']og:image["'][^>]+content=["']([^"']+)/i) ??
+    html.match(/content=["']([^"']+)["'][^>]+property=["']og:image/i);
+  if (og) try { images.add(new URL(og[1], baseUrl).href); } catch { /* bad url */ }
+  for (const m of html.matchAll(/<img[^>]+(?:src|data-src|data-lazy-src)=["']([^"']+)["']/gi)) {
+    try {
+      const u = new URL(m[1], baseUrl).href;
+      if (/\.(jpe?g|png|webp)(\?|$)/i.test(u)) images.add(u);
+    } catch { /* bad url */ }
+  }
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&#?\w+;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 4000);
+  return { title, images: [...images].slice(0, 30), text };
+}
+
+// Crawled hosts may close their kept-alive HTTP/2 sockets minutes later, and
+// Node's fetch internals surface that as an unhandled async 'error' event —
+// which would kill the process in the middle of the (long) extraction call.
+// Swallow exactly that; anything else still crashes loudly.
+process.on("uncaughtException", (e) => {
+  if (e?.code === "UND_ERR_SOCKET") {
+    console.warn("(ignored stray keep-alive socket close from crawl)");
+    return;
+  }
+  console.error(e);
+  process.exit(1);
+});
+
+async function crawlSite(startUrl, cap) {
+  const start = new URL(startUrl);
+  const seen = new Set();
+  const queue = [{ url: start.href, depth: 0 }];
+  const pages = [];
+  while (queue.length && pages.length < cap) {
+    const { url, depth } = queue.shift();
+    const norm = url.split("#")[0].replace(/\?.*$/, "").replace(/\/$/, "");
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    let res;
+    try {
+      res = await fetch(url, {
+        redirect: "follow",
+        headers: { "user-agent": "MovablesImport/0.1 (operator-requested catalog migration)" },
+      });
+    } catch {
+      continue;
+    }
+    if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/html")) continue;
+    const html = await res.text();
+    pages.push({ url: norm, ...extractPage(html, url) });
+    if (depth < 2) {
+      for (const m of html.matchAll(/href=["']([^"']+)["']/gi)) {
+        try {
+          const u = new URL(m[1], url);
+          if (u.host !== start.host) continue;
+          if (SKIP_EXT.test(u.pathname) || SKIP_PATH.test(u.pathname)) continue;
+          queue.push({ url: u.href, depth: depth + 1 });
+        } catch { /* bad href */ }
+      }
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return pages;
 }
 
 // ---- extraction schema (mirrors the ItemInput contract in inventory/actions) ----
@@ -117,26 +211,47 @@ Field rules:
 - confidence: "high" = everything mapped cleanly; "medium" = minor inference (parsed odd dimensions, assumed unit); "low" = guessed something material (price, identity).
 - warnings: file-level issues (columns you ignored entirely, rows you merged or skipped, systematic ambiguity).
 
-Deduplicate rows that are clearly the same product; sum quantities only when that is obviously right and note it.`;
+Deduplicate rows that are clearly the same product; sum quantities only when that is obviously right and note it.
+
+When BOTH a spreadsheet and website pages are provided, merge them into ONE list — match products by name (names may differ slightly between the two; match on the obvious product identity):
+- The spreadsheet is the authority for quantity and anything operational (weights, notes).
+- The website is the authority for images and marketing copy. If prices conflict, prefer the spreadsheet and note the site's price.
+- Include spreadsheet items missing from the site and site items missing from the sheet (note which source each came from when it's only one).
+When website pages are provided:
+- description: write a fresh 1–3 sentence description in the operator's voice grounded in the site's copy for that product. Do NOT copy sentences verbatim — the imported store must not duplicate the old site's text.
+- images: pick up to 6 URLs that are clearly photos of THAT product (product page galleries, the listing thumbnail, og:image of its page). Never logos, icons, banners, or other products' photos. A category page's images belong to the products listed on it — attribute them by adjacency to the product's name/link only when unambiguous, else leave them off.
+- Ignore non-catalog pages (home, service areas, policies) except as background for tone.`;
 
 // ---- run --------------------------------------------------------------------
-const csvText = readFileSync(csvPath, "utf8");
-const rows = parseCsv(csvText);
-if (rows.length < 2) throw new Error("CSV has no data rows.");
-console.log(`Read ${rows.length - 1} data rows from ${csvPath}`);
+const sections = [];
+if (csvPath) {
+  const csvText = readFileSync(csvPath, "utf8");
+  const rows = parseCsv(csvText);
+  if (rows.length < 2) throw new Error("CSV has no data rows.");
+  console.log(`Read ${rows.length - 1} data rows from ${csvPath}`);
+  sections.push(`SPREADSHEET (header row first, ${rows.length - 1} data rows):\n\n${csvText}`);
+}
+if (siteUrl) {
+  console.log(`Crawling ${siteUrl} (same host, depth 2, max ${maxPages} pages)…`);
+  const pages = await crawlSite(siteUrl, maxPages);
+  const withImages = pages.filter((p) => p.images.length).length;
+  console.log(`Crawled ${pages.length} pages (${withImages} with images)`);
+  if (!pages.length) throw new Error("crawl found no readable pages");
+  sections.push(
+    `WEBSITE PAGES (crawled from ${siteUrl}; JSON array of {url, title, images, text}):\n\n${JSON.stringify(pages)}`,
+  );
+}
 
-const anthropic = new Anthropic();
+// Large max_tokens trips the SDK's 10-minute non-streaming guard unless a
+// timeout is set on the CLIENT (the guard runs before per-request options
+// apply). Extraction of a full catalog can legitimately run long.
+const anthropic = new Anthropic({ timeout: 15 * 60 * 1000 });
 const t0 = Date.now();
 const msg = await anthropic.messages.parse({
   model: IMPORT_MODEL,
-  max_tokens: 16000,
+  max_tokens: 32000,
   system: SYSTEM_PROMPT,
-  messages: [
-    {
-      role: "user",
-      content: `Spreadsheet (header row first, ${rows.length - 1} data rows):\n\n${csvText}`,
-    },
-  ],
+  messages: [{ role: "user", content: sections.join("\n\n---\n\n") }],
   output_config: { format: zodOutputFormat(Extraction, "extraction") },
 });
 if (msg.stop_reason === "refusal" || !msg.parsed_output) {
@@ -149,8 +264,11 @@ console.log(
 );
 
 // ---- report -----------------------------------------------------------------
-const staged = outPath ?? `${csvPath}.staged.json`;
-writeFileSync(staged, JSON.stringify({ source: csvPath, model: IMPORT_MODEL, warnings, items }, null, 2));
+const staged = outPath ?? `${csvPath ?? "site-import"}.staged.json`;
+writeFileSync(
+  staged,
+  JSON.stringify({ source: { csv: csvPath, site: siteUrl }, model: IMPORT_MODEL, warnings, items }, null, 2),
+);
 
 const money = (c) => `$${(c / 100).toFixed(2)}`;
 const dims = (f) =>
@@ -161,7 +279,7 @@ for (const it of items) {
   const mark = it.confidence === "high" ? " " : it.confidence === "medium" ? "~" : "!";
   console.log(
     `${mark} ${it.name.padEnd(40)} ${String(it.quantity).padStart(3)}x ${money(it.basePrice).padStart(9)} ` +
-      `${it.priceUnit.padEnd(8)} ${it.category.padEnd(6)} ${dims(it.footprint).padEnd(14)}${it.notes ? ` | ${it.notes}` : ""}`,
+      `${it.priceUnit.padEnd(8)} ${it.category.padEnd(6)} ${dims(it.footprint).padEnd(14)} ${String(it.images.length).padStart(2)}img${it.notes ? ` | ${it.notes}` : ""}`,
   );
 }
 for (const w of warnings) console.log(`⚠ ${w}`);
