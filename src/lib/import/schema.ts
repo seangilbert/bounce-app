@@ -42,8 +42,10 @@ export type Extraction = z.infer<typeof ExtractionSchema>;
  *  comfortably inside a single server-action invocation. */
 export const IMPORT_CHUNK_ROWS = 8;
 
-/** Crawled pages sent to the model per enrichment call — same budget logic. */
-export const ENRICH_CHUNK_PAGES = 6;
+/** Crawled pages sent to the model per enrichment call. Kept small because the
+ *  OUTPUT is the binding budget here — patches + site-only items for a big
+ *  staged list truncated at 6 pages/8k tokens in live testing. */
+export const ENRICH_CHUNK_PAGES = 4;
 
 /** Site enrichment for one page chunk: patches onto already-staged items
  *  (referenced by their index in the numbered list the model was shown) plus

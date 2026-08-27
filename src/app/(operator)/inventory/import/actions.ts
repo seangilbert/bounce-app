@@ -177,12 +177,24 @@ export async function processImportChunkAction(jobId: string): Promise<ChunkResu
       return asResult(job, patch);
     }
 
-    // phase === "enrich"
+    // phase === "enrich" — additive polish on top of already-staged items, so
+    // a chunk that fails (e.g. truncated output) becomes a warning and the job
+    // moves on; only crawl/extract failures are fatal.
     const pages = job.crawlState?.pages ?? [];
     const start = job.doneChunks * ENRICH_CHUNK_PAGES;
-    const enrichment = await enrichChunk(job.staged, pages.slice(start, start + ENRICH_CHUNK_PAGES));
-    const staged = applyEnrichment(job.staged, enrichment);
-    const warnings = [...job.warnings, ...enrichment.warnings];
+    const chunk = pages.slice(start, start + ENRICH_CHUNK_PAGES);
+    let staged = job.staged;
+    const warnings = [...job.warnings];
+    try {
+      const enrichment = await enrichChunk(job.staged, chunk);
+      staged = applyEnrichment(job.staged, enrichment);
+      warnings.push(...enrichment.warnings);
+    } catch (e) {
+      const why = e instanceof Error ? e.message : "processing failed";
+      warnings.push(
+        `Some website pages couldn't be processed (${chunk.map((p) => p.url).join(", ")}): ${why}`,
+      );
+    }
     const doneChunks = job.doneChunks + 1;
     const finished = doneChunks >= job.totalChunks;
     const patch = {

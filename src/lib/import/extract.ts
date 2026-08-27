@@ -68,6 +68,8 @@ export async function extractChunk(
 
 const ENRICH_PROMPT = `You enrich a party-rental operator's staged catalog items using pages crawled from their OWN public website (they asked us to migrate it). You receive a numbered list of staged items and a CHUNK of the site's pages (other chunks are processed separately).
 
+Be economical: emit a patch ONLY for items these pages actually describe and only when you have something to add (a description for an item lacking one, photos, or dimensions) — never emit empty or no-op patches.
+
 Return:
 - patches: for each staged item these pages describe, a patch referencing its index. Write a fresh 1–3 sentence description in the operator's voice grounded in the page copy — NEVER copy sentences verbatim (the new store must not duplicate the old site's text). Attach up to 6 photo URLs that are clearly of THAT item (product-page galleries, its listing thumbnail, its page's og:image) — never logos, icons, banners, or another product's photo; a listing page's images belong to the products listed on it, attribute by adjacency only when unambiguous. Report the item's own dimensions in decimal feet when stated (prefer actual size over "space required" setup area). Match items to pages by product identity — names may differ slightly.
 - newItems: rentable products clearly offered on these pages that are NOT in the staged list (full item objects, active true, note "found on website only"). Skip products you suspect are just a listing-page duplicate of a staged item. Category taxonomy: "bounce" = any inflatable; "tent" = tents/canopies; "tables" = tables/chairs/linens; "other" = everything else. Prices in CENTS; priceUnit "per_day" unless clearly hourly, "flat" for services/packages.
@@ -91,7 +93,9 @@ export async function enrichChunk(staged: StagedItem[], pages: CrawlPage[]): Pro
     : "(none staged yet — every product found becomes a newItem)";
   const response = await client.messages.parse({
     model: IMPORT_MODEL,
-    max_tokens: 8000,
+    // Output is the binding budget: patches + site-only items for a large
+    // staged list truncated at 8k in live testing (stop_reason max_tokens).
+    max_tokens: 12000,
     system: ENRICH_PROMPT,
     output_config: { format: zodOutputFormat(EnrichmentSchema) },
     messages: [
@@ -103,6 +107,9 @@ export async function enrichChunk(staged: StagedItem[], pages: CrawlPage[]): Pro
   });
   if (response.stop_reason === "refusal") {
     throw new Error("The model declined to process this website.");
+  }
+  if (response.stop_reason === "max_tokens") {
+    throw new Error("Enrichment output was truncated — the page batch produced too much data.");
   }
   if (!response.parsed_output) {
     throw new Error("Could not parse structured enrichment from the model response.");
