@@ -42,6 +42,38 @@ export type Extraction = z.infer<typeof ExtractionSchema>;
  *  comfortably inside a single server-action invocation. */
 export const IMPORT_CHUNK_ROWS = 8;
 
+/** Crawled pages sent to the model per enrichment call — same budget logic. */
+export const ENRICH_CHUNK_PAGES = 6;
+
+/** Site enrichment for one page chunk: patches onto already-staged items
+ *  (referenced by their index in the numbered list the model was shown) plus
+ *  products found on the site that aren't staged yet. */
+export const EnrichmentSchema = z.object({
+  patches: z.array(
+    z.object({
+      index: z.number().int().min(0).describe("index of the staged item this patch applies to"),
+      description: z
+        .string()
+        .trim()
+        .max(500)
+        .nullable()
+        .describe("fresh 1–3 sentence description grounded in the site copy; null if these pages say nothing about this item"),
+      images: z.array(z.string()).max(6).describe("photo URLs of THIS item found on these pages"),
+      footprint: z
+        .object({
+          w: z.number().min(0).max(999).nullable(),
+          l: z.number().min(0).max(999).nullable(),
+          h: z.number().min(0).max(999).nullable(),
+        })
+        .nullable()
+        .describe("item dimensions in feet from these pages; null if not stated"),
+    }),
+  ),
+  newItems: z.array(StagedItemSchema).describe("products on these pages that are NOT in the staged list"),
+  warnings: z.array(z.string()),
+});
+export type Enrichment = z.infer<typeof EnrichmentSchema>;
+
 /** Minimal RFC 4180 CSV parser (quoted fields, escaped quotes, CRLF). Returns
  *  rows of fields; blank lines dropped. */
 export function parseCsv(text: string): string[][] {
@@ -79,6 +111,34 @@ export function toCsvLine(fields: string[]): string {
   return fields
     .map((f) => (/[",\n\r]/.test(f) ? `"${f.replace(/"/g, '""')}"` : f))
     .join(",");
+}
+
+/** Merge one enrichment chunk into the staged list: patches fill blanks only
+ *  (spreadsheet data stays authoritative), images union up to the schema cap,
+ *  and site-only products append unless a staged name already matches. */
+export function applyEnrichment(staged: StagedItem[], e: Enrichment): StagedItem[] {
+  const next = staged.map((s) => ({ ...s }));
+  for (const p of e.patches) {
+    const it = next[p.index];
+    if (!it) continue;
+    if (p.description && !it.description) it.description = p.description;
+    if (p.images.length) it.images = [...new Set([...it.images, ...p.images])].slice(0, 12);
+    if (p.footprint) {
+      it.footprint = {
+        w: it.footprint.w ?? p.footprint.w,
+        l: it.footprint.l ?? p.footprint.l,
+        h: it.footprint.h ?? p.footprint.h,
+      };
+    }
+  }
+  const names = new Set(next.map((s) => s.name.trim().toLowerCase()));
+  for (const n of e.newItems) {
+    const key = n.name.trim().toLowerCase();
+    if (names.has(key)) continue;
+    names.add(key);
+    next.push(n);
+  }
+  return next;
 }
 
 /**

@@ -13,9 +13,16 @@ import {
 
 type Phase =
   | { name: "pick"; error: string | null }
-  | { name: "processing"; done: number; total: number }
+  | { name: "processing"; jobPhase: "crawl" | "extract" | "enrich"; done: number; total: number; pages: number }
   | { name: "review"; jobId: string; warnings: string[] }
   | { name: "done"; imported: number; live: number; hidden: number };
+
+const PHASE_LABEL = {
+  crawl: (p: { pages: number }) => `Reading your website… ${p.pages} pages so far`,
+  extract: (p: { done: number; total: number }) => `Reading your items… ${p.done} of ${p.total} batches`,
+  enrich: (p: { done: number; total: number }) =>
+    `Matching photos and descriptions… ${p.done} of ${p.total} batches`,
+};
 
 /** One staged item plus its review state (edits live client-side; commit
  *  re-validates everything server-side). */
@@ -41,17 +48,27 @@ export function ImportWizard({
   const [phase, setPhase] = useState<Phase>({ name: "pick", error: null });
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [committing, setCommitting] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [siteUrl, setSiteUrl] = useState("");
+  const [siteConfirmed, setSiteConfirmed] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function start(file: File) {
-    const csv = await file.text();
-    const started = await startImportAction({ sourceName: file.name, csv });
+  const canStart = file !== null || (siteUrl.trim() !== "" && siteConfirmed);
+
+  async function start() {
+    const csv = file ? await file.text() : null;
+    const started = await startImportAction({
+      sourceName: file?.name ?? null,
+      csv,
+      url: siteUrl.trim() || null,
+      siteConfirmed,
+    });
     if (!started.ok) {
       setPhase({ name: "pick", error: started.error });
       return;
     }
-    setPhase({ name: "processing", done: 0, total: started.totalChunks });
-    // Drive extraction one bounded chunk per call; each call updates progress.
+    setPhase({ name: "processing", jobPhase: siteUrl.trim() ? "crawl" : "extract", done: 0, total: 0, pages: 0 });
+    // Drive the job one bounded step per call; each call updates progress.
     for (;;) {
       const step = await processImportChunkAction(started.jobId);
       if (!step.ok) {
@@ -63,7 +80,13 @@ export function ImportWizard({
         setPhase({ name: "review", jobId: started.jobId, warnings: step.warnings });
         return;
       }
-      setPhase({ name: "processing", done: step.doneChunks, total: step.totalChunks });
+      setPhase({
+        name: "processing",
+        jobPhase: step.phase,
+        done: step.doneChunks,
+        total: step.totalChunks,
+        pages: step.pagesCrawled,
+      });
     }
   }
 
@@ -108,37 +131,89 @@ export function ImportWizard({
 
       <div className="px-5 py-6 lg:px-8">
         {phase.name === "pick" ? (
-          <div className="mx-auto flex max-w-xl flex-col items-center gap-4 py-10 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-tint text-brand">
-              <FileCsv size={28} weight="fill" />
-            </div>
-            <h2 className="font-display text-xl font-bold text-ink">Upload your price sheet</h2>
-            <p className="max-w-md text-sm font-medium text-ink-mute">
-              A CSV export from Inflatable Office, Goodshuffle, TapGoods, Booqable — or any
-              spreadsheet with your items. We&apos;ll read it, draft your catalog, and you review
-              every item before anything is added.
-            </p>
-            {phase.error ? (
-              <p className="rounded-xl bg-coral/10 px-4 py-2 text-sm font-semibold text-coral">
-                {phase.error}
+          <div className="mx-auto flex max-w-xl flex-col gap-4 py-6">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-tint text-brand">
+                <FileCsv size={28} weight="fill" />
+              </div>
+              <h2 className="font-display text-xl font-bold text-ink">Bring your catalog over</h2>
+              <p className="max-w-md text-sm font-medium text-ink-mute">
+                Upload a spreadsheet from your old software, paste your current website, or both —
+                the sheet brings quantities, your site brings photos and descriptions. You review
+                every item before anything is added.
               </p>
-            ) : null}
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void start(f);
-              }}
-            />
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white hover:bg-brand-deep"
-            >
-              <Sparkle size={16} weight="fill" /> Choose CSV file
-            </button>
+              {phase.error ? (
+                <p className="rounded-xl bg-coral/10 px-4 py-2 text-sm font-semibold text-coral">
+                  {phase.error}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-2xl border border-sand-line bg-white p-4">
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center justify-between rounded-xl border border-sand-line px-4 py-3 text-left text-sm font-bold text-ink-soft hover:border-sand"
+              >
+                <span className="flex items-center gap-2">
+                  <FileCsv size={18} weight="bold" />
+                  {file ? file.name : "Choose a CSV file"}
+                </span>
+                {file ? (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFile(null);
+                      if (fileRef.current) fileRef.current.value = "";
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.stopPropagation();
+                        setFile(null);
+                        if (fileRef.current) fileRef.current.value = "";
+                      }
+                    }}
+                    className="text-[12px] font-bold text-ink-mute underline"
+                  >
+                    remove
+                  </span>
+                ) : null}
+              </button>
+              <input
+                type="url"
+                value={siteUrl}
+                onChange={(e) => setSiteUrl(e.target.value)}
+                placeholder="Your current website, e.g. https://yourbusiness.com/rentals"
+                className="input"
+              />
+              {siteUrl.trim() ? (
+                <label className="flex items-start gap-2 text-[13px] font-semibold text-ink-soft">
+                  <input
+                    type="checkbox"
+                    checked={siteConfirmed}
+                    onChange={(e) => setSiteConfirmed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-brand"
+                  />
+                  This is my business&apos;s website and I have the right to use its content —
+                  photos and text will be imported for my catalog.
+                </label>
+              ) : null}
+              <button
+                onClick={() => void start()}
+                disabled={!canStart}
+                className="flex items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white hover:bg-brand-deep disabled:opacity-50"
+              >
+                <Sparkle size={16} weight="fill" /> Start import
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -146,15 +221,20 @@ export function ImportWizard({
           <div className="mx-auto flex max-w-xl flex-col items-center gap-4 py-14 text-center">
             <div className="h-2 w-64 overflow-hidden rounded-full bg-sand">
               <div
-                className="h-full rounded-full bg-brand transition-all duration-500"
-                style={{ width: `${Math.max(6, Math.round((phase.done / phase.total) * 100))}%` }}
+                className={`h-full rounded-full bg-brand transition-all duration-500 ${
+                  phase.jobPhase === "crawl" ? "animate-pulse" : ""
+                }`}
+                style={{
+                  width:
+                    phase.jobPhase === "crawl" || phase.total === 0
+                      ? "30%"
+                      : `${Math.max(6, Math.round((phase.done / phase.total) * 100))}%`,
+                }}
               />
             </div>
-            <p className="text-sm font-semibold text-ink-soft">
-              Reading your items… {phase.done} of {phase.total} batches
-            </p>
+            <p className="text-sm font-semibold text-ink-soft">{PHASE_LABEL[phase.jobPhase](phase)}</p>
             <p className="text-[13px] font-medium text-ink-mute">
-              This takes a minute — keep this tab open.
+              This takes a few minutes — keep this tab open.
             </p>
           </div>
         ) : null}
@@ -193,6 +273,16 @@ export function ImportWizard({
                       className="h-4 w-4 accent-brand"
                       aria-label={`Include ${r.name}`}
                     />
+                    {r.images[0] ? (
+                      // Review-only preview straight from the operator's old site;
+                      // commit copies the file into our own storage.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={r.images[0]}
+                        alt=""
+                        className="h-9 w-9 flex-shrink-0 rounded-lg border border-sand-line object-cover"
+                      />
+                    ) : null}
                     <input
                       value={r.name}
                       onChange={(e) => edit(i, { name: e.target.value })}
