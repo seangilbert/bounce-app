@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 const FAQ = [
   {
     q: "Is there really a free plan?",
-    a: "Yes. The Free plan lets you run your storefront and take bookings with up to 20 AI quotes a month and 5 catalog items, no credit card required. Upgrade whenever you outgrow it.",
+    a: "Yes. The Free plan lets you run your storefront and take bookings with up to 20 AI quotes a month and 5 live catalog items, no credit card required. Upgrade whenever you outgrow it.",
   },
   {
     q: "What happens after the trial?",

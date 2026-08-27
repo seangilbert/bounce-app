@@ -345,13 +345,19 @@ export async function listItems(
   return (data as ItemRow[]).map(rowToItem);
 }
 
-/** How many catalog items the operator has (for plan-limit enforcement). */
-export async function countItems(operatorId: string): Promise<number> {
+/** How many catalog items the operator has (for limit enforcement). Pass
+ *  `activeOnly` to count live items — the number plan caps apply to. */
+export async function countItems(
+  operatorId: string,
+  opts: { activeOnly?: boolean } = {},
+): Promise<number> {
   const supabase = createAdminClient();
-  const { count, error } = await supabase
+  let query = supabase
     .from(ITEMS)
     .select("id", { count: "exact", head: true })
     .eq("operator_id", operatorId);
+  if (opts.activeOnly) query = query.eq("active", true);
+  const { count, error } = await query;
   if (error) throw new Error(`countItems failed: ${error.message}`);
   return count ?? 0;
 }

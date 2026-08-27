@@ -1,5 +1,6 @@
 import { listItems } from "@/lib/inventory/repo";
 import { availabilityForOperator } from "@/lib/inventory/availability";
+import { liveCatalog } from "@/lib/inventory/live-cap";
 import { normalizeSchedule } from "@/lib/availability/schedule";
 import type { Operator } from "@/lib/inventory/types";
 
@@ -54,9 +55,13 @@ export async function buildStorefrontCatalog(
   range: { start: string | null; end: string | null },
 ): Promise<StorefrontCatalog> {
   const { start, end } = range;
-  const items =
+  // liveCatalog re-applies the plan's live-item cap at read time — the operator
+  // may have lapsed to Free without any event firing (see live-cap.ts).
+  const items = liveCatalog(
+    operator,
     start && end
       ? await availabilityForOperator(operator.id, start, end)
-      : await listItems(operator.id, { activeOnly: true });
+      : await listItems(operator.id, { activeOnly: true }),
+  );
   return { operator: toPublicOperator(operator), startDate: start, endDate: end, items };
 }

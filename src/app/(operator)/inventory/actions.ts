@@ -3,8 +3,9 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/operator/session";
-import { createItem, updateItem, deleteItem, countItems } from "@/lib/inventory/repo";
+import { createItem, updateItem, deleteItem, countItems, getItem } from "@/lib/inventory/repo";
 import { getItemImages, removeItemPhotos } from "@/lib/inventory/photos";
+import { MAX_TOTAL_ITEMS } from "@/lib/inventory/live-cap";
 import { planCapabilities, effectivePlanId } from "@/lib/plans";
 
 const ItemInput = z.object({
@@ -36,23 +37,34 @@ const ItemInput = z.object({
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
+/** Plan caps apply to LIVE items only (hidden items are always safe to keep),
+ *  so the message points at the two ways out: hide something, or upgrade. */
+function liveCapError(op: { plan: string | null; subscriptionStatus: string | null; billingExempt?: boolean | null }, cap: number): string {
+  return effectivePlanId(op) === "free"
+    ? `The Free plan is limited to ${cap} live items. Hide another item first, or upgrade — hidden items stay saved.`
+    : `Your plan is limited to ${cap} live items. Hide another item first.`;
+}
+
 export async function createItemAction(input: unknown): Promise<ActionResult> {
   const g = await requireAdmin();
   if (!g.ok) return { ok: false, error: g.error };
   const op = g.membership.operator;
   const p = ItemInput.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid item." };
-  // Plan limit: cap on *create* (existing items are grandfathered on downgrade).
+  // Plan limits cap *live* items, not owned ones — creating hidden items is
+  // always allowed (bulk import relies on this), bounded only by the abuse
+  // ceiling on total catalog size.
+  const willBeLive = p.data.active ?? true;
   const cap = planCapabilities(op).maxItems;
-  if (Number.isFinite(cap) && (await countItems(op.id)) >= cap) {
-    const plan = effectivePlanId(op);
-    return {
-      ok: false,
-      error:
-        plan === "free"
-          ? `The Free plan is limited to ${cap} catalog items. Upgrade to add more.`
-          : `Your plan is limited to ${cap} catalog items.`,
-    };
+  const [total, live] = await Promise.all([
+    countItems(op.id),
+    willBeLive && Number.isFinite(cap) ? countItems(op.id, { activeOnly: true }) : 0,
+  ]);
+  if (total >= MAX_TOTAL_ITEMS) {
+    return { ok: false, error: `Catalogs are limited to ${MAX_TOTAL_ITEMS} items.` };
+  }
+  if (willBeLive && Number.isFinite(cap) && live >= cap) {
+    return { ok: false, error: liveCapError(op, cap) };
   }
   try {
     await createItem({
@@ -74,6 +86,22 @@ export async function updateItemAction(id: string, input: unknown): Promise<Acti
   const op = g.membership.operator;
   const p = ItemInput.partial().safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Invalid item." };
+  // Activating a hidden item is where the live-item cap bites (creates and
+  // edits of already-live items are covered elsewhere; deactivation is free).
+  if (p.data.active === true) {
+    const cap = planCapabilities(op).maxItems;
+    if (Number.isFinite(cap)) {
+      const current = await getItem(id);
+      if (
+        current &&
+        current.operatorId === op.id &&
+        !current.active &&
+        (await countItems(op.id, { activeOnly: true })) >= cap
+      ) {
+        return { ok: false, error: liveCapError(op, cap) };
+      }
+    }
+  }
   try {
     // Delete photos that were removed in this edit (best-effort, before the write).
     let removed: string[] = [];

@@ -33,7 +33,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "What does it cost?",
-    a: `The Free plan is free forever, with up to ${free.maxItems} catalog items and ${free.aiQuotesPerMonth} AI quotes a month. Paid plans start at $${soloPrice}/month, unlock unlimited quotes, and drop the platform fee to zero.`,
+    a: `The Free plan is free forever, with up to ${free.maxItems} live catalog items and ${free.aiQuotesPerMonth} AI quotes a month. Paid plans start at $${soloPrice}/month, unlock unlimited quotes, and drop the platform fee to zero.`,
   },
 ];
 

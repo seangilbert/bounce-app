@@ -4,6 +4,7 @@ import { getAnthropicClient } from "./client";
 import { getOperatorById } from "@/lib/inventory/repo";
 import { listItems } from "@/lib/inventory/repo";
 import { availabilityForOperator } from "@/lib/inventory/availability";
+import { liveCatalog } from "@/lib/inventory/live-cap";
 import { durationDays, lineTotal, priceBreakdown } from "@/lib/inventory/pricing";
 import { assessRange, normalizeSchedule } from "@/lib/availability/schedule";
 import {
@@ -324,7 +325,7 @@ async function loadPromptContext(
   // prices alone (a date-less "availability" would be misleading).
   let promptItems: PromptItem[];
   if (hintStart) {
-    const withAvail = await availabilityForOperator(operator.id, hintStart, hintStart);
+    const withAvail = liveCatalog(operator, await availabilityForOperator(operator.id, hintStart, hintStart));
     promptItems = withAvail.map((i) => ({
       id: i.id,
       name: i.name,
@@ -335,7 +336,7 @@ async function loadPromptContext(
       available: i.availability.available,
     }));
   } else {
-    const items = await listItems(operator.id, { activeOnly: true });
+    const items = liveCatalog(operator, await listItems(operator.id, { activeOnly: true }));
     promptItems = items.map((i) => ({
       id: i.id,
       name: i.name,
@@ -551,7 +552,9 @@ async function runInquiryTurn(inquiry: Inquiry, operator: Operator): Promise<Con
   const endDate = inquiry.endDate && inquiry.endDate >= startDate ? inquiry.endDate : startDate;
   const days = durationDays(startDate, endDate);
 
-  const catalog = await availabilityForOperator(operator.id, startDate, endDate);
+  // Same live-item cap as the storefront — the agent must never quote an item
+  // the customer can't see or book.
+  const catalog = liveCatalog(operator, await availabilityForOperator(operator.id, startDate, endDate));
   const catalogById = new Map(catalog.map((i) => [i.id, i]));
 
   const lines: QuoteLine[] = [];

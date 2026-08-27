@@ -15,12 +15,14 @@ export function InventoryManager({
 }: {
   items: Item[];
   isAdmin: boolean;
-  /** Plan catalog cap; null = unlimited. */
+  /** Plan cap on LIVE items; null = unlimited. Hidden items don't count. */
   itemLimit: number | null;
 }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
-  const atCap = itemLimit !== null && items.length >= itemLimit;
+  const liveCount = items.filter((i) => i.active).length;
+  const hiddenCount = items.length - liveCount;
+  const atCap = itemLimit !== null && liveCount >= itemLimit;
 
   return (
     <div className="flex w-full flex-col">
@@ -30,7 +32,7 @@ export function InventoryManager({
           <h1 className="font-display text-2xl font-bold tracking-tight text-ink lg:text-[28px]">Inventory</h1>
           <p className="mt-0.5 text-sm font-medium text-ink-mute">
             {itemLimit !== null
-              ? `${items.length} of ${itemLimit} items on the Free plan`
+              ? `${liveCount} of ${itemLimit} live items on the Free plan${hiddenCount > 0 ? ` · ${hiddenCount} hidden` : ""}`
               : `${items.length} ${items.length === 1 ? "item" : "items"} in your catalog`}
           </p>
         </div>
@@ -45,14 +47,14 @@ export function InventoryManager({
         ) : null}
       </div>
 
-      {/* Cap runway: surface the Free-plan catalog limit BEFORE the create
-          action rejects, with the way out. Shown from one-item-short onward. */}
-      {isAdmin && itemLimit !== null && items.length >= itemLimit - 1 ? (
+      {/* Cap runway: surface the Free-plan live-item limit BEFORE the action
+          rejects, with the way out. Shown from one-slot-short onward. */}
+      {isAdmin && itemLimit !== null && liveCount >= itemLimit - 1 ? (
         <div className="mx-5 mt-4 rounded-xl bg-brand-tint/50 px-4 py-3 lg:mx-8">
           <p className="text-[13.5px] font-semibold text-ink-soft">
             {atCap
-              ? `You've used all ${itemLimit} catalog items on the Free plan.`
-              : `You're one item away from the Free plan's ${itemLimit}-item catalog cap.`}{" "}
+              ? `All ${itemLimit} live-item slots on the Free plan are in use — hidden items stay saved and can be swapped in anytime.`
+              : `You're one item away from the Free plan's ${itemLimit} live-item limit.`}{" "}
             Upgrade to Solo for an unlimited catalog, unlimited AI quotes, and a 0% platform fee.
           </p>
           <UpgradeButton plan="solo">Upgrade to Solo</UpgradeButton>

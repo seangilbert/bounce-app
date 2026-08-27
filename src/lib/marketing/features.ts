@@ -123,7 +123,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
     ],
     capabilities: [
       { label: "AI quote assistant", quota: "aiQuotesPerMonth", detail: "Conversations answered with a priced, bookable quote" },
-      { label: "Catalog items", quota: "maxItems" },
+      { label: "Live catalog items", quota: "maxItems" },
       { label: "Quotes priced from your live catalog and rates" },
       { label: "Sales tax, delivery, and deposit calculated in the quote" },
       { label: "Respects your service area, hours, blackout dates, and lead time" },

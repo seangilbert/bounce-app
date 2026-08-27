@@ -11,8 +11,8 @@ export default async function InventoryPage() {
     return <div className="p-8 text-ink-mute">No operator linked to your account.</div>;
   }
   const items = await listItems(membership.operator.id); // active + inactive
-  // Catalog cap as a visible runway, not just a wall at create time (the action
-  // still enforces it). null = unlimited (Infinity doesn't cross the RSC boundary).
+  // Live-item cap as a visible runway, not just a wall at activate time (the
+  // action still enforces it). null = unlimited (Infinity doesn't cross the RSC boundary).
   const cap = planCapabilities(membership.operator).maxItems;
   return (
     <InventoryManager

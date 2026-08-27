@@ -69,7 +69,8 @@ export function isPaidPlan(id: PlanId): boolean {
 
 /** Hard limits per tier. `Infinity` = unlimited. */
 export interface PlanCapabilities {
-  /** Max catalog items an operator can create (the scale lever). */
+  /** Max LIVE (storefront-visible) catalog items — the scale lever. Hidden
+   *  items are uncapped by plan (see MAX_TOTAL_ITEMS in inventory/live-cap). */
   maxItems: number;
   /** AI-assisted quotes per calendar month (controls our Anthropic cost). */
   aiQuotesPerMonth: number;

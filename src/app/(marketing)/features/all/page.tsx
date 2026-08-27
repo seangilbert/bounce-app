@@ -60,7 +60,7 @@ function digestFor(planId: PlanId): { intro: string | null; lines: string[] } {
     return {
       intro: null,
       lines: [
-        `${caps.maxItems} catalog items`,
+        `${caps.maxItems} live catalog items`,
         `${caps.aiQuotesPerMonth} AI quotes a month`,
         `${caps.platformFeeBps / 100}% platform fee on bookings`,
       ],
