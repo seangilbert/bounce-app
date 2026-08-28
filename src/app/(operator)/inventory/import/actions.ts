@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/operator/session";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { planCapabilities } from "@/lib/plans";
-import { countItems, createItem } from "@/lib/inventory/repo";
+import { countItems, createItem, listItems } from "@/lib/inventory/repo";
 import { uploadItemPhoto } from "@/lib/inventory/photos";
 import { MAX_TOTAL_ITEMS } from "@/lib/inventory/live-cap";
 import {
@@ -43,7 +43,7 @@ export type ChunkResult =
   | { ok: false; error: string };
 
 export type CommitResult =
-  | { ok: true; imported: number; live: number; hidden: number; imagesCopied: number }
+  | { ok: true; imported: number; live: number; hidden: number; skipped: number; imagesCopied: number }
   | { ok: false; error: string };
 
 const StartInput = z.object({
@@ -271,7 +271,15 @@ export async function commitImportAction(input: unknown): Promise<CommitResult> 
   if (job.status === "committed") return { ok: false, error: "This import was already committed." };
   if (job.status !== "review") return { ok: false, error: "This import isn't ready to commit." };
 
-  const items = p.data.items;
+  // Rerun-safe: an item whose name the operator already has is skipped, so
+  // importing the same sheet twice can't duplicate the catalog.
+  const existing = new Set((await listItems(op.id)).map((i) => i.name.trim().toLowerCase()));
+  const items = p.data.items.filter((i) => !existing.has(i.name.trim().toLowerCase()));
+  const skipped = p.data.items.length - items.length;
+  if (items.length === 0) {
+    await updateImportJob(op.id, p.data.jobId, { status: "committed" });
+    return { ok: true, imported: 0, live: 0, hidden: 0, skipped, imagesCopied: 0 };
+  }
   const [total, liveNow] = await Promise.all([
     countItems(op.id),
     countItems(op.id, { activeOnly: true }),
@@ -315,5 +323,5 @@ export async function commitImportAction(input: unknown): Promise<CommitResult> 
   await updateImportJob(op.id, p.data.jobId, { status: "committed" });
   revalidatePath("/inventory");
   const live = activeFlags.filter(Boolean).length;
-  return { ok: true, imported: items.length, live, hidden: items.length - live, imagesCopied };
+  return { ok: true, imported: items.length, live, hidden: items.length - live, skipped, imagesCopied };
 }

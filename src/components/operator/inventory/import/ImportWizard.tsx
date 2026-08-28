@@ -16,7 +16,7 @@ type Phase =
   | { name: "processing"; jobPhase: "crawl" | "extract" | "enrich"; done: number; total: number; pages: number }
   | { name: "stalled"; jobId: string }
   | { name: "review"; jobId: string; warnings: string[] }
-  | { name: "done"; imported: number; live: number; hidden: number };
+  | { name: "done"; imported: number; live: number; hidden: number; skipped: number };
 
 /** Watchdog per step call: the longest legitimate step (a retried enrich
  *  chunk) runs ~90s, so past this the call is presumed wedged. The server
@@ -148,7 +148,7 @@ export function ImportWizard({
       setPhase({ name: "review", jobId, warnings: [res.error] });
       return;
     }
-    setPhase({ name: "done", imported: res.imported, live: res.live, hidden: res.hidden });
+    setPhase({ name: "done", imported: res.imported, live: res.live, hidden: res.hidden, skipped: res.skipped });
   }
 
   const edit = (i: number, patch: Partial<ReviewRow>) =>
@@ -512,7 +512,8 @@ export function ImportWizard({
             </h2>
             <p className="text-sm font-medium text-ink-mute">
               {phase.live} live on your storefront
-              {phase.hidden > 0 ? ` · ${phase.hidden} hidden (swap or upgrade anytime)` : ""}.
+              {phase.hidden > 0 ? ` · ${phase.hidden} hidden (swap or upgrade anytime)` : ""}
+              {phase.skipped > 0 ? ` · ${phase.skipped} skipped (already in your inventory)` : ""}.
             </p>
             <button
               onClick={() => router.push("/inventory")}
