@@ -64,6 +64,7 @@ describe("applyEnrichment", () => {
           description: "from the site",
           images: ["https://x.com/a.jpg"],
           footprint: { w: 99, l: 20, h: 15 },
+          note: null,
         },
       ],
       newItems: [],
@@ -74,12 +75,22 @@ describe("applyEnrichment", () => {
     expect(out[0].images).toEqual(["https://x.com/a.jpg"]);
   });
 
+  it("appends patch notes to the item's own notes", () => {
+    const items = [staged({ notes: "weight 278 lb" })];
+    const out = applyEnrichment(items, {
+      patches: [{ index: 0, description: null, images: [], footprint: null, note: "photo matched by listing order" }],
+      newItems: [],
+      warnings: [],
+    });
+    expect(out[0].notes).toBe("weight 278 lb; photo matched by listing order");
+  });
+
   it("dedupes images and ignores out-of-range patch indexes", () => {
     const items = [staged({ images: ["https://x.com/a.jpg"] })];
     const out = applyEnrichment(items, {
       patches: [
-        { index: 0, description: null, images: ["https://x.com/a.jpg", "https://x.com/b.jpg"], footprint: null },
-        { index: 7, description: "nope", images: [], footprint: null },
+        { index: 0, description: null, images: ["https://x.com/a.jpg", "https://x.com/b.jpg"], footprint: null, note: null },
+        { index: 7, description: "nope", images: [], footprint: null, note: null },
       ],
       newItems: [],
       warnings: [],

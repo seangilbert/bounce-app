@@ -48,6 +48,7 @@ export function ImportWizard({
   const [phase, setPhase] = useState<Phase>({ name: "pick", error: null });
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [committing, setCommitting] = useState(false);
+  const [showAllWarnings, setShowAllWarnings] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [siteUrl, setSiteUrl] = useState("");
   const [siteConfirmed, setSiteConfirmed] = useState(false);
@@ -241,14 +242,33 @@ export function ImportWizard({
 
         {phase.name === "review" ? (
           <div className="flex flex-col gap-4">
-            {phase.warnings.map((w) => (
-              <p
-                key={w}
-                className="flex items-start gap-2 rounded-xl bg-amber-tint/60 px-4 py-2.5 text-[13.5px] font-semibold text-amber-deep"
-              >
-                <Warning size={16} weight="fill" className="mt-0.5 flex-shrink-0" /> {w}
-              </p>
-            ))}
+            {phase.warnings.length > 0 ? (
+              <div className="rounded-xl bg-amber-tint/60 px-4 py-3">
+                <p className="flex items-start gap-2 text-[13.5px] font-semibold text-amber-deep">
+                  <Warning size={16} weight="fill" className="mt-0.5 flex-shrink-0" />
+                  {phase.warnings.length === 1
+                    ? phase.warnings[0]
+                    : `${phase.warnings.length} things to double-check from this import. Item-specific flags are shown on each item below.`}
+                </p>
+                {phase.warnings.length > 1 ? (
+                  <>
+                    {(showAllWarnings ? phase.warnings : phase.warnings.slice(0, 2)).map((w) => (
+                      <p key={w} className="mt-1.5 pl-6 text-[13px] font-medium text-amber-deep">
+                        {w}
+                      </p>
+                    ))}
+                    {phase.warnings.length > 2 ? (
+                      <button
+                        onClick={() => setShowAllWarnings((v) => !v)}
+                        className="mt-1.5 pl-6 text-[13px] font-bold text-amber-deep underline"
+                      >
+                        {showAllWarnings ? "Show fewer" : `Show all ${phase.warnings.length}`}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
             {itemLimit !== null && wantLive > slots ? (
               <p className="rounded-xl bg-brand-tint/50 px-4 py-2.5 text-[13.5px] font-semibold text-ink-soft">
                 Your plan has {slots} live-item {slots === 1 ? "slot" : "slots"} left — the first{" "}

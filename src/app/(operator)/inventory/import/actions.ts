@@ -186,9 +186,9 @@ export async function processImportChunkAction(jobId: string): Promise<ChunkResu
     let staged = job.staged;
     const warnings = [...job.warnings];
     try {
-      const enrichment = await enrichChunk(job.staged, chunk);
+      const enrichment = await enrichChunk(job.staged, chunk, job.warnings);
       staged = applyEnrichment(job.staged, enrichment);
-      warnings.push(...enrichment.warnings);
+      warnings.push(...enrichment.warnings.filter((w) => !warnings.includes(w)));
     } catch (e) {
       const why = e instanceof Error ? e.message : "processing failed";
       warnings.push(

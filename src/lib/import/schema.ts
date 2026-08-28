@@ -69,10 +69,19 @@ export const EnrichmentSchema = z.object({
         })
         .nullable()
         .describe("item dimensions in feet from these pages; null if not stated"),
+      note: z
+        .string()
+        .trim()
+        .max(200)
+        .nullable()
+        .describe("one short caveat the operator should check on THIS item (uncertain photo match, price structure the schema can't hold, suspect unit); null when clean"),
     }),
   ),
   newItems: z.array(StagedItemSchema).describe("products on these pages that are NOT in the staged list"),
-  warnings: z.array(z.string()),
+  warnings: z
+    .array(z.string())
+    .max(5)
+    .describe("file-level problems the OPERATOR must act on; never routine mapping decisions"),
 });
 export type Enrichment = z.infer<typeof EnrichmentSchema>;
 
@@ -132,6 +141,9 @@ export function applyEnrichment(staged: StagedItem[], e: Enrichment): StagedItem
         h: it.footprint.h ?? p.footprint.h,
       };
     }
+    // Per-item caveats surface on the item row (next to its confidence badge),
+    // not in the global warnings list.
+    if (p.note) it.notes = (it.notes ? `${it.notes}; ${p.note}` : p.note).slice(0, 300);
   }
   const names = new Set(next.map((s) => s.name.trim().toLowerCase()));
   for (const n of e.newItems) {

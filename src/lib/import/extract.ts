@@ -29,7 +29,7 @@ Field rules:
 - notes: one short line for anything lossy or inferred — weights ("weight 278 lb"), vendor, derived prices, ambiguous dimensions. Null when extraction was clean.
 - confidence: "high" = everything mapped cleanly; "medium" = minor inference; "low" = guessed something material (price, identity).
 - sourceRow: the 1-based data-row number given with each row.
-- warnings: chunk-level issues (columns you ignored, rows you skipped, systematic ambiguity).`;
+- warnings: ONLY problems the operator must act on that aren't tied to one item (e.g. a whole column that looks like corrupted data, rows you had to skip entirely). Routine mapping decisions are NOT warnings — silently ignore unmappable columns (Vendor, Parent, Package, status/source columns, links that aren't images) and put any item-specific caveat in that item's notes instead. Most chunks should return zero warnings.`;
 
 /**
  * Extract one chunk of spreadsheet rows into staged items. `rows` are parsed
@@ -71,15 +71,22 @@ const ENRICH_PROMPT = `You enrich a party-rental operator's staged catalog items
 Be economical: emit a patch ONLY for items these pages actually describe and only when you have something to add (a description for an item lacking one, photos, or dimensions) — never emit empty or no-op patches.
 
 Return:
-- patches: for each staged item these pages describe, a patch referencing its index. Write a fresh 1–3 sentence description in the operator's voice grounded in the page copy — NEVER copy sentences verbatim (the new store must not duplicate the old site's text). Attach up to 6 photo URLs that are clearly of THAT item (product-page galleries, its listing thumbnail, its page's og:image) — never logos, icons, banners, or another product's photo; a listing page's images belong to the products listed on it, attribute by adjacency only when unambiguous. Report the item's own dimensions in decimal feet when stated (prefer actual size over "space required" setup area). Match items to pages by product identity — names may differ slightly.
+- patches: for each staged item these pages describe, a patch referencing its index. Write a fresh 1–3 sentence description in the operator's voice grounded in the page copy — NEVER copy sentences verbatim (the new store must not duplicate the old site's text). Attach up to 6 photo URLs that are clearly of THAT item (product-page galleries, its listing thumbnail, its page's og:image) — never logos, icons, banners, or another product's photo; a listing page's images belong to the products listed on it, attribute by adjacency only when unambiguous. Report the item's own dimensions in DECIMAL FEET when stated — always convert inches (17" = 1.42 ft), never record an inch value as feet (prefer actual size over "space required" setup area). Match items to pages by product identity — names may differ slightly. Use a patch's note for a short caveat the operator should check on THAT item: an inferred photo match, a suspect unit, a price structure the schema can't hold (e.g. an hourly minimum), a spreadsheet-vs-site conflict. Null when clean.
 - newItems: rentable products clearly offered on these pages that are NOT in the staged list (full item objects, active true, note "found on website only"). Skip products you suspect are just a listing-page duplicate of a staged item. Category taxonomy: "bounce" = any inflatable; "tent" = tents/canopies; "tables" = tables/chairs/linens; "other" = everything else. Prices in CENTS; priceUnit "per_day" unless clearly hourly, "flat" for services/packages.
-- warnings: page-level issues (products whose photos couldn't be attributed, conflicting prices vs the staged data, non-catalog pages ignored).
+- warnings: ONLY problems the operator must act on that aren't tied to one item. Everything item-specific belongs in that item's patch note. NEVER report routine, correct behavior: excluding logos/banners/icons/rating widgets, ignoring non-catalog pages, pages that simply lack dimensions or descriptions, unmappable spreadsheet columns — all of that is the job working as intended and must stay silent. Most chunks should return ZERO warnings. Never restate anything listed under "Already noted".
 
-The staged data (from the operator's spreadsheet) is authoritative for quantity and price — never patch those; note conflicts in warnings instead. Ignore non-catalog pages except as background for tone.`;
+The staged data (from the operator's spreadsheet) is authoritative for quantity and price — never patch those; note conflicts in the item's patch note. Ignore non-catalog pages except as background for tone.`;
 
 /** Enrich staged items from one chunk of crawled pages. The staged list may be
- *  empty (URL-only import) — then everything arrives as newItems. */
-export async function enrichChunk(staged: StagedItem[], pages: CrawlPage[]): Promise<Enrichment> {
+ *  empty (URL-only import) — then everything arrives as newItems. Pass the
+ *  warnings recorded so far so a chunk can't re-report them — without this,
+ *  every chunk rediscovers the same site-wide facts and the review screen
+ *  drowns in duplicates. */
+export async function enrichChunk(
+  staged: StagedItem[],
+  pages: CrawlPage[],
+  priorWarnings: string[] = [],
+): Promise<Enrichment> {
   const client = getAnthropicClient();
   const itemList = staged.length
     ? staged
@@ -101,7 +108,11 @@ export async function enrichChunk(staged: StagedItem[], pages: CrawlPage[]): Pro
     messages: [
       {
         role: "user",
-        content: `Staged items:\n${itemList}\n\nWebsite pages (JSON, ${pages.length}):\n${JSON.stringify(pages)}`,
+        content: `Staged items:\n${itemList}\n${
+          priorWarnings.length
+            ? `\nAlready noted (do NOT repeat or rephrase any of these):\n${priorWarnings.map((w) => `- ${w}`).join("\n")}\n`
+            : ""
+        }\nWebsite pages (JSON, ${pages.length}):\n${JSON.stringify(pages)}`,
       },
     ],
   });
