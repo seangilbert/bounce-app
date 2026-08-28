@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, FileCsv, Sparkle, Warning } from "@phosphor-icons/react/dist/ssr";
+import { ArrowLeft, CastleTurret, CheckCircle, CircleNotch, FileCsv, Sparkle, Warning } from "@phosphor-icons/react/dist/ssr";
 import type { StagedItem } from "@/lib/import/schema";
 import { CATS } from "@/components/operator/inventory/shared";
 import {
@@ -13,7 +13,7 @@ import {
 
 type Phase =
   | { name: "pick"; error: string | null }
-  | { name: "processing"; jobPhase: "crawl" | "extract" | "enrich"; done: number; total: number; pages: number }
+  | { name: "processing"; jobPhase: "crawl" | "extract" | "enrich"; done: number; total: number; pages: number; items: number }
   | { name: "stalled"; jobId: string }
   | { name: "review"; jobId: string; warnings: string[] }
   | { name: "done"; imported: number; live: number; hidden: number; skipped: number };
@@ -30,6 +30,26 @@ const PHASE_LABEL = {
   enrich: (p: { done: number; total: number }) =>
     `Matching photos and descriptions… ${p.done} of ${p.total} batches`,
 };
+
+const PHASE_ORDER = ["crawl", "extract", "enrich"] as const;
+
+/** Something to smile at while the batches grind. Rotates every few seconds. */
+const QUIPS = [
+  "Unfolding the bounce houses…",
+  "Counting every chair… twice.",
+  "Checking the blowers for spiders…",
+  "Staking down the tents…",
+  "Measuring slides in actual feet…",
+  "Politely knocking on your old website's door…",
+  "Rolling up the extension cords…",
+  "Double-checking the cotton candy supply…",
+  "Finding the most flattering photo of every castle…",
+  "Writing descriptions that don't sound like a robot…",
+  "Inflating expectations…",
+  "Asking the popcorn machine to behave…",
+  "Untangling the anchor straps…",
+  "Reading the fine print… kidding, there isn't any.",
+];
 
 /** One staged item plus its review state (edits live client-side; commit
  *  re-validates everything server-side). */
@@ -74,6 +94,13 @@ export function ImportWizard({
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [committing, setCommitting] = useState(false);
   const [showAllWarnings, setShowAllWarnings] = useState(false);
+  const [quip, setQuip] = useState(() => Math.floor(Math.random() * QUIPS.length));
+  const processing = phase.name === "processing";
+  useEffect(() => {
+    if (!processing) return;
+    const t = setInterval(() => setQuip((q) => q + 1), 4500);
+    return () => clearInterval(t);
+  }, [processing]);
   const [file, setFile] = useState<File | null>(null);
   const [siteUrl, setSiteUrl] = useState("");
   const [siteConfirmed, setSiteConfirmed] = useState(false);
@@ -93,7 +120,7 @@ export function ImportWizard({
       setPhase({ name: "pick", error: started.error });
       return;
     }
-    setPhase({ name: "processing", jobPhase: siteUrl.trim() ? "crawl" : "extract", done: 0, total: 0, pages: 0 });
+    setPhase({ name: "processing", jobPhase: siteUrl.trim() ? "crawl" : "extract", done: 0, total: 0, pages: 0, items: 0 });
     await drive(started.jobId);
   }
 
@@ -135,6 +162,7 @@ export function ImportWizard({
         done: step.doneChunks,
         total: step.totalChunks,
         pages: step.pagesCrawled,
+        items: step.staged.length,
       });
     }
   }
@@ -268,7 +296,44 @@ export function ImportWizard({
         ) : null}
 
         {phase.name === "processing" ? (
-          <div className="mx-auto flex max-w-xl flex-col items-center gap-4 py-14 text-center">
+          <div className="mx-auto flex max-w-xl flex-col items-center gap-5 py-12 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-tint text-brand motion-safe:animate-bounce">
+              <CastleTurret size={34} weight="fill" />
+            </div>
+
+            {/* Step checklist — only the steps this import actually runs. */}
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+              {[
+                ...(siteUrl.trim() ? [{ key: "crawl" as const, label: "Read your website" }] : []),
+                ...(file ? [{ key: "extract" as const, label: "Read your items" }] : []),
+                ...(siteUrl.trim() ? [{ key: "enrich" as const, label: "Photos & descriptions" }] : []),
+              ].map((s) => {
+                const state =
+                  PHASE_ORDER.indexOf(s.key) < PHASE_ORDER.indexOf(phase.jobPhase)
+                    ? "done"
+                    : s.key === phase.jobPhase
+                      ? "active"
+                      : "pending";
+                return (
+                  <span
+                    key={s.key}
+                    className={`flex items-center gap-1.5 text-[13px] font-bold ${
+                      state === "done" ? "text-teal" : state === "active" ? "text-ink" : "text-ink-faint"
+                    }`}
+                  >
+                    {state === "done" ? (
+                      <CheckCircle size={16} weight="fill" />
+                    ) : state === "active" ? (
+                      <CircleNotch size={16} weight="bold" className="animate-spin" />
+                    ) : (
+                      <span className="h-2 w-2 rounded-full bg-sand" />
+                    )}
+                    {s.label}
+                  </span>
+                );
+              })}
+            </div>
+
             <div className="h-2 w-64 overflow-hidden rounded-full bg-sand">
               <div
                 className={`h-full rounded-full bg-brand transition-all duration-500 ${
@@ -282,8 +347,24 @@ export function ImportWizard({
                 }}
               />
             </div>
-            <p className="text-sm font-semibold text-ink-soft">{PHASE_LABEL[phase.jobPhase](phase)}</p>
-            <p className="text-[13px] font-medium text-ink-mute">
+            <div>
+              <p className="text-sm font-semibold text-ink-soft">{PHASE_LABEL[phase.jobPhase](phase)}</p>
+              {phase.items > 0 || phase.pages > 0 ? (
+                <p className="mt-0.5 text-[13px] font-semibold text-ink-mute">
+                  {[
+                    phase.pages > 0 ? `${phase.pages} pages found` : null,
+                    phase.items > 0 ? `${phase.items} items so far` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              ) : null}
+            </div>
+
+            <p aria-live="polite" className="text-[13px] font-medium italic text-ink-mute">
+              {QUIPS[quip % QUIPS.length]}
+            </p>
+            <p className="text-[12px] font-medium text-ink-faint">
               This takes a few minutes — keep this tab open.
             </p>
           </div>
@@ -303,7 +384,7 @@ export function ImportWizard({
               <button
                 onClick={() => {
                   const { jobId } = phase;
-                  setPhase({ name: "processing", jobPhase: "crawl", done: 0, total: 0, pages: 0 });
+                  setPhase({ name: "processing", jobPhase: "crawl", done: 0, total: 0, pages: 0, items: 0 });
                   void drive(jobId);
                 }}
                 className="rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-deep"
