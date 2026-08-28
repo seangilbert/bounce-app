@@ -104,6 +104,17 @@ export async function startImportAction(input: unknown): Promise<StartResult> {
   return { ok: true, jobId: job.id };
 }
 
+/** One retry for model calls: a transient bad generation (malformed JSON,
+ *  network blip) usually succeeds on the second attempt, and a chunk is cheap
+ *  to redo relative to failing (extract) or skipping pages (enrich). */
+async function retryOnce<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    return await fn();
+  }
+}
+
 const asResult = (job: ImportJob, patch: Partial<ImportJob>): ChunkResult => {
   const j = { ...job, ...patch };
   return {
@@ -157,7 +168,9 @@ export async function processImportChunkAction(jobId: string): Promise<ChunkResu
       if (!job.sourceCsv) throw new Error("Spreadsheet missing.");
       const rows = parseCsv(job.sourceCsv);
       const start = 1 + job.doneChunks * IMPORT_CHUNK_ROWS;
-      const result = await extractChunk(rows[0], rows.slice(start, start + IMPORT_CHUNK_ROWS), start);
+      const result = await retryOnce(() =>
+        extractChunk(rows[0], rows.slice(start, start + IMPORT_CHUNK_ROWS), start),
+      );
       const staged = [...job.staged, ...result.items];
       const warnings = [...job.warnings, ...result.warnings];
       const doneChunks = job.doneChunks + 1;
@@ -186,13 +199,19 @@ export async function processImportChunkAction(jobId: string): Promise<ChunkResu
     let staged = job.staged;
     const warnings = [...job.warnings];
     try {
-      const enrichment = await enrichChunk(job.staged, chunk, job.warnings);
+      const enrichment = await retryOnce(() => enrichChunk(job.staged, chunk, job.warnings));
       staged = applyEnrichment(job.staged, enrichment);
       warnings.push(...enrichment.warnings.filter((w) => !warnings.includes(w)));
     } catch (e) {
-      const why = e instanceof Error ? e.message : "processing failed";
+      const raw = e instanceof Error ? e.message : "processing failed";
+      // Parser/SDK internals are developer noise — say what it means instead.
+      const why = /parse|JSON/i.test(raw)
+        ? "we couldn't read the results for these pages (tried twice)"
+        : raw;
       warnings.push(
-        `Some website pages couldn't be processed (${chunk.map((p) => p.url).join(", ")}): ${why}`,
+        `Some website pages couldn't be processed, so photos or descriptions from them may be missing: ${chunk
+          .map((p) => p.url)
+          .join(", ")} — ${why}.`,
       );
     }
     const doneChunks = job.doneChunks + 1;

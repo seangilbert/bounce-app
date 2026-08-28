@@ -4,6 +4,9 @@ import { planCapabilities } from "@/lib/plans";
 import { ImportWizard } from "@/components/operator/inventory/import/ImportWizard";
 
 export const dynamic = "force-dynamic";
+// Import steps are single bounded model calls, but a retried enrich chunk can
+// legitimately run ~90s — give the server actions room beyond the 60s default.
+export const maxDuration = 300;
 
 export default async function InventoryImportPage() {
   const membership = await getSessionMembership();
