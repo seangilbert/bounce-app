@@ -350,14 +350,25 @@ export function ImportWizard({
               </div>
             ) : null}
             {itemLimit !== null && rows.length > slots ? (
-              <p className="rounded-xl bg-brand-tint/50 px-4 py-2.5 text-[13.5px] font-semibold text-ink-soft">
-                <span className="font-bold text-ink">
-                  {wantLive} of {slots} live {slots === 1 ? "slot" : "slots"} used.
-                </span>{" "}
-                Your plan shows {itemLimit} items on your storefront at a time — use the Live
-                checkboxes to pick which ones. Everything else imports hidden: saved, editable, and
-                swappable into a live slot anytime.
-              </p>
+              slots === 0 ? (
+                <p className="rounded-xl bg-brand-tint/50 px-4 py-2.5 text-[13.5px] font-semibold text-ink-soft">
+                  <span className="font-bold text-ink">
+                    All {itemLimit} of your plan&apos;s live slots are already used
+                  </span>{" "}
+                  by items in your inventory, so everything here imports hidden — saved and
+                  editable. After importing, swap any of them live from your Inventory page, or
+                  upgrade for an unlimited live catalog.
+                </p>
+              ) : (
+                <p className="rounded-xl bg-brand-tint/50 px-4 py-2.5 text-[13.5px] font-semibold text-ink-soft">
+                  <span className="font-bold text-ink">
+                    {wantLive} of {slots} live {slots === 1 ? "slot" : "slots"} used.
+                  </span>{" "}
+                  Your plan shows {itemLimit} items on your storefront at a time — use the Live
+                  checkboxes to pick which ones. Everything else imports hidden: saved, editable, and
+                  swappable into a live slot anytime.
+                </p>
+              )
             ) : null}
 
             {/* Confidence legend — the chips triage the review. */}
@@ -448,7 +459,13 @@ export function ImportWizard({
                       className={`flex items-center gap-1.5 text-[13px] font-bold ${
                         !r.active && liveFull ? "text-ink-faint" : "text-ink-soft"
                       }`}
-                      title={!r.active && liveFull ? "All live slots are used — uncheck another item first." : undefined}
+                      title={
+                        !r.active && liveFull
+                          ? slots === 0
+                            ? "Your plan's live slots are all used by existing items — import as hidden, then swap from Inventory."
+                            : "All live slots are used — uncheck another item first."
+                          : undefined
+                      }
                     >
                       <input
                         type="checkbox"
