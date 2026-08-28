@@ -295,6 +295,11 @@ export function ItemDetail({
             setEditing(false);
             router.refresh();
           }}
+          onDeleted={() => {
+            // This page IS the deleted item — refreshing it would 404.
+            router.push("/inventory");
+            router.refresh();
+          }}
         />
       ) : null}
     </div>

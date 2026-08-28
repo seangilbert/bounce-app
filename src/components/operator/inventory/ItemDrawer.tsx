@@ -110,10 +110,15 @@ export function ItemDrawer({
   item,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   item: Item | null;
   onClose: () => void;
   onSaved: () => void;
+  /** After a successful delete. Defaults to onSaved — but a page that IS the
+   *  deleted item (the detail page) must navigate away instead of refreshing
+   *  into a 404. */
+  onDeleted?: () => void;
 }) {
   const [draft, setDraft] = useState<DraftForm>(item ? itemToDraft(item) : emptyDraft);
   const [submitting, setSubmitting] = useState(false);
@@ -199,7 +204,7 @@ export function ItemDrawer({
     setDeleting(true);
     setError(null);
     const res = await deleteItemAction(item.id);
-    if (res.ok) onSaved();
+    if (res.ok) (onDeleted ?? onSaved)();
     else {
       setError(res.error);
       setDeleting(false);
