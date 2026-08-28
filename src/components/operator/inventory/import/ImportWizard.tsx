@@ -30,6 +30,24 @@ interface ReviewRow extends StagedItem {
   include: boolean;
 }
 
+/** Review-only preview hotlinked from the operator's old site (commit copies
+ *  the file into our storage). Scraped URLs can be dead or hotlink-protected,
+ *  so a load failure falls back to the placeholder square instead of the
+ *  browser's broken-image icon. */
+function Thumb({ src }: { src: string | undefined }) {
+  const [broken, setBroken] = useState(false);
+  if (!src || broken) return <span aria-hidden className="h-9 w-9 rounded-lg bg-sand/50" />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      onError={() => setBroken(true)}
+      className="h-9 w-9 rounded-lg border border-sand-line object-cover"
+    />
+  );
+}
+
 const CONFIDENCE_STYLE: Record<StagedItem["confidence"], string> = {
   high: "bg-teal-tint text-teal",
   medium: "bg-amber-tint text-amber-deep",
@@ -77,7 +95,17 @@ export function ImportWizard({
         return;
       }
       if (step.status === "review") {
-        setRows(step.staged.map((s) => ({ ...s, include: true })));
+        // Make the Live checkboxes tell the truth up front: pre-select Live on
+        // only as many items as the plan has slots for — the checkboxes ARE the
+        // slot picker, and commit does exactly what the screen shows.
+        let liveLeft = itemLimit === null ? Infinity : Math.max(0, itemLimit - liveNow);
+        setRows(
+          step.staged.map((s) => {
+            const live = s.active && liveLeft > 0;
+            if (live) liveLeft--;
+            return { ...s, active: live, include: true };
+          }),
+        );
         setPhase({ name: "review", jobId: started.jobId, warnings: step.warnings });
         return;
       }
@@ -109,6 +137,7 @@ export function ImportWizard({
   const includedCount = rows.filter((r) => r.include).length;
   const wantLive = rows.filter((r) => r.include && r.active).length;
   const slots = itemLimit === null ? Infinity : Math.max(0, itemLimit - liveNow);
+  const liveFull = slots !== Infinity && wantLive >= slots;
 
   return (
     <div className="flex w-full flex-col">
@@ -269,11 +298,14 @@ export function ImportWizard({
                 ) : null}
               </div>
             ) : null}
-            {itemLimit !== null && wantLive > slots ? (
+            {itemLimit !== null && rows.length > slots ? (
               <p className="rounded-xl bg-brand-tint/50 px-4 py-2.5 text-[13.5px] font-semibold text-ink-soft">
-                Your plan has {slots} live-item {slots === 1 ? "slot" : "slots"} left — the first{" "}
-                {slots} live items import live, the rest import hidden (saved and swappable
-                anytime).
+                <span className="font-bold text-ink">
+                  {wantLive} of {slots} live {slots === 1 ? "slot" : "slots"} used.
+                </span>{" "}
+                Your plan shows {itemLimit} items on your storefront at a time — use the Live
+                checkboxes to pick which ones. Everything else imports hidden: saved, editable, and
+                swappable into a live slot anytime.
               </p>
             ) : null}
 
@@ -296,18 +328,7 @@ export function ImportWizard({
                       className="h-4 w-4 accent-brand"
                       aria-label={`Include ${r.name}`}
                     />
-                    {r.images[0] ? (
-                      // Review-only preview straight from the operator's old site;
-                      // commit copies the file into our own storage.
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={r.images[0]}
-                        alt=""
-                        className="h-9 w-9 rounded-lg border border-sand-line object-cover"
-                      />
-                    ) : (
-                      <span aria-hidden className="h-9 w-9 rounded-lg bg-sand/50" />
-                    )}
+                    <Thumb src={r.images[0]} />
                     <input
                       value={r.name}
                       onChange={(e) => edit(i, { name: e.target.value })}
@@ -355,12 +376,18 @@ export function ImportWizard({
                       <option value="per_hour">Per hour</option>
                       <option value="flat">Flat</option>
                     </select>
-                    <label className="flex items-center gap-1.5 text-[13px] font-bold text-ink-soft">
+                    <label
+                      className={`flex items-center gap-1.5 text-[13px] font-bold ${
+                        !r.active && liveFull ? "text-ink-faint" : "text-ink-soft"
+                      }`}
+                      title={!r.active && liveFull ? "All live slots are used — uncheck another item first." : undefined}
+                    >
                       <input
                         type="checkbox"
                         checked={r.active}
+                        disabled={!r.active && liveFull}
                         onChange={(e) => edit(i, { active: e.target.checked })}
-                        className="h-4 w-4 accent-brand"
+                        className="h-4 w-4 accent-brand disabled:opacity-40"
                       />
                       Live
                     </label>
