@@ -277,7 +277,8 @@ export function ImportWizard({
               </p>
             ) : null}
 
-            <div className="flex flex-col gap-2">
+            <div className="overflow-x-auto">
+              <div className="flex min-w-[56rem] flex-col gap-2">
               {rows.map((r, i) => (
                 <div
                   key={i}
@@ -285,7 +286,9 @@ export function ImportWizard({
                     r.include ? "border-sand-line" : "border-sand-line opacity-45"
                   }`}
                 >
-                  <div className="flex flex-wrap items-center gap-2">
+                  {/* Fixed column tracks so every row's controls align; the
+                      thumbnail cell is always reserved, image or not. */}
+                  <div className="grid grid-cols-[1rem_2.25rem_minmax(0,1fr)_8.5rem_4rem_7rem_7rem_3.5rem_4.5rem] items-center gap-2">
                     <input
                       type="checkbox"
                       checked={r.include}
@@ -300,18 +303,20 @@ export function ImportWizard({
                       <img
                         src={r.images[0]}
                         alt=""
-                        className="h-9 w-9 flex-shrink-0 rounded-lg border border-sand-line object-cover"
+                        className="h-9 w-9 rounded-lg border border-sand-line object-cover"
                       />
-                    ) : null}
+                    ) : (
+                      <span aria-hidden className="h-9 w-9 rounded-lg bg-sand/50" />
+                    )}
                     <input
                       value={r.name}
                       onChange={(e) => edit(i, { name: e.target.value })}
-                      className="input min-w-44 flex-1 !py-2 text-sm font-bold"
+                      className="input !py-2 text-sm font-bold"
                     />
                     <select
                       value={r.category}
                       onChange={(e) => edit(i, { category: e.target.value as StagedItem["category"] })}
-                      className="input w-36 !py-2 text-sm"
+                      className="input !py-2 text-sm"
                     >
                       {CATS.map((c) => (
                         <option key={c.value} value={c.value}>
@@ -324,7 +329,7 @@ export function ImportWizard({
                       min={0}
                       value={r.quantity}
                       onChange={(e) => edit(i, { quantity: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
-                      className="input w-16 !py-2 text-sm"
+                      className="input !py-2 text-sm"
                       aria-label="Quantity"
                     />
                     <div className="flex items-center gap-1">
@@ -337,14 +342,14 @@ export function ImportWizard({
                         onChange={(e) =>
                           edit(i, { basePrice: Math.max(0, Math.round(Number(e.target.value) * 100) || 0) })
                         }
-                        className="input w-24 !py-2 text-sm"
+                        className="input w-full !py-2 text-sm"
                         aria-label="Price"
                       />
                     </div>
                     <select
                       value={r.priceUnit}
                       onChange={(e) => edit(i, { priceUnit: e.target.value as StagedItem["priceUnit"] })}
-                      className="input w-28 !py-2 text-sm"
+                      className="input !py-2 text-sm"
                     >
                       <option value="per_day">Per day</option>
                       <option value="per_hour">Per hour</option>
@@ -360,16 +365,17 @@ export function ImportWizard({
                       Live
                     </label>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${CONFIDENCE_STYLE[r.confidence]}`}
+                      className={`justify-self-center rounded-full px-2 py-0.5 text-center text-[10px] font-extrabold uppercase ${CONFIDENCE_STYLE[r.confidence]}`}
                     >
                       {r.confidence}
                     </span>
                   </div>
                   {r.notes ? (
-                    <p className="mt-1.5 pl-6 text-[12.5px] font-medium text-ink-mute">{r.notes}</p>
+                    <p className="mt-1.5 pl-[4.25rem] text-[12.5px] font-medium text-ink-mute">{r.notes}</p>
                   ) : null}
                 </div>
               ))}
+              </div>
             </div>
 
             <div className="flex items-center justify-between rounded-2xl border border-sand-line bg-white px-4 py-3">
