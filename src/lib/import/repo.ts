@@ -9,6 +9,8 @@ export interface ImportJob {
   id: string;
   operatorId: string;
   createdAt: string;
+  /** Optimistic-lock token: every write bumps it (DB trigger). */
+  updatedAt: string;
   status: ImportJobStatus;
   phase: ImportJobPhase;
   sourceName: string | null;
@@ -26,6 +28,7 @@ type Row = {
   id: string;
   operator_id: string;
   created_at: string;
+  updated_at: string;
   status: ImportJobStatus;
   phase: ImportJobPhase;
   source_name: string | null;
@@ -43,6 +46,7 @@ const rowToJob = (r: Row): ImportJob => ({
   id: r.id,
   operatorId: r.operator_id,
   createdAt: r.created_at,
+  updatedAt: r.updated_at,
   status: r.status,
   phase: r.phase,
   sourceName: r.source_name,
@@ -109,7 +113,11 @@ export async function updateImportJob(
     warnings: string[];
     error: string | null;
   }>,
-): Promise<void> {
+  /** With ifUpdatedAt: apply only if the row hasn't changed since that read —
+   *  returns false when another call already advanced the job (a stall-retry
+   *  racing the original), so the caller re-reads instead of double-applying. */
+  opts: { ifUpdatedAt?: string } = {},
+): Promise<boolean> {
   const supabase = createAdminClient();
   const row: Record<string, unknown> = {};
   if (patch.status !== undefined) row.status = patch.status;
@@ -120,10 +128,9 @@ export async function updateImportJob(
   if (patch.staged !== undefined) row.staged = patch.staged;
   if (patch.warnings !== undefined) row.warnings = patch.warnings;
   if (patch.error !== undefined) row.error = patch.error;
-  const { error } = await supabase
-    .from("import_jobs")
-    .update(row)
-    .eq("id", id)
-    .eq("operator_id", operatorId);
+  let query = supabase.from("import_jobs").update(row).eq("id", id).eq("operator_id", operatorId);
+  if (opts.ifUpdatedAt) query = query.eq("updated_at", opts.ifUpdatedAt);
+  const { data, error } = await query.select("id");
   if (error) throw new Error(`updateImportJob failed: ${error.message}`);
+  return (data ?? []).length > 0;
 }

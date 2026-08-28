@@ -142,14 +142,21 @@ export async function processImportChunkAction(jobId: string): Promise<ChunkResu
   if (job.status === "failed") return { ok: false, error: job.error ?? "Import failed." };
   if (job.status !== "processing") return asResult(job, {});
 
+  // Optimistic locking on every step write: a stall-retry from the wizard can
+  // race the original (still-running) call, and both must not apply the same
+  // chunk twice. The loser re-reads and reports the winner's state.
+  const apply = async (patch: Parameters<typeof updateImportJob>[2]): Promise<ChunkResult> => {
+    const applied = await updateImportJob(op.id, jobId, patch, { ifUpdatedAt: job.updatedAt });
+    if (applied) return asResult(job, patch);
+    const fresh = await getImportJob(op.id, jobId);
+    return fresh ? asResult(fresh, {}) : { ok: false, error: "Import not found." };
+  };
+
   try {
     if (job.phase === "crawl") {
       if (!job.crawlState) throw new Error("Crawl state missing.");
       const { state, done } = await crawlStep(job.crawlState);
-      if (!done) {
-        await updateImportJob(op.id, jobId, { crawlState: state });
-        return asResult(job, { crawlState: state });
-      }
+      if (!done) return apply({ crawlState: state });
       if (state.pages.length === 0) {
         throw new Error("We couldn't read any pages from that website.");
       }
@@ -159,9 +166,7 @@ export async function processImportChunkAction(jobId: string): Promise<ChunkResu
       const totalChunks = job.sourceCsv
         ? Math.ceil((parseCsv(job.sourceCsv).length - 1) / IMPORT_CHUNK_ROWS)
         : Math.ceil(state.pages.length / ENRICH_CHUNK_PAGES);
-      const patch = { crawlState: state, phase: nextPhase, doneChunks: 0, totalChunks };
-      await updateImportJob(op.id, jobId, patch);
-      return asResult(job, patch);
+      return apply({ crawlState: state, phase: nextPhase, doneChunks: 0, totalChunks });
     }
 
     if (job.phase === "extract") {
@@ -176,7 +181,7 @@ export async function processImportChunkAction(jobId: string): Promise<ChunkResu
       const doneChunks = job.doneChunks + 1;
       const finished = doneChunks >= job.totalChunks;
       const pages = job.crawlState?.pages ?? [];
-      const patch =
+      return apply(
         finished && job.sourceUrl && pages.length
           ? {
               staged,
@@ -185,9 +190,8 @@ export async function processImportChunkAction(jobId: string): Promise<ChunkResu
               doneChunks: 0,
               totalChunks: Math.ceil(pages.length / ENRICH_CHUNK_PAGES),
             }
-          : { staged, warnings, doneChunks, status: finished ? ("review" as const) : ("processing" as const) };
-      await updateImportJob(op.id, jobId, patch);
-      return asResult(job, patch);
+          : { staged, warnings, doneChunks, status: finished ? ("review" as const) : ("processing" as const) },
+      );
     }
 
     // phase === "enrich" — additive polish on top of already-staged items, so
@@ -216,14 +220,12 @@ export async function processImportChunkAction(jobId: string): Promise<ChunkResu
     }
     const doneChunks = job.doneChunks + 1;
     const finished = doneChunks >= job.totalChunks;
-    const patch = {
+    return apply({
       staged,
       warnings,
       doneChunks,
       status: finished ? ("review" as const) : ("processing" as const),
-    };
-    await updateImportJob(op.id, jobId, patch);
-    return asResult(job, patch);
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Import failed.";
     await updateImportJob(op.id, jobId, { status: "failed", error: message });

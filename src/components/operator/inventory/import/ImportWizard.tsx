@@ -14,8 +14,15 @@ import {
 type Phase =
   | { name: "pick"; error: string | null }
   | { name: "processing"; jobPhase: "crawl" | "extract" | "enrich"; done: number; total: number; pages: number }
+  | { name: "stalled"; jobId: string }
   | { name: "review"; jobId: string; warnings: string[] }
   | { name: "done"; imported: number; live: number; hidden: number };
+
+/** Watchdog per step call: the longest legitimate step (a retried enrich
+ *  chunk) runs ~90s, so past this the call is presumed wedged. The server
+ *  side uses optimistic locking, so resuming while the original call is
+ *  somehow still alive can never double-apply a chunk. */
+const STEP_TIMEOUT_MS = 180_000;
 
 const PHASE_LABEL = {
   crawl: (p: { pages: number }) => `Reading your website… ${p.pages} pages so far`,
@@ -87,9 +94,22 @@ export function ImportWizard({
       return;
     }
     setPhase({ name: "processing", jobPhase: siteUrl.trim() ? "crawl" : "extract", done: 0, total: 0, pages: 0 });
-    // Drive the job one bounded step per call; each call updates progress.
+    await drive(started.jobId);
+  }
+
+  /** Drive the job one bounded step per call; each call updates progress. Also
+   *  the resume path after a stall — safe to re-enter thanks to the server's
+   *  optimistic locking. */
+  async function drive(jobId: string) {
     for (;;) {
-      const step = await processImportChunkAction(started.jobId);
+      const step = await Promise.race([
+        processImportChunkAction(jobId),
+        new Promise<"stalled">((resolve) => setTimeout(() => resolve("stalled"), STEP_TIMEOUT_MS)),
+      ]);
+      if (step === "stalled") {
+        setPhase({ name: "stalled", jobId });
+        return;
+      }
       if (!step.ok) {
         setPhase({ name: "pick", error: step.error });
         return;
@@ -106,7 +126,7 @@ export function ImportWizard({
             return { ...s, active: live, include: true };
           }),
         );
-        setPhase({ name: "review", jobId: started.jobId, warnings: step.warnings });
+        setPhase({ name: "review", jobId, warnings: step.warnings });
         return;
       }
       setPhase({
@@ -266,6 +286,37 @@ export function ImportWizard({
             <p className="text-[13px] font-medium text-ink-mute">
               This takes a few minutes — keep this tab open.
             </p>
+          </div>
+        ) : null}
+
+        {phase.name === "stalled" ? (
+          <div className="mx-auto flex max-w-xl flex-col items-center gap-3 py-14 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-tint text-amber-deep">
+              <Warning size={24} weight="fill" />
+            </div>
+            <h2 className="font-display text-xl font-bold text-ink">Taking longer than expected</h2>
+            <p className="max-w-md text-sm font-medium text-ink-mute">
+              One step didn&apos;t come back in time. Your progress is saved — picking up where it
+              left off is safe.
+            </p>
+            <div className="mt-1 flex gap-2">
+              <button
+                onClick={() => {
+                  const { jobId } = phase;
+                  setPhase({ name: "processing", jobPhase: "crawl", done: 0, total: 0, pages: 0 });
+                  void drive(jobId);
+                }}
+                className="rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-deep"
+              >
+                Keep going
+              </button>
+              <button
+                onClick={() => setPhase({ name: "pick", error: null })}
+                className="rounded-full border border-sand-line bg-white px-6 py-2.5 text-sm font-bold text-ink-soft hover:border-sand"
+              >
+                Start over
+              </button>
+            </div>
           </div>
         ) : null}
 
