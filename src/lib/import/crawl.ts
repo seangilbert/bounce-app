@@ -151,6 +151,9 @@ export async function crawlStep(
       res = await fetch(url, {
         redirect: "follow",
         headers: { "user-agent": "MovablesImport/0.1 (operator-requested catalog migration)" },
+        // A single hanging page must not stall the whole import — seen live:
+        // one stuck fetch froze a job in crawl phase for 15 minutes.
+        signal: AbortSignal.timeout(10_000),
       });
     } catch {
       continue;
@@ -160,10 +163,13 @@ export async function crawlStep(
     pages.push({ url: norm, ...extractPage(html, url) });
     if (depth < 2 && startHost) {
       for (const m of html.matchAll(/href=["']([^"']+)["']/gi)) {
+        if (queue.length >= 600) break; // nav links repeat on every page; don't hoard dupes
         try {
           const u = new URL(m[1], url);
           if (u.host !== startHost) continue;
           if (SKIP_EXT.test(u.pathname) || SKIP_PATH.test(u.pathname)) continue;
+          const norm = u.href.split("#")[0].replace(/\?.*$/, "").replace(/\/$/, "");
+          if (seen.has(norm)) continue;
           queue.push({ url: u.href, depth: depth + 1 });
         } catch {
           /* bad href */
