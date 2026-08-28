@@ -360,6 +360,23 @@ export function ImportWizard({
               </p>
             ) : null}
 
+            {/* Confidence legend — the chips triage the review. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1 text-[12.5px] font-medium text-ink-mute">
+              <span className="font-bold text-ink-soft">How sure we are about each item:</span>
+              <span className="flex items-center gap-1.5">
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${CONFIDENCE_STYLE.high}`}>high</span>
+                read directly from your data
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${CONFIDENCE_STYLE.medium}`}>medium</span>
+                some interpretation — see the note
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${CONFIDENCE_STYLE.low}`}>low</span>
+                a guess was needed — check these first
+              </span>
+            </div>
+
             <div className="overflow-x-auto">
               <div className="flex min-w-[56rem] flex-col gap-2">
               {rows.map((r, i) => (
