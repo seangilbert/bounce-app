@@ -28,11 +28,12 @@ export function createAdminClient(): SupabaseClient {
     admin = createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },
       // This client reads real-time data (availability, orders, bookings) from
-      // Route Handlers and webhooks. Force every request past Next.js's Data
-      // Cache so a stale read can never be served; retry reads once on a
-      // dead pooled socket (see resilient-fetch).
+      // Route Handlers and webhooks. resilientFetch uses undici directly —
+      // outside Next's fetch patching — so nothing is ever served from the
+      // Data Cache (the guarantee `cache: "no-store"` used to provide), and
+      // reads retry once on a dead pooled connection.
       global: {
-        fetch: (input, init) => resilientFetch(input, { ...init, cache: "no-store" }),
+        fetch: resilientFetch,
       },
     });
   }
