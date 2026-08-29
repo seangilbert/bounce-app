@@ -6,6 +6,7 @@ import { ArrowLeft, CastleTurret, CheckCircle, CircleNotch, FileCsv, Sparkle, Wa
 import type { StagedItem } from "@/lib/import/schema";
 import { CATS } from "@/components/operator/inventory/shared";
 import {
+  abandonImportAction,
   commitImportAction,
   processImportChunkAction,
   startImportAction,
@@ -14,7 +15,7 @@ import {
 type Phase =
   | { name: "pick"; error: string | null }
   | { name: "processing"; jobPhase: "crawl" | "extract" | "enrich"; done: number; total: number; pages: number; items: number }
-  | { name: "stalled"; jobId: string }
+  | { name: "stalled"; jobId: string; resume?: boolean }
   | { name: "review"; jobId: string; warnings: string[] }
   | { name: "done"; imported: number; live: number; hidden: number; skipped: number };
 
@@ -84,13 +85,18 @@ const CONFIDENCE_STYLE: Record<StagedItem["confidence"], string> = {
 export function ImportWizard({
   liveNow,
   itemLimit,
+  resumeJobId = null,
 }: {
   liveNow: number;
   /** Plan cap on LIVE items; null = unlimited. */
   itemLimit: number | null;
+  /** A still-processing job from before a reload — offer to pick it back up. */
+  resumeJobId?: string | null;
 }) {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>({ name: "pick", error: null });
+  const [phase, setPhase] = useState<Phase>(
+    resumeJobId ? { name: "stalled", jobId: resumeJobId, resume: true } : { name: "pick", error: null },
+  );
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [committing, setCommitting] = useState(false);
   const [showAllWarnings, setShowAllWarnings] = useState(false);
@@ -135,6 +141,7 @@ export function ImportWizard({
    *  the resume path after a stall — safe to re-enter thanks to the server's
    *  optimistic locking. */
   async function drive(jobId: string) {
+    let rejections = 0;
     for (;;) {
       let step: Awaited<ReturnType<typeof processImportChunkAction>> | "stalled";
       try {
@@ -143,16 +150,23 @@ export function ImportWizard({
           new Promise<"stalled">((resolve) => setTimeout(() => resolve("stalled"), STEP_TIMEOUT_MS)),
         ]);
       } catch (e) {
-        // A rejected step (network drop, function killed mid-flight) is
-        // retryable, same as a stall — without this the loop dies silently
-        // and the processing screen freezes forever.
-        console.error("[import] step failed", e);
+        // The connection died mid-step (proxy/NAT cut, network blip). The
+        // server keeps running and saves its progress, and re-entry is
+        // optimistic-locked, so just resume — the next call picks up where
+        // the server actually got to. Backoff gives an interrupted-but-alive
+        // server call time to finish before we re-enter.
+        console.error("[import] step connection lost", e);
+        if (++rejections <= 3) {
+          await new Promise((r) => setTimeout(r, rejections * 5000));
+          continue;
+        }
         step = "stalled";
       }
       if (step === "stalled") {
         setPhase({ name: "stalled", jobId });
         return;
       }
+      rejections = 0;
       if (!step.ok) {
         setPhase({ name: "pick", error: step.error });
         return;
@@ -397,10 +411,13 @@ export function ImportWizard({
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-tint text-amber-deep">
               <Warning size={24} weight="fill" />
             </div>
-            <h2 className="font-display text-xl font-bold text-ink">Taking longer than expected</h2>
+            <h2 className="font-display text-xl font-bold text-ink">
+              {phase.resume ? "Finish your import?" : "Taking longer than expected"}
+            </h2>
             <p className="max-w-md text-sm font-medium text-ink-mute">
-              One step didn&apos;t come back in time. Your progress is saved — picking up where it
-              left off is safe.
+              {phase.resume
+                ? "An import was interrupted before it finished. Your progress is saved — picking up where it left off is safe."
+                : "One step didn't come back in time. Your progress is saved — picking up where it left off is safe."}
             </p>
             <div className="mt-1 flex gap-2">
               <button
@@ -414,7 +431,12 @@ export function ImportWizard({
                 Keep going
               </button>
               <button
-                onClick={() => setPhase({ name: "pick", error: null })}
+                onClick={() => {
+                  // Fire-and-forget: mark the old job failed so this screen
+                  // doesn't come back on the next visit.
+                  abandonImportAction(phase.jobId).catch(() => undefined);
+                  setPhase({ name: "pick", error: null });
+                }}
                 className="rounded-full border border-sand-line bg-white px-6 py-2.5 text-sm font-bold text-ink-soft hover:border-sand"
               >
                 Start over

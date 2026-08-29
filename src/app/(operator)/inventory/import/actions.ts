@@ -57,6 +57,17 @@ const StartInput = z.object({
   siteConfirmed: z.boolean().optional(),
 });
 
+/** Mark a still-processing job failed so the wizard stops offering to resume
+ *  it. Only called from "Start over" — never touches finished jobs. */
+export async function abandonImportAction(jobId: string): Promise<void> {
+  const g = await requireAdmin();
+  if (!g.ok) return;
+  const op = g.membership.operator;
+  const job = typeof jobId === "string" ? await getImportJob(op.id, jobId) : null;
+  if (!job || job.status !== "processing") return;
+  await updateImportJob(op.id, jobId, { status: "failed", error: "Abandoned by the operator." });
+}
+
 export async function startImportAction(input: unknown): Promise<StartResult> {
   const g = await requireAdmin();
   if (!g.ok) return { ok: false, error: g.error };

@@ -100,6 +100,22 @@ export async function getImportJob(operatorId: string, id: string): Promise<Impo
   return data ? rowToJob(data as Row) : null;
 }
 
+/** The operator's most recent still-processing job, if any — lets the wizard
+ *  offer to resume after a reload (the client drive loop doesn't survive one). */
+export async function latestProcessingImportJob(operatorId: string): Promise<ImportJob | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("import_jobs")
+    .select()
+    .eq("operator_id", operatorId)
+    .eq("status", "processing")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`latestProcessingImportJob failed: ${error.message}`);
+  return data ? rowToJob(data as Row) : null;
+}
+
 export async function updateImportJob(
   operatorId: string,
   id: string,

@@ -1,5 +1,6 @@
 import { getSessionMembership } from "@/lib/operator/session";
 import { countItems } from "@/lib/inventory/repo";
+import { latestProcessingImportJob } from "@/lib/import/repo";
 import { planCapabilities } from "@/lib/plans";
 import { ImportWizard } from "@/components/operator/inventory/import/ImportWizard";
 
@@ -18,5 +19,12 @@ export default async function InventoryImportPage() {
   }
   const liveNow = await countItems(membership.operator.id, { activeOnly: true });
   const cap = planCapabilities(membership.operator).maxItems;
-  return <ImportWizard liveNow={liveNow} itemLimit={Number.isFinite(cap) ? cap : null} />;
+  const unfinished = await latestProcessingImportJob(membership.operator.id);
+  return (
+    <ImportWizard
+      liveNow={liveNow}
+      itemLimit={Number.isFinite(cap) ? cap : null}
+      resumeJobId={unfinished?.id ?? null}
+    />
+  );
 }
