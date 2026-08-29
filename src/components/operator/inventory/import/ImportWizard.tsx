@@ -109,13 +109,20 @@ export function ImportWizard({
   const canStart = file !== null || (siteUrl.trim() !== "" && siteConfirmed);
 
   async function start() {
-    const csv = file ? await file.text() : null;
-    const started = await startImportAction({
-      sourceName: file?.name ?? null,
-      csv,
-      url: siteUrl.trim() || null,
-      siteConfirmed,
-    });
+    let started: Awaited<ReturnType<typeof startImportAction>>;
+    try {
+      const csv = file ? await file.text() : null;
+      started = await startImportAction({
+        sourceName: file?.name ?? null,
+        csv,
+        url: siteUrl.trim() || null,
+        siteConfirmed,
+      });
+    } catch (e) {
+      console.error("[import] start failed", e);
+      setPhase({ name: "pick", error: "Something went wrong starting the import — please try again." });
+      return;
+    }
     if (!started.ok) {
       setPhase({ name: "pick", error: started.error });
       return;
@@ -129,10 +136,19 @@ export function ImportWizard({
    *  optimistic locking. */
   async function drive(jobId: string) {
     for (;;) {
-      const step = await Promise.race([
-        processImportChunkAction(jobId),
-        new Promise<"stalled">((resolve) => setTimeout(() => resolve("stalled"), STEP_TIMEOUT_MS)),
-      ]);
+      let step: Awaited<ReturnType<typeof processImportChunkAction>> | "stalled";
+      try {
+        step = await Promise.race([
+          processImportChunkAction(jobId),
+          new Promise<"stalled">((resolve) => setTimeout(() => resolve("stalled"), STEP_TIMEOUT_MS)),
+        ]);
+      } catch (e) {
+        // A rejected step (network drop, function killed mid-flight) is
+        // retryable, same as a stall — without this the loop dies silently
+        // and the processing screen freezes forever.
+        console.error("[import] step failed", e);
+        step = "stalled";
+      }
       if (step === "stalled") {
         setPhase({ name: "stalled", jobId });
         return;
@@ -170,7 +186,13 @@ export function ImportWizard({
   async function commit(jobId: string) {
     setCommitting(true);
     const included = rows.filter((r) => r.include).map(({ include: _include, ...item }) => item);
-    const res = await commitImportAction({ jobId, items: included });
+    let res: Awaited<ReturnType<typeof commitImportAction>>;
+    try {
+      res = await commitImportAction({ jobId, items: included });
+    } catch (e) {
+      console.error("[import] commit failed", e);
+      res = { ok: false, error: "The import may not have finished — check your inventory before retrying, so items aren't added twice." };
+    }
     setCommitting(false);
     if (!res.ok) {
       setPhase({ name: "review", jobId, warnings: [res.error] });
