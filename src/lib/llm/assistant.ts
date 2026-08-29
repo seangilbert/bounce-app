@@ -13,6 +13,7 @@ import {
   recordCustomerInbound,
   appendInquiryMessage,
   markInquiryNeedsHuman,
+  updateInquiryQuote,
   type InquiryRow,
 } from "@/lib/inquiries/repo";
 import { notifyOperatorNewInquiry } from "@/lib/email";
@@ -20,6 +21,7 @@ import { getQuoteQuota, incrementAiQuoteUsage } from "@/lib/usage/ai-quotes";
 import { listAssistantPromos } from "@/lib/promos/repo";
 import { buildOperatorConfig } from "./operator-config";
 import type { Operator } from "@/lib/inventory/types";
+import type { QuoteMessageMeta } from "@/lib/operator/inquiries";
 
 /**
  * Per-task models — three independent cost dials (docs/pricing-plan.md, 2026-08-17).
@@ -124,6 +126,9 @@ export interface ConversationResult {
   unmatchedRequests: string[];
   /** Persisted inbox row id (echoed back so we update rather than duplicate). */
   inquiryId: string | null;
+  /** Quote-card payload for the AI's message row (auto-sent quotes only) —
+   *  callers persisting the AI turn attach it as message metadata. */
+  quoteMeta?: QuoteMessageMeta;
 }
 
 function hoursUntil(dateStr: string): number {
@@ -292,6 +297,7 @@ export async function handleInquiry(
         await appendInquiryMessage(existing.id, "ai", result.reply, {
           channel: existing.channel,
           direction: "outbound",
+          metadata: result.quoteMeta,
         });
       } catch (err) {
         console.error("[inquiries] failed to persist AI turn:", err);
@@ -647,7 +653,33 @@ async function runInquiryTurn(inquiry: Inquiry, operator: Operator): Promise<Con
       : out.reply
     : `Thanks! This one's a bit beyond an instant quote — ${operator.name} will put together a custom price for you. Just leave your email below and they'll send it over, usually within a few hours.`;
 
-  // Persist to the operator inbox once per conversation (first quote only).
+  const quote = {
+    lineItems: lines,
+    subtotal,
+    deliveryFee: bd.deliveryFee,
+    tax: bd.tax,
+    total: bd.total,
+    suggestedDeposit,
+    currency: "usd",
+  };
+  // Card payload for the AI's message row — only when the quote was actually
+  // auto-sent (an escalated draft isn't shown to the customer as a quote).
+  const quoteMeta: QuoteMessageMeta | undefined = auto
+    ? {
+        kind: "quote",
+        lines: lines.map((l) => ({ name: l.name, quantity: l.quantity, lineTotal: l.lineTotal })),
+        subtotal,
+        deliveryFee: deliveryDeferred ? null : bd.deliveryFee,
+        tax: bd.tax,
+        total: bd.total,
+        deposit: suggestedDeposit,
+        startDate,
+        endDate,
+      }
+    : undefined;
+
+  // Persist to the operator inbox: create on the first quote, refresh the
+  // stored quote on later quoting turns so the inbox shows the latest one.
   let inquiryId = inquiry.inquiryId ?? null;
   if (!inquiryId) {
     const firstUser = inquiry.messages.find((m) => m.role === "user")?.content ?? "";
@@ -665,7 +697,8 @@ async function runInquiryTurn(inquiry: Inquiry, operator: Operator): Promise<Con
         aiSummary: out.reply,
         escalationReasons: reasons,
         unmatchedRequests: out.unmatchedRequests,
-        quote: { lineItems: lines, subtotal, deliveryFee: bd.deliveryFee, tax: bd.tax, total: bd.total, suggestedDeposit, currency: "usd" },
+        quote,
+        aiMessageMetadata: quoteMeta,
       });
       inquiryId = created.id;
       // Count this conversation once for every plan — the Free cap gates on it,
@@ -696,13 +729,22 @@ async function runInquiryTurn(inquiry: Inquiry, operator: Operator): Promise<Con
         console.error("[inquiries] operator alert failed:", err);
       }
     }
+  } else {
+    // Best-effort — a stale inbox quote shouldn't fail a quote the customer
+    // already received.
+    try {
+      await updateInquiryQuote(inquiryId, quote, startDate, endDate);
+    } catch (err) {
+      console.error("[inquiries] failed to refresh quote:", err);
+    }
   }
 
   return {
     reply: customerReply,
     status: auto ? "quoted" : "review",
     eventDate: startDate,
-    quote: { lineItems: lines, subtotal, deliveryFee: bd.deliveryFee, tax: bd.tax, total: bd.total, suggestedDeposit, currency: "usd" },
+    quote,
+    quoteMeta,
     auto,
     unmatchedRequests: out.unmatchedRequests,
     inquiryId,

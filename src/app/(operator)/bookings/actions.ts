@@ -16,7 +16,8 @@ import {
 } from "@/lib/bookings/repo";
 import { getOrderByBookingId, setOrderStatusByPaymentId, recordCashPayment } from "@/lib/orders/repo";
 import { getPaymentProvider, type PaymentProviderName } from "@/lib/payments";
-import { linkInquiryToBooking } from "@/lib/inquiries/repo";
+import { linkInquiryToBooking, recordOperatorQuoteSent } from "@/lib/inquiries/repo";
+import type { QuoteMessageMeta } from "@/lib/operator/inquiries";
 import { redeemPromoForBooking } from "@/lib/promos/repo";
 import { notifyQuoteLink } from "@/lib/email";
 import { depositAmount } from "@/lib/deposit";
@@ -140,6 +141,38 @@ export async function createOperatorBookingAction(
       await markQuoteSent(booking.id);
     } catch (err) {
       console.error("[bookings] markQuoteSent failed:", err);
+    }
+    // Put the quote in the conversation (as a quote card) so the thread stays a
+    // truthful record of what the customer received. Best-effort — the email
+    // already went out.
+    if (d.inquiryId) {
+      try {
+        const itemsLabel = booking.items
+          .map((i) => (i.quantity > 1 ? `${i.quantity}× ${i.name}` : i.name))
+          .join(", ");
+        const meta: QuoteMessageMeta = {
+          kind: "quote",
+          lines: booking.items.map((i) => ({ name: i.name, quantity: i.quantity, lineTotal: i.lineTotal })),
+          subtotal: booking.subtotal,
+          deliveryFee: booking.deliveryFee,
+          tax: booking.taxAmount,
+          discount: booking.discount || null,
+          total: booking.total,
+          deposit: depositAmount(booking.total, op.depositPercent),
+          startDate: booking.startDate,
+          endDate: booking.endDate,
+          note: d.message ?? null,
+          payUrl,
+          paymentType: d.paymentType,
+        };
+        await recordOperatorQuoteSent(
+          d.inquiryId,
+          `Sent a quote — ${itemsLabel}. Payment link emailed to ${d.customerEmail}.`,
+          meta,
+        );
+      } catch (err) {
+        console.error("[inquiries] recordOperatorQuoteSent failed:", err);
+      }
     }
     revalidatePath("/inquiries");
     revalidatePath("/dashboard");

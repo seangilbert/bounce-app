@@ -88,7 +88,11 @@ export async function ingestInbound(opts: {
     endDate: inquiry.end_date,
   });
 
-  await appendInquiryMessage(inquiry.id, "ai", result.reply, { channel, direction: "outbound" });
+  await appendInquiryMessage(inquiry.id, "ai", result.reply, {
+    channel,
+    direction: "outbound",
+    metadata: result.quoteMeta,
+  });
 
   const operator = await getOperatorById(inquiry.operator_id);
   if (result.status === "review") {

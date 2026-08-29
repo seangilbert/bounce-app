@@ -40,6 +40,9 @@ export interface CreateInquiryInput {
   /** Null when no AI quote was generated (e.g. a lead captured while the
    *  operator is over their monthly AI-quote cap). */
   quote: InquiryQuote | null;
+  /** Structured payload for the seeded AI message (the quote card an
+   *  auto-answer sent), stored on the message row itself. */
+  aiMessageMetadata?: Record<string, unknown> | null;
 }
 
 export type InquirySender = "customer" | "operator" | "ai";
@@ -60,6 +63,8 @@ export interface ThreadMessage {
   createdAt: string;
   channel?: string | null;
   direction?: MessageDirection | null;
+  /** Structured payload, e.g. an operator-sent quote card. */
+  metadata?: Record<string, unknown> | null;
 }
 
 /** A row from the `inquiries` table (snake_case, as stored). */
@@ -148,11 +153,19 @@ export async function createInquiry(input: CreateInquiryInput): Promise<{ id: st
     body: string;
     channel: string;
     direction: MessageDirection;
+    metadata?: Record<string, unknown> | null;
   }[] = [];
   if (input.inboundMessage?.trim())
     seed.push({ inquiry_id: id, sender: "customer", body: input.inboundMessage, channel, direction: "inbound" });
   if (input.auto && input.aiSummary?.trim())
-    seed.push({ inquiry_id: id, sender: "ai", body: input.aiSummary, channel, direction: "outbound" });
+    seed.push({
+      inquiry_id: id,
+      sender: "ai",
+      body: input.aiSummary,
+      channel,
+      direction: "outbound",
+      metadata: input.aiMessageMetadata ?? null,
+    });
   if (seed.length) await supabase.from("inquiry_messages").insert(seed);
 
   return { id };
@@ -164,7 +177,7 @@ export async function appendInquiryMessage(
   inquiryId: string,
   sender: InquirySender,
   body: string,
-  opts?: { channel?: string; direction?: MessageDirection },
+  opts?: { channel?: string; direction?: MessageDirection; metadata?: Record<string, unknown> },
 ): Promise<void> {
   const supabase = createAdminClient();
   const { error } = await supabase.from("inquiry_messages").insert({
@@ -173,8 +186,30 @@ export async function appendInquiryMessage(
     body,
     channel: opts?.channel ?? null,
     direction: opts?.direction ?? (sender === "customer" ? "inbound" : "outbound"),
+    metadata: opts?.metadata ?? null,
   });
   if (error) throw new Error(`appendInquiryMessage failed: ${error.message}`);
+}
+
+/** Record an operator-sent quote in the thread (as a quote-card message) AND
+ *  touch last_human_at so the conversation bubbles up like any reply would.
+ *  Service-role — called from the create-booking action after the quote email. */
+export async function recordOperatorQuoteSent(
+  inquiryId: string,
+  body: string,
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  await appendInquiryMessage(inquiryId, "operator", body, {
+    channel: "email",
+    direction: "outbound",
+    metadata,
+  });
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("inquiries")
+    .update({ last_human_at: new Date().toISOString() })
+    .eq("id", inquiryId);
+  if (error) throw new Error(`recordOperatorQuoteSent failed: ${error.message}`);
 }
 
 /** One inquiry row by id (service-role — used by the AI brain's handoff gate,
@@ -238,6 +273,23 @@ export async function markInquiryNeedsHuman(inquiryId: string): Promise<void> {
     .update({ status: "needs_review", owner: "needs_human" })
     .eq("id", inquiryId);
   if (error) throw new Error(`markInquiryNeedsHuman failed: ${error.message}`);
+}
+
+/** Refresh the stored quote (and the dates it was priced for) after a follow-up
+ *  AI quoting turn — createInquiry only captures the first quote, and the inbox
+ *  should show what the customer was *last* quoted. Service-role. */
+export async function updateInquiryQuote(
+  inquiryId: string,
+  quote: InquiryQuote,
+  startDate: string,
+  endDate: string,
+): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("inquiries")
+    .update({ quote, start_date: startDate, end_date: endDate })
+    .eq("id", inquiryId);
+  if (error) throw new Error(`updateInquiryQuote failed: ${error.message}`);
 }
 
 /** Append an inbound customer message AND touch last_customer_at — one helper
@@ -367,7 +419,7 @@ export async function listMessagesByInquiry(
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("inquiry_messages")
-    .select("id, inquiry_id, sender, body, created_at, channel, direction")
+    .select("id, inquiry_id, sender, body, created_at, channel, direction, metadata")
     .in("inquiry_id", inquiryIds)
     .order("created_at", { ascending: true });
   if (error) throw new Error(`listMessagesByInquiry failed: ${error.message}`);
@@ -379,6 +431,7 @@ export async function listMessagesByInquiry(
     created_at: string;
     channel: string | null;
     direction: MessageDirection | null;
+    metadata: Record<string, unknown> | null;
   }[];
   // Tiebreaker for same-timestamp messages (backfill seeded customer + AI at the
   // inquiry's created_at): always show customer → ai → operator.
@@ -395,6 +448,7 @@ export async function listMessagesByInquiry(
       createdAt: r.created_at,
       channel: r.channel,
       direction: r.direction,
+      metadata: r.metadata,
     });
     map.set(r.inquiry_id, arr);
   }

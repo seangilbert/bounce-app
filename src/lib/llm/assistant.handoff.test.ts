@@ -17,6 +17,7 @@ const {
   recordCustomerInbound,
   appendInquiryMessage,
   markInquiryNeedsHuman,
+  updateInquiryQuote,
   createInquiry,
   getQuoteQuota,
 } = vi.hoisted(() => ({
@@ -29,6 +30,7 @@ const {
   recordCustomerInbound: vi.fn(),
   appendInquiryMessage: vi.fn(),
   markInquiryNeedsHuman: vi.fn(),
+  updateInquiryQuote: vi.fn(),
   createInquiry: vi.fn(),
   getQuoteQuota: vi.fn(),
 }));
@@ -51,6 +53,7 @@ vi.mock("@/lib/inquiries/repo", () => ({
   recordCustomerInbound,
   appendInquiryMessage,
   markInquiryNeedsHuman,
+  updateInquiryQuote,
 }));
 vi.mock("@/lib/email", () => ({ notifyOperatorNewInquiry: vi.fn() }));
 vi.mock("@/lib/usage/ai-quotes", () => ({ getQuoteQuota, incrementAiQuoteUsage: vi.fn() }));
@@ -180,8 +183,15 @@ describe("handleInquiry — handoff gate", () => {
     const res = await handleInquiry({ ...CHAT, startDate: "2030-06-01" });
     expect(res.status).toBe("review");
     expect(markInquiryNeedsHuman).toHaveBeenCalledWith("inq-1");
-    // Existing conversation — no duplicate inbox row.
+    // Existing conversation — no duplicate inbox row, but the stored quote is
+    // refreshed so the inbox shows what was last quoted.
     expect(createInquiry).not.toHaveBeenCalled();
+    expect(updateInquiryQuote).toHaveBeenCalledWith(
+      "inq-1",
+      expect.objectContaining({ subtotal: 20000, total: 20000 }),
+      "2030-06-01",
+      "2030-06-01",
+    );
   });
 
   it("new conversations (no inquiryId) never hit the gate or the row lookup", async () => {

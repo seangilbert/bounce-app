@@ -9,6 +9,7 @@ import type {
   SelectedBooking,
   SelectedDayDetail,
 } from "./calendar";
+import { quoteFromMessageMeta } from "./inquiries";
 import type { InquiryListItem, InquiryDetail, BookingOutcome } from "./inquiries";
 import { bookingsForOutcomes, type OutcomeBookingRow } from "@/lib/bookings/repo";
 import { listInquiries, listMessagesByInquiry, type InquiryRow, type ThreadMessage } from "@/lib/inquiries/repo";
@@ -43,6 +44,16 @@ function shortLabel(name: string, qty: number): string {
 
 function money(cents: number): string {
   return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
+}
+
+/** Like money() but keeps cents when present — quote breakdowns (tax, deposit)
+ *  must match what the customer was actually quoted. */
+function moneyExact(cents: number): string {
+  return (cents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+  });
 }
 
 interface BItem {
@@ -333,6 +344,7 @@ function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, 
     time: relTime(m.createdAt),
     channel: m.channel ?? null,
     direction: m.direction ?? null,
+    quote: quoteFromMessageMeta(m.metadata),
   }));
   const channelLabel =
     r.channel === "sms"
@@ -352,12 +364,31 @@ function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, 
     customerEmail: r.customer_email,
   };
 
+  // The latest AI-computed quote, formatted for the expandable well. (deliveryFee
+  // of 0 means zones/distance pricing deferred it to checkout.)
+  const q = r.quote;
+  const quote =
+    q && q.lineItems.length
+      ? {
+          lines: q.lineItems.map((l) => ({
+            name: l.name,
+            quantity: l.quantity,
+            lineTotal: moneyExact(l.lineTotal),
+          })),
+          subtotal: moneyExact(q.subtotal),
+          deliveryFee: q.deliveryFee ? moneyExact(q.deliveryFee) : null,
+          tax: q.tax != null ? moneyExact(q.tax) : null,
+          total: moneyExact(q.total ?? q.subtotal),
+          deposit: moneyExact(q.suggestedDeposit),
+          eventDateLabel: fmtEventDate(r.start_date),
+        }
+      : undefined;
+
   // The AI draft is a *suggestion* only while it's an unsent needs_review draft.
   if (r.status !== "needs_review") {
-    return { channelMeta, email, phone, channel, prefill, thread };
+    return { channelMeta, email, phone, channel, prefill, thread, quote };
   }
 
-  const q = r.quote;
   const top = q?.lineItems[0];
   const draft = r.ai_summary ?? "I've flagged this for you — add a reply below.";
   return {
@@ -367,6 +398,7 @@ function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, 
     channel,
     prefill,
     thread,
+    quote,
     whyBanner: friendlyWhy(r.escalation_reasons),
     aiDraft: {
       match: top
@@ -384,13 +416,20 @@ function rowToDetail(r: InquiryRow, msgs: ThreadMessage[]): Omit<InquiryDetail, 
 }
 
 const BOOKED_STATUSES = new Set(["paid", "contracted", "confirmed", "delivered", "completed"]);
-const OUTCOME_RANK: Record<BookingOutcome["status"], number> = { booked: 3, pending: 2, canceled: 1, none: 0 };
+const OUTCOME_RANK: Record<BookingOutcome["status"], number> = {
+  booked: 4,
+  pending: 3,
+  quoted: 2,
+  canceled: 1,
+  none: 0,
+};
 
 function outcomeStatusOf(s: string): BookingOutcome["status"] {
   if (BOOKED_STATUSES.has(s)) return "booked";
   if (s === "pending_payment") return "pending";
+  if (s === "quoted") return "quoted"; // sent, waiting on payment
   if (s === "canceled") return "canceled";
-  return "none"; // quoted / anything uncommitted
+  return "none"; // anything uncommitted
 }
 
 function bookingToOutcome(b: OutcomeBookingRow): BookingOutcome {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -10,6 +10,7 @@ import {
   CheckCircle,
   EnvelopeSimple,
   ChatText,
+  CaretDown,
   CaretLeft,
   CurrencyDollar,
   Globe,
@@ -25,6 +26,7 @@ import type {
   InquiryDetail,
   ThreadMsg,
   BookingOutcome,
+  QuoteSummary,
 } from "@/lib/operator/inquiries";
 import {
   replyInquiryAction,
@@ -195,6 +197,16 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
     );
   }
 
+  const thread = mergeThread(detail.thread, overlay.get(selected.id) ?? []);
+  // The stored AI quote, slotted right after the AI's last message so it stays
+  // in time sequence. Only for legacy threads whose AI messages predate
+  // per-message quote cards — hidden once any AI message carries its own card,
+  // and while needs_review shows the draft card instead.
+  const lastAiIdx = thread.reduce((last, m, i) => (m.sender === "ai" ? i : last), -1);
+  const showQuoteWell =
+    !!detail.quote && !detail.aiDraft && !thread.some((m) => m.sender === "ai" && m.quote);
+  const quoteWellAfter = showQuoteWell ? (lastAiIdx === -1 ? thread.length - 1 : lastAiIdx) : -2;
+
   return (
     <div className="lg:flex lg:h-dvh lg:overflow-hidden">
       {/* ── Inbox list ── */}
@@ -322,6 +334,19 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
                 <span className="hidden sm:inline">Email</span>
               </a>
             ) : null}
+            <button
+              onClick={dismiss}
+              disabled={busy !== null}
+              title="Dismiss this conversation — removes it from your inbox"
+              className="flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2 text-sm font-bold text-ink-soft transition-colors hover:bg-coral-tint hover:text-coral-deep disabled:opacity-50"
+            >
+              {busy === "dismiss" ? (
+                <CircleNotch size={15} weight="bold" className="animate-spin" />
+              ) : (
+                <Prohibit size={15} weight="bold" />
+              )}
+              <span className="hidden xl:inline">Dismiss</span>
+            </button>
           </div>
         </div>
 
@@ -347,8 +372,13 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
               Conversation
             </div>
             <div className="mt-3 flex flex-col gap-3">
-              {mergeThread(detail.thread, overlay.get(selected.id) ?? []).map((m) => (
-                <ThreadBubble key={m.id} msg={m} />
+              {thread.map((m, i) => (
+                <Fragment key={m.id}>
+                  <ThreadBubble msg={m} />
+                  {i === quoteWellAfter && detail.quote ? (
+                    <QuoteWell key={selected.id} quote={detail.quote} />
+                  ) : null}
+                </Fragment>
               ))}
             </div>
           </div>
@@ -479,14 +509,16 @@ export function InquiriesView({ list, details, filters, operatorId, smsEnabled }
             />
             <div className="mt-3 flex items-center justify-end gap-2.5 border-t border-sand-line pt-3">
               <div className="flex gap-2.5">
-                <button
-                  onClick={dismiss}
-                  disabled={busy !== null}
-                  className="flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2.5 text-sm font-bold text-ink-soft transition-colors hover:bg-sand disabled:opacity-50"
-                >
-                  {busy === "dismiss" ? <CircleNotch size={15} weight="bold" className="animate-spin" /> : null}
-                  Dismiss
-                </button>
+                {reply ? (
+                  <button
+                    onClick={() => setReply("")}
+                    disabled={busy !== null}
+                    title="Clear this draft — nothing is sent"
+                    className="flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2.5 text-sm font-bold text-ink-soft transition-colors hover:bg-sand disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                ) : null}
                 <button
                   onClick={sendReply}
                   disabled={
@@ -554,18 +586,33 @@ function ThreadBubble({ msg }: { msg: ThreadMsg }) {
   const isAi = msg.sender === "ai";
   const chip = msg.channel ? CHANNEL_CHIP[msg.channel] : undefined;
   return (
-    <div className={`max-w-[85%] ${isCustomer ? "self-start" : "ml-auto"}`}>
-      <div
-        className={`whitespace-pre-wrap px-5 py-3.5 text-[15px] leading-relaxed ${
-          isCustomer
-            ? "rounded-2xl rounded-tl-md border border-sand-line bg-white text-ink"
-            : isAi
-              ? "rounded-2xl rounded-tr-md border border-brand-ring bg-brand-tint/50 text-ink"
-              : "rounded-2xl rounded-tr-md bg-brand text-white"
-        }`}
-      >
-        {msg.body}
-      </div>
+    <div
+      className={`max-w-[85%] ${msg.quote && !isAi ? "w-full sm:max-w-[400px]" : ""} ${isCustomer ? "self-start" : "ml-auto"}`}
+    >
+      {msg.quote && !isAi ? (
+        // Operator-sent quote: the card IS the message (body is a plain-text fallback).
+        <QuoteCard quote={msg.quote} label={`Quote sent · ${msg.quote.total}`} tone="operator" />
+      ) : (
+        <>
+          <div
+            className={`whitespace-pre-wrap px-5 py-3.5 text-[15px] leading-relaxed ${
+              isCustomer
+                ? "rounded-2xl rounded-tl-md border border-sand-line bg-white text-ink"
+                : isAi
+                  ? "rounded-2xl rounded-tr-md border border-brand-ring bg-brand-tint/50 text-ink"
+                  : "rounded-2xl rounded-tr-md bg-brand text-white"
+            }`}
+          >
+            {msg.body}
+          </div>
+          {/* AI turn that quoted: keep the reply text, attach its quote card. */}
+          {msg.quote ? (
+            <div className="mt-1.5">
+              <QuoteCard quote={msg.quote} label={`AI quoted ${msg.quote.total}`} tone="ai" />
+            </div>
+          ) : null}
+        </>
+      )}
       <div className={`mt-1 text-xs font-medium text-ink-mute ${isCustomer ? "" : "text-right"}`}>
         {chip ? (
           <span className="mr-1.5 inline-flex items-center gap-1 rounded-full bg-sand px-1.5 py-0.5 align-middle text-[10px] font-bold text-ink-soft">
@@ -575,6 +622,131 @@ function ThreadBubble({ msg }: { msg: ThreadMsg }) {
         {isAi ? "AI auto-answer · " : isCustomer ? "" : "You · "}
         {msg.time}
       </div>
+    </div>
+  );
+}
+
+/** Expandable quote card — collapsed to one line, expandable to the full
+ *  line-item breakdown the customer's price was built from. tone "ai" is the
+ *  tinted auto-quote well; "operator" is a quote you sent from the builder
+ *  (solid header; shows your note + the pay link). */
+function QuoteCard({
+  quote,
+  label,
+  tone,
+}: {
+  quote: QuoteSummary;
+  label: string;
+  tone: "ai" | "operator";
+}) {
+  const [open, setOpen] = useState(false);
+  const ai = tone === "ai";
+  return (
+    <div
+      className={`overflow-hidden rounded-2xl rounded-tr-md border ${
+        ai ? "border-brand-ring bg-brand-tint/50" : "border-brand"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors ${
+          ai ? "text-brand-deep hover:bg-brand-tint/70" : "bg-brand text-white hover:bg-brand-deep"
+        }`}
+      >
+        <span className="flex items-center gap-2 text-sm font-bold">
+          <CurrencyDollar size={16} weight="fill" />
+          {label}
+        </span>
+        <span
+          className={`flex flex-shrink-0 items-center gap-1 text-xs font-bold ${
+            ai ? "text-ink-mute" : "text-white/80"
+          }`}
+        >
+          {open ? "Hide" : "Details"}
+          <CaretDown
+            size={12}
+            weight="bold"
+            className={`transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </span>
+      </button>
+      {open ? (
+        <div className={`border-t bg-white px-4 py-3.5 ${ai ? "border-brand-ring/60" : "border-brand/30"}`}>
+          {quote.note ? (
+            <p className="mb-3 whitespace-pre-wrap border-b border-sand-line pb-3 text-sm leading-relaxed text-ink">
+              {quote.note}
+            </p>
+          ) : null}
+          <div className="flex flex-col gap-1.5">
+            {quote.lines.map((l, i) => (
+              <div key={i} className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="font-semibold text-ink">
+                  {l.quantity > 1 ? `${l.quantity}× ` : ""}
+                  {l.name}
+                </span>
+                <span className="flex-shrink-0 font-medium text-ink-soft">{l.lineTotal}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-col gap-1 border-t border-sand-line pt-2.5 text-[13px] font-medium text-ink-soft">
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>{quote.subtotal}</span>
+            </div>
+            {quote.discount ? (
+              <div className="flex justify-between text-teal-deep">
+                <span>Discount</span>
+                <span>−{quote.discount}</span>
+              </div>
+            ) : null}
+            <div className="flex justify-between">
+              <span>Delivery</span>
+              <span className={quote.deliveryFee ? "" : "text-ink-mute"}>
+                {quote.deliveryFee ?? "Added at checkout"}
+              </span>
+            </div>
+            {quote.tax ? (
+              <div className="flex justify-between">
+                <span>Sales tax</span>
+                <span>{quote.tax}</span>
+              </div>
+            ) : null}
+            <div className="mt-0.5 flex justify-between text-sm font-bold text-ink">
+              <span>Total</span>
+              <span>{quote.total}</span>
+            </div>
+          </div>
+          <p className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-ink-mute">
+            <span>
+              {quote.eventDateLabel ? `For ${quote.eventDateLabel} · ` : ""}
+              {quote.paymentType === "full"
+                ? `pay link for the full ${quote.total}`
+                : `deposit to book ${quote.deposit}`}
+            </span>
+            {quote.payUrl ? (
+              <a
+                href={quote.payUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-bold text-brand hover:text-brand-deep"
+              >
+                Payment link <ArrowSquareOut size={12} weight="bold" />
+              </a>
+            ) : null}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The AI's auto-quote, shown as a well at the end of the thread. */
+function QuoteWell({ quote }: { quote: QuoteSummary }) {
+  return (
+    <div className="ml-auto w-full max-w-[85%] sm:max-w-[400px]">
+      <QuoteCard quote={quote} label={`AI quoted ${quote.total}`} tone="ai" />
     </div>
   );
 }
@@ -677,6 +849,13 @@ function OutcomeBadge({ outcome }: { outcome: BookingOutcome }) {
       </span>
     );
   }
+  if (outcome.status === "quoted") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint px-2 py-0.5 text-[10px] font-extrabold text-brand-deep">
+        <CurrencyDollar size={10} weight="fill" /> QUOTE SENT{outcome.amount ? ` · ${outcome.amount}` : ""}
+      </span>
+    );
+  }
   if (outcome.status === "canceled") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-coral-tint px-2 py-0.5 text-[10px] font-extrabold text-coral-deep">
@@ -717,6 +896,18 @@ function OutcomeBanner({ outcome }: { outcome: BookingOutcome }) {
         <span className="flex items-center gap-2 text-[15px] font-bold text-amber-deep">
           <CurrencyDollar size={20} weight="fill" /> Checkout started — not paid
           {outcome.amount ? ` · ${outcome.amount}` : ""}
+        </span>
+        {link}
+      </div>
+    );
+  }
+  if (outcome.status === "quoted") {
+    return (
+      <div className={`${base} border-brand-ring bg-brand-tint`}>
+        <span className="flex items-center gap-2 text-[15px] font-bold text-brand-deep">
+          <CurrencyDollar size={20} weight="fill" /> Quote sent — waiting on payment
+          {outcome.amount ? ` · ${outcome.amount}` : ""}
+          {outcome.dateLabel ? ` · ${outcome.dateLabel}` : ""}
         </span>
         {link}
       </div>

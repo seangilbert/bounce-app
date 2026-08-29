@@ -1,3 +1,4 @@
+import { quoteFromMessageMeta } from "@/lib/operator/inquiries";
 import type { InquiryDetail, ThreadMsg } from "@/lib/operator/inquiries";
 
 /**
@@ -16,6 +17,7 @@ export interface LiveMessageRow {
   channel: string | null;
   direction: "inbound" | "outbound" | null;
   created_at: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 /** Payload row → the UI shape. Client-side time label until the server's
@@ -28,6 +30,7 @@ export function liveToThreadMsg(row: LiveMessageRow): ThreadMsg {
     time: "Just now",
     channel: row.channel,
     direction: row.direction,
+    quote: quoteFromMessageMeta(row.metadata),
   };
 }
 
