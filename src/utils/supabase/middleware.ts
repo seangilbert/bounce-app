@@ -105,6 +105,14 @@ export async function updateSession(request: NextRequest) {
 
   let refreshedCookies: { name: string; value: string; options?: CookieOptions }[] = [];
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    // Bound every auth network call (JWKS fetch on a cold isolate, token
+    // refresh on expiry). Unbounded, a hung Supabase request rides past
+    // Vercel's 25s middleware cap and 504s EVERY route on the app
+    // (MIDDLEWARE_INVOCATION_TIMEOUT) — seen live 2026-08-28.
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+        fetch(input, { ...init, signal: AbortSignal.timeout(8000) }),
+    },
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -138,8 +146,16 @@ export async function updateSession(request: NextRequest) {
   // When the token IS expired, getClaims falls through to a refresh via the
   // client below, and `setAll` captures the rotated cookies — so the slow path
   // still happens exactly when it must, and only then.
-  const { data: claims } = await supabase.auth.getClaims();
-  const user = claims?.claims?.sub ? { id: claims.claims.sub } : null;
+  // If auth is unreachable (timeout above, network failure), fail toward the
+  // sign-in redirect rather than letting the exception 500/504 the request —
+  // gated pages re-verify for themselves, so this can't grant access.
+  let user: { id: string } | null = null;
+  try {
+    const { data: claims } = await supabase.auth.getClaims();
+    user = claims?.claims?.sub ? { id: claims.claims.sub } : null;
+  } catch (e) {
+    console.error("[middleware] auth check failed", e);
+  }
 
   if (!user && isOperatorRoute) {
     const url = request.nextUrl.clone();
