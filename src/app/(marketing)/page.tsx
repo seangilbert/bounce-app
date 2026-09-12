@@ -84,11 +84,11 @@ export default function MarketingHome() {
               Your AI office manager for party rentals
             </span>
             <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tighter text-ink sm:text-5xl lg:text-6xl">
-              Stop losing bookings to slow replies.
+              The fastest reply wins the booking.
             </h1>
             <p className="mt-5 max-w-lg text-lg text-ink-soft">
-              Customers book whoever answers first. Movables replies instantly with an accurate
-              quote, even while you&apos;re on a job.
+              Movables answers every customer instantly with a real, accurate quote, even while
+              you&apos;re on a job.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <SignupCta
