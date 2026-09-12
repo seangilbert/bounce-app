@@ -83,8 +83,10 @@ export default function MarketingHome() {
               <Sparkle size={14} weight="fill" className="text-brand" />
               Your AI office manager for party rentals
             </span>
-            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tighter text-ink sm:text-5xl lg:text-6xl">
-              The fastest reply wins the booking.
+            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tighter text-ink sm:text-5xl">
+              The fastest reply
+              <br />
+              wins the booking.
             </h1>
             <p className="mt-5 max-w-lg text-lg text-ink-soft">
               Movables answers every customer instantly with a real, accurate quote, even while
