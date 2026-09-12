@@ -223,7 +223,7 @@ function Quoting({ group }: { group?: FeatureGroup }) {
           src="/marketing/quote-chat.png"
           alt="A storefront chat where the AI answers an availability question with a priced quote card"
           width={1800}
-          height={1800}
+          height={2040}
           caption="A live storefront quote: item matched, date checked, deposit computed."
           className="mx-auto mt-2 w-full max-w-2xl lg:col-span-12"
         />
@@ -441,7 +441,7 @@ function Agents({ group }: { group?: FeatureGroup }) {
           alt="The Agents page: each automation with its activity count and an on/off toggle"
           width={2000}
           height={1520}
-          caption="Each agent shows its work — and any of them can be switched off."
+          caption="Each agent shows its work, and any of them can be switched off."
           className="mx-auto mt-12 max-w-3xl"
         />
         <div className="mt-10 overflow-hidden rounded-3xl border border-sand-line bg-white">
