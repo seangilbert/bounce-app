@@ -77,13 +77,13 @@ export default function MarketingHome() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-x-0 -top-24 h-72 bg-gradient-to-b from-brand/5 to-transparent" />
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-2">
-          <div>
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-12">
+          <div className="lg:col-span-7">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-sand-line bg-white px-3 py-1 text-[12.5px] font-bold text-ink-soft">
               <Sparkle size={14} weight="fill" className="text-brand" />
               Your AI office manager for party rentals
             </span>
-            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tighter text-ink sm:text-5xl">
+            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tighter text-ink sm:text-5xl lg:text-6xl">
               The fastest reply
               <br />
               wins the booking.
@@ -113,7 +113,7 @@ export default function MarketingHome() {
 
           {/* AI-quote demo: the storefront chat played as a timed loop
               (client island; the rest of the page stays server-rendered). */}
-          <div className="relative">
+          <div className="relative lg:col-span-5">
             <HeroChatDemo />
           </div>
         </div>
